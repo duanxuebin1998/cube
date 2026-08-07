@@ -896,7 +896,7 @@ static uint32_t Read_CurrentWeight_Adapter(void)
  * @note 关键约束：该操作会短时占用 UART6 进入 CH9141 AT 模式；命令切换时必须把 STATE_SWITCH 传给上层，不能继续抢占传感器透传链路。
  *
  * @param force_update 更新。
- * @return NO_ERROR 表示本轮无需刷新、刷新周期未到或 RSSI 快照已成功更新；命令切换返回 STATE_SWITCH，其他值为蓝牙连接状态查询的具体错误。
+ * @return NO_ERROR 表示本轮无需刷新、刷新周期未到、RSSI 快照已成功更新或仅 RSSI 数值无效但 UART6 已恢复透明传输；命令切换返回 STATE_SWITCH，其他值表示 AT/UART6 交接未安全完成。
  */
 static uint32_t Sensor_UpdateWirelessRssiForPartParams(uint8_t force_update)
 {
@@ -1063,9 +1063,9 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
         return STATE_SWITCH;
     }
     if (ret != NO_ERROR) {
-        printf("读取部件参数\t蓝牙RSSI刷新失败，保留上次RSSI快照。错误码=0x%08lX\r\n",
+        printf("读取部件参数\t蓝牙状态刷新失败，UART6透明传输未确认，停止后续流程。错误码=0x%08lX\r\n",
                (unsigned long)ret);
-        ret = NO_ERROR;
+        return ret;
     }
     if ((!update_command_state) && HasEffectiveCommandSwitchRequest()) {
         return STATE_SWITCH;

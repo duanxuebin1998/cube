@@ -1686,7 +1686,7 @@ static void WirelessPairing_Finish(const char *title, uint32_t ret)
         reset_ret = WirelessPairing_ResetModule();
         snprintf(stage, sizeof(stage), "%s\t失败恢复复位", title);
         WirelessPairing_PrintRet(stage, reset_ret);
-        (void)CH9141_AT_PrepareUart6(WIRELESS_PAIRING_POST_RESET_IDLE_MS);
+        (void)CH9141_AT_CompleteTransparentHandoff(WIRELESS_PAIRING_POST_RESET_IDLE_MS);
     }
 
     if (g_measurement.device_status.device_state == STATE_MAINTENANCEMODE) {
@@ -1721,6 +1721,8 @@ uint32_t WirelessPairing_ReadConnectionStatus(WirelessConnectionStatus *status)
     uint32_t exit_ret = NO_ERROR;
     uint32_t rssi_stop_ret = NO_ERROR;
     uint32_t rssi_ret = NO_ERROR;
+    uint32_t recover_ret = NO_ERROR;
+    uint32_t prepare_ret = NO_ERROR;
     uint8_t at_entered = 0U;
     uint8_t mode = 0xFFU;
     uint8_t ble_status = 0xFFU;
@@ -1839,8 +1841,12 @@ finish:
         }
         if (rssi_stop_ret != NO_ERROR) {
             /* 普通清理被半 ACK、UART 故障或命令切换打断时，强制关闭 RSSI 并退出 AT。 */
-            CH9141_AT_RecoverRssiQuery();
+            recover_ret = CH9141_AT_RecoverRssiQuery();
             at_entered = 0U;
+            if (recover_ret != NO_ERROR) {
+                ret = recover_ret;
+                status->error_code = recover_ret;
+            }
         }
     }
 
@@ -1851,10 +1857,18 @@ finish:
                                          &response);
         if (exit_ret != NO_ERROR) {
             /* AT EXIT 可能已执行但 ACK 丢失，也可能仍停留在 AT 模式，统一执行有界强制清理。 */
-            CH9141_AT_RecoverRssiQuery();
-
+            recover_ret = CH9141_AT_RecoverRssiQuery();
+            if (recover_ret != NO_ERROR) {
+                ret = recover_ret;
+                status->error_code = recover_ret;
+            }
+        } else {
+            prepare_ret = CH9141_AT_CompleteTransparentHandoff(WIRELESS_PAIRING_POST_RESET_IDLE_MS);
+            if (prepare_ret != NO_ERROR) {
+                ret = prepare_ret;
+                status->error_code = prepare_ret;
+            }
         }
-        (void)CH9141_AT_PrepareUart6(WIRELESS_PAIRING_POST_RESET_IDLE_MS);
         if ((ret == NO_ERROR) && (exit_ret != NO_ERROR)) {
             ret = exit_ret;
         }
@@ -1911,6 +1925,8 @@ uint32_t WirelessPairing_PrintConnectionStatus(void)
     uint32_t exit_ret = NO_ERROR;
     uint32_t rssi_stop_ret = NO_ERROR;
     uint32_t rssi_ret = NO_ERROR;
+    uint32_t recover_ret = NO_ERROR;
+    uint32_t prepare_ret = NO_ERROR;
     uint8_t at_entered = 0U;
     uint8_t mode = 0xFFU;
     uint8_t status = 0xFFU;
@@ -2045,8 +2061,11 @@ uint32_t WirelessPairing_PrintConnectionStatus(void)
         WirelessPairing_PrintRet("无线滑环连接状态\t关闭RSSI读取", rssi_stop_ret);
         if (rssi_stop_ret != NO_ERROR) {
             /* 普通清理失败时立即强制关闭 RSSI 并退出 AT，避免污染后续 DSM 透传响应。 */
-            CH9141_AT_RecoverRssiQuery();
+            recover_ret = CH9141_AT_RecoverRssiQuery();
             at_entered = 0U;
+            if (recover_ret != NO_ERROR) {
+                ret = recover_ret;
+            }
         }
         /* 关闭 RSSI 上报失败时只在主查询尚未失败的情况下提升为最终错误，保留更早的真实根因。 */
         if ((ret == NO_ERROR) && (rssi_stop_ret != NO_ERROR)) {
@@ -2078,9 +2097,16 @@ finish:
         WirelessPairing_PrintRet("无线滑环连接状态\t退出AT", exit_ret);
         if (exit_ret != NO_ERROR) {
             /* 退出 AT 未确认时执行有界强制清理，保证下一条传感器命令回到透传链路。 */
-            CH9141_AT_RecoverRssiQuery();
+            recover_ret = CH9141_AT_RecoverRssiQuery();
+            if (recover_ret != NO_ERROR) {
+                ret = recover_ret;
+            }
+        } else {
+            prepare_ret = CH9141_AT_CompleteTransparentHandoff(WIRELESS_PAIRING_POST_RESET_IDLE_MS);
+            if (prepare_ret != NO_ERROR) {
+                ret = prepare_ret;
+            }
         }
-        (void)CH9141_AT_PrepareUart6(WIRELESS_PAIRING_POST_RESET_IDLE_MS);
         /* 退出 AT 模式失败同样只在此前无错误时成为最终结果，清理失败不能覆盖扫描或查询阶段的原始故障。 */
         if ((ret == NO_ERROR) && (exit_ret != NO_ERROR)) {
             ret = exit_ret;
@@ -2115,7 +2141,7 @@ uint32_t WirelessPairing_DebugScan(void)
         printf("无线滑环扫描调试\t扫描完成后复位模块，恢复透传\r\n");
         ret = WirelessPairing_ResetModule();
         if (ret == NO_ERROR) {
-            (void)CH9141_AT_PrepareUart6(WIRELESS_PAIRING_POST_RESET_IDLE_MS);
+            (void)CH9141_AT_CompleteTransparentHandoff(WIRELESS_PAIRING_POST_RESET_IDLE_MS);
         }
     }
     WirelessPairing_Finish("无线滑环扫描调试", ret);

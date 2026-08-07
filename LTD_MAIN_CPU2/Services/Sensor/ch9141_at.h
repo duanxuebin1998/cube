@@ -20,6 +20,15 @@ typedef enum {
     CH9141_AT_WAIT_RSSI, /* 等待完整 RSSI 文本字段；半 ACK 时仍由恢复流程继续清理。 */
 } CH9141AtWaitMode;
 
+typedef enum {
+    /* UART6 在 DSM 透传与 CH9141K AT 操作之间的公开交接状态。 */
+    CH9141_UART6_TRANSPARENT_READY = 0,
+    CH9141_UART6_ENTERING_AT,
+    CH9141_UART6_AT_ACTIVE,
+    CH9141_UART6_RECOVERING,
+    CH9141_UART6_NOT_READY
+} CH9141Uart6LinkState;
+
 typedef struct {
     /* CH9141K AT 响应解析结果；保留原始文本长度及 OK、ERR、连接、扫描和 RSSI 关键标志。 */
     char text[CH9141_AT_RESPONSE_TEXT_SIZE]; /* 本次 AT 响应的原始文本副本，固定容量并保证以 NUL 结束。 */
@@ -59,11 +68,26 @@ void CH9141_AT_NotifySensorPowerOn(void);
 uint32_t CH9141_AT_PrepareUart6(uint32_t idle_ms);
 
 /**
+ * @brief 在退出 AT 或模块复位后完成不可被命令切换打断的透明传输交接。
+ *
+ * 该函数只允许在已经发出 AT+EXIT/AT+RESET 的收尾路径调用；返回前必须完成最终空闲确认。
+ */
+uint32_t CH9141_AT_CompleteTransparentHandoff(uint32_t idle_ms);
+
+/**
+ * @brief 读取 UART6 当前是否已经完成透明传输交接。
+ *
+ * DSM 发送入口只允许在 CH9141_UART6_TRANSPARENT_READY 状态启动新事务。
+ */
+CH9141Uart6LinkState CH9141_AT_GetUart6LinkState(void);
+
+/**
  * @brief 在 RSSI 查询清理不确定时，强制关闭异步上报并退出 AT 模式。
  *
  * 该函数绕过命令切换检查发送清理命令，只能在已进入 AT 模式的主循环任务上下文调用。
+ * 返回前会执行最终 UART6 空闲确认；只有 NO_ERROR 才表示透明传输重新就绪。
  */
-void CH9141_AT_RecoverRssiQuery(void);
+uint32_t CH9141_AT_RecoverRssiQuery(void);
 
 /**
  * @brief 通过 UART6 软件方式进入 CH9141K AT 配置。

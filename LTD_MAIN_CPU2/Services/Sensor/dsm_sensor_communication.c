@@ -5,6 +5,7 @@
  *      Author: Duan Xuebin
  */
 #include "dsm_sensor_communication.h"
+#include "ch9141_at.h"
 #include "error_log.h"
 #include "system_parameter.h"
 #include <stdio.h>
@@ -22,26 +23,87 @@ char DSMRcvBuffer[RCVBUFFLEN]; /* ¼æÈİ¾É DSM ÎÄ±¾ÊÕ·¢½Ó¿Ú±£ÁôµÄÈ«¾Ö½ÓÊÕ»º³åÇø£»µ
 int DSMRcvLen; /* ¼æÈİ¾É DSM ÎÄ±¾ÊÕ·¢½Ó¿Ú±£ÁôµÄÈ«¾Ö½ÓÊÕ³¤¶È£»µ±Ç°±¾ÎÄ¼şÎ´¸üĞÂ¸ÃÖµ£¬Êµ¼Ê³¤¶ÈÓÉ¾Ö²¿Êä³ö²ÎÊı·µ»Ø¡£ */
 
 static char CalculationBCC_DSM(char command[], int count);
+static bool DSM_IsSevenDigitInteger(const char *value);
+static bool DSM_IsSevenDigitValue(const char *value);
+static bool DSM_IsSignedSevenDigitValue(const char *value, uint8_t require_decimal);
+static bool DSM_ParseSevenByteFloat(const char *value, float *result_out);
+static uint32_t s_uart6_last_error = HAL_UART_ERROR_NONE; /* ×î½üÒ»´Î DSM UART6 ÊÂÎñËø´æµÄ HAL Ó²¼ş´íÎóÎ»¡£ */
+
+#define DSM_UART6_DRAIN_TOTAL_TIMEOUT_MS 100U /* DSM UART6 ÅÅ¿ÕÔÊĞíÕ¼ÓÃµÄ×ÜÊ±ÏŞ¡£ */
+#define DSM_RESPONSE_ERROR_PAYLOAD_LEN 16U /* DSM Í³Ò»´íÎóÔØºÉ³¤¶È£¬²»º¬ BCC ºÍ CRLF¡£ */
+
+typedef enum {
+    DSM_FRAME_ACK = 0,
+    DSM_FRAME_COMBINED_VERSION,
+    DSM_FRAME_CPU1_VERSION,
+    DSM_FRAME_SENSOR_NUMBER,
+    DSM_FRAME_SUPPLY_VOLTAGE,
+    DSM_FRAME_LEVEL_FREQUENCY,
+    DSM_FRAME_DENSITY,
+    DSM_FRAME_GYRO_ANGLE,
+    DSM_FRAME_WATER_CAPACITANCE
+} DsmFrameType;
+
+typedef struct {
+    const char *command;
+    uint16_t normal_len;
+    uint16_t error_len;
+    DsmFrameType frame_type;
+    const char *operation_name;
+} DsmCommandFrameSpec;
+
+/* Éú²úÃüÁîºÍ°æ±¾ÃüÁî¹²ÓÃÕâÒ»ÕÅÏìÓ¦ÆõÔ¼±í£»Î´µÇ¼ÇÃüÁî²»µÃÍË»Ø°´ LF ½ØÖ¡¡£ */
+static const DsmCommandFrameSpec s_dsm_frame_specs[] = {
+    {"CL", 3U, 0U, DSM_FRAME_ACK, "ÆôÓÃ²âË®Ì½Õë"},
+    {"CB", 3U, 0U, DSM_FRAME_ACK, "ÆôÓÃÒºÎ»Ä£Ê½"},
+    {"CD", 3U, 0U, DSM_FRAME_ACK, "ÆôÓÃÃÜ¶ÈÄ£Ê½"},
+    {"CV", 6U, 0U, DSM_FRAME_COMBINED_VERSION, "¶ÁÈ¡×éºÏ°æ±¾"},
+    {"Cv", 6U, 0U, DSM_FRAME_CPU1_VERSION, "¶ÁÈ¡´«¸ĞÆ÷°æ±¾"},
+    {"CN", 11U, 19U, DSM_FRAME_SENSOR_NUMBER, "¶ÁÈ¡´«¸ĞÆ÷±àºÅ"},
+    {"CK", 11U, 0U, DSM_FRAME_SUPPLY_VOLTAGE, "¶ÁÈ¡´«¸ĞÆ÷µçÑ¹"},
+    {"Cb", 11U, 19U, DSM_FRAME_LEVEL_FREQUENCY, "¶ÁÈ¡ÒºÎ»ÆµÂÊ"},
+    {"Cd", 27U, 19U, DSM_FRAME_DENSITY, "¶ÁÈ¡ÆµÂÊÃÜ¶ÈÎÂ¶È"},
+    {"Ch", 19U, 19U, DSM_FRAME_GYRO_ANGLE, "¶ÁÈ¡´«¸ĞÆ÷Çã½Ç"},
+    {"Cl", 11U, 19U, DSM_FRAME_WATER_CAPACITANCE, "¶ÁÈ¡²âË®µçÈİ"}
+};
+
+#define DSM_FRAME_SPEC_COUNT (sizeof(s_dsm_frame_specs) / sizeof(s_dsm_frame_specs[0]))
 
 /**
  * @brief ÔÚÏŞ¶¨Ê±¼äÄÚÅÅ¿Õ UART6 ²ĞÁôÊı¾İ£¬Á¬Ğø¿ÕÏĞºó½áÊø¡£
  *
- * @param idle_ms ½øÈë AT ²Ù×÷Ç°ÒªÇó UART6 Á¬ĞøÎŞÊı¾İµÄ¿ÕÏĞÊ±¼ä£¬µ¥Î» ms¡£
+ * @param idle_ms ·¢ËÍ DSM ÃüÁîÇ°ÒªÇó UART6 Á¬ĞøÎŞÊı¾İµÄ¿ÕÏĞÊ±¼ä£¬µ¥Î» ms¡£
+ * @return NO_ERROR ±íÊ¾ UART6 ÒÑÁ¬Ğø¿ÕÏĞ£»ÃüÁîÇĞ»»·µ»Ø STATE_SWITCH£¬Ó²¼ş´íÎó·µ»Ø COMM_UART_TRANSFER_ERROR£¬³ÖĞøÓĞÊı¾İ´ïµ½×ÜÊ±ÏŞ·µ»Ø SENSOR_DEVICE_COMM_TIMEOUT¡£
  */
-static void UART6_DrainRX_UntilIdle(uint32_t idle_ms)
+static uint32_t UART6_DrainRX_UntilIdle(uint32_t idle_ms)
 {
     uint8_t dump;
-    uint32_t last = HAL_GetTick();
+    uint32_t start_tick = HAL_GetTick();
+    uint32_t last_rx_tick = start_tick;
 
     for (;;) {
-        if (HAL_UART_Receive(&huart6, &dump, 1, 1) == HAL_OK) {
-            last = HAL_GetTick();
-        } else if ((HAL_GetTick() - last) >= idle_ms) {
-            break;
+        HAL_StatusTypeDef status = HAL_UART_Receive(&huart6, &dump, 1U, 1U);
+        uint32_t now_tick = HAL_GetTick();
+
+        if (status == HAL_OK) {
+            last_rx_tick = now_tick;
+        } else if (status == HAL_ERROR) {
+            s_uart6_last_error = huart6.ErrorCode;
+            __HAL_UART_CLEAR_OREFLAG(&huart6);
+            huart6.ErrorCode = HAL_UART_ERROR_NONE;
+            return COMM_UART_TRANSFER_ERROR;
+        } else if ((now_tick - last_rx_tick) >= idle_ms) {
+            __HAL_UART_CLEAR_OREFLAG(&huart6);
+            return NO_ERROR;
+        }
+
+        if (HasEffectiveCommandSwitchRequest()) {
+            return STATE_SWITCH;
+        }
+        if ((now_tick - start_tick) >= DSM_UART6_DRAIN_TOTAL_TIMEOUT_MS) {
+            return SENSOR_DEVICE_COMM_TIMEOUT;
         }
     }
-
-    __HAL_UART_CLEAR_OREFLAG(&huart6);
 }
 
 /* DSM ÎÄ±¾´íÎóÏìÓ¦µ½Í³Ò»¹ÊÕÏÂëµÄÓ³ÉäÏî£»°´Ã÷È·ÏìÓ¦¹Ø¼ü×Ö±£ÁôÔ¶¶Ë´íÎóÔ­Òò¡£ */
@@ -58,6 +120,8 @@ static const DsmResponseErrorMap s_dsm_response_errors[] = {
     {"A+333.33B+333.33", SENSOR_GYRO_COMM_TIMEOUT},
     {"A+444.44B+444.44", SENSOR_GYRO_ANGLE_ERROR},
     {"A+555.55B+555.55", SENSOR_SELF_TEST_FAILED},
+    {"A+666.66B+666.66", SENSOR_REMOTE_INTERNAL_ERROR},
+    {"A+777.88B+777.88", SENSOR_REMOTE_INTERNAL_ERROR},
     {"A+888.88B+888.88", SENSOR_INTERNAL_CPU_COMM_TIMEOUT},
     {"A+999.99B+999.99", SENSOR_INTERNAL_COMM_CHECK_ERROR}
 };
@@ -82,21 +146,89 @@ static void DSM_LogLowVoltageFrame(const char *resp)
  * @param resp ÒÑ¾­½ÓÊÕÍê³É¡¢µÈ´ıÊ¶±ğ»ò½âÎöµÄ DSM ÏìÓ¦ÎÄ±¾¡£
  * @return NO_ERROR ±íÊ¾ÏìÓ¦²»ÊÇÒÑÖª DSM ´íÎóÎÄ±¾£»ÃüÖĞ´íÎó±íÊ±·µ»Ø¸ÃÎÄ±¾¶ÔÓ¦µÄ¶ş´ú´«¸ĞÆ÷´íÎóÂë¡£
  */
-static uint32_t DSM_MapErrorResponse(const char *resp)
+static uint32_t DSM_MapErrorResponse(const char *resp, uint16_t recv_len)
 {
-    if ((resp == NULL) || (resp[0] == 'E') || (resp[0] == 'e')) {
+    if ((resp == NULL) || (recv_len != 19U) ||
+        (resp[17] != '\r') || (resp[18] != '\n')) {
         return NO_ERROR;
     }
     for (uint32_t i = 0U; i < DSM_RESPONSE_ERROR_COUNT; i++) {
-        if (strstr(resp, s_dsm_response_errors[i].response_text) != NULL) {
+        if (memcmp(resp,
+                   s_dsm_response_errors[i].response_text,
+                   DSM_RESPONSE_ERROR_PAYLOAD_LEN) == 0) {
             return s_dsm_response_errors[i].error_code;
         }
     }
     return NO_ERROR;
 }
 
+/**
+ * @brief °´ÃüÁî²éÕÒ DSM ¶¨³¤ÏìÓ¦¹æ¸ñ¡£
+ *
+ * µ÷ÓÃ³¡¾°£ºÃ¿´Î DSM ÊÂÎñÔÚÆô¶¯ DMA¡¢ÅĞ¶ÏÖ¡±ß½ç¡¢Ğ£ÑéºÍĞ´ÈÕÖ¾Ê±¹²ÓÃÍ¬Ò»¹æ¸ñ¡£
+ * ¹Ø¼üÔ¼Êø£ºÎ´µÇ¼ÇÃüÁî·µ»Ø NULL£¬½ûÖ¹»ØÍËµ½Ê×¸ö LF ½áÊøµÄÀúÊ·Â·¾¶¡£
+ *
+ * @param cmd Á½×Ö½Ú DSM ÃüÁîÎÄ×Ö¡£
+ * @return ÃüÖĞÊ±·µ»ØÖ»¶Á¹æ¸ñÖ¸Õë£¬Î´ÃüÖĞ»ò²ÎÊıÎª¿Õ·µ»Ø NULL¡£
+ */
+static const DsmCommandFrameSpec *DSM_FindFrameSpec(const char *cmd)
+{
+    if (cmd == NULL) {
+        return NULL;
+    }
+    for (uint32_t i = 0U; i < DSM_FRAME_SPEC_COUNT; i++) {
+        if (strcmp(cmd, s_dsm_frame_specs[i].command) == 0) {
+            return &s_dsm_frame_specs[i];
+        }
+    }
+    return NULL;
+}
+
+/**
+ * @brief ¸ù¾İÃüÁî¹æ¸ñºÍÏìÓ¦Ê××Ö½ÚÈ·¶¨±¾´ÎºòÑ¡Ö¡µÄ¾«È·³¤¶È¡£
+ *
+ * Êı¾İÃüÁîÒÔ A ¿ªÍ·Ê±Ê¹ÓÃ 19 ×Ö½ÚÍ³Ò»´íÎóÖ¡³¤¶È£»ÆäËüÊ××Ö½ÚÊ¹ÓÃÕı³£ÏìÓ¦³¤¶È¡£
+ * Ch µÄÕı³£Ö¡ºÍ´íÎóÖ¡Í¬Îª 19 ×Ö½Ú£¬²»ĞèÒª¶îÍâ·ÖÖ§¡£
+ *
+ * @param spec µ±Ç°ÃüÁî¹æ¸ñ¡£
+ * @param rx DMA ½ÓÊÕ»º³åÇø¡£
+ * @param recv_len µ±Ç°ÒÑ½ÓÊÕ×Ö½ÚÊı¡£
+ * @return ±¾ºòÑ¡Ö¡±ØĞë½ÓÊÕµÄ¾«È·×Ü³¤¶È£»¹æ¸ñÎŞĞ§Ê±·µ»Ø 0¡£
+ */
+static uint16_t DSM_GetExpectedFrameLength(const DsmCommandFrameSpec *spec,
+                                           const uint8_t *rx,
+                                           uint16_t recv_len)
+{
+    if (spec == NULL) {
+        return 0U;
+    }
+    if ((spec->error_len != 0U) &&
+        (spec->error_len != spec->normal_len) &&
+        (rx != NULL) && (recv_len > 0U) &&
+        (rx[0] == (uint8_t)'A')) {
+        return spec->error_len;
+    }
+    return spec->normal_len;
+}
+
+/**
+ * @brief ÅĞ¶Ïµ±Ç° DMA ×Ö½ÚÊıÊÇ·ñ´ïµ½ÃüÁî¹æ¶¨µÄ¾«È·ºòÑ¡³¤¶È¡£
+ *
+ * @param spec µ±Ç°ÃüÁî¹æ¸ñ¡£
+ * @param rx DMA ½ÓÊÕ»º³åÇø¡£
+ * @param recv_len µ±Ç°ÒÑ½ÓÊÕ×Ö½ÚÊı¡£
+ * @return 1 ±íÊ¾ÒÑ¾­´ïµ½»ò³¬¹ıºòÑ¡³¤¶È£¬0 ±íÊ¾ÈÔĞèµÈ´ı¡£
+ */
+static uint8_t DSM_IsFixedFrameCandidateComplete(const DsmCommandFrameSpec *spec,
+                                                 const uint8_t *rx,
+                                                 uint16_t recv_len)
+{
+    uint16_t expected_len = DSM_GetExpectedFrameLength(spec, rx, recv_len);
+
+    return (uint8_t)(((expected_len != 0U) && (recv_len >= expected_len)) ? 1U : 0U);
+}
+
 #define DSM_UART_MAX_RETRY UART6_COMM_MAX_RETRY /* ´«¸ĞÆ÷Í¨ĞÅ²ÎÊı£º´«¸ĞÆ÷ UART ×î´óÖµ ÖØÊÔ¡£ */
-static uint32_t s_uart6_last_error = HAL_UART_ERROR_NONE; /* ×î½üÒ»´Î DSM UART6 HAL Ó²¼ş´íÎóÎ»¿ìÕÕ£»ÔÚ DMA µÈ´ı»òÓ¦´ğÊÕÎ²½×¶ÎËø´æ£¬¹©Á´Â·Õï¶ÏÊä³ö ORE¡¢FE¡¢NE¡¢PE µÈ¸ùÒò¡£ */
 static uint8_t s_uart6_dma_rx_buf[RX_BUF_LEN]; /* DSM ÎÄ±¾ÃüÁîµ¥´Î UART6 DMA ½ÓÊÕ»º³åÇø£»Æô¶¯Ç°ÇåÁã£¬DMA ¼ÆÊıÆ÷»»ËãÊµ¼Ê³¤¶ÈºóÔÙ¸´ÖÆµ½µ÷ÓÃ·½ÏìÓ¦»º´æ¡£ */
 
 /**
@@ -106,7 +238,11 @@ static uint8_t s_uart6_dma_rx_buf[RX_BUF_LEN]; /* DSM ÎÄ±¾ÃüÁîµ¥´Î UART6 DMA ½ÓÊ
  */
 static void UART6_StopDmaReceive(void)
 {
+    /* Í£Ö¹ DMA Ç°ÏÈËø´æ×îºó×Ö½Ú¸½½üµÄ FE/NE/ORE/PE£¬±ÜÃâ HAL Çå³¡ºó¶ªÊ§ÕæÊµ¸ùÒò¡£ */
+    s_uart6_last_error |= huart6.ErrorCode;
     (void)HAL_UART_DMAStop(&huart6);
+    /* HAL Í£Ö¹¹ı³ÌÖĞÈôÓÖ·¢²¼´íÎóÎ»£¬Çå³ıÇ°ÔÙ´ÎºÏ²¢µ½±¾ÊÂÎñ¿ìÕÕ¡£ */
+    s_uart6_last_error |= huart6.ErrorCode;
     __HAL_UART_CLEAR_OREFLAG(&huart6);
     huart6.ErrorCode = HAL_UART_ERROR_NONE;
 }
@@ -176,18 +312,26 @@ static uint32_t UART6_WaitTransmitDmaDone(uint32_t timeout)
  * @param dma_len_out ÓÃÓÚ·µ»Ø±¾´ÎÊµ¼ÊÆô¶¯µÄ UART6 DMA ½ÓÊÕ³¤¶È£¬µ¥Î»×Ö½Ú¡£
  * @return NO_ERROR ±íÊ¾ÒÑ°´»º³åÇøÈİÁ¿Æô¶¯ UART6 DMA ½ÓÊÕ²¢Ğ´»Ø dma_len_out£»ÈİÁ¿»òÊä³öÖ¸ÕëÎŞĞ§·µ»Ø SENSOR_RESP_FORMAT_ERROR£¬HAL Æô¶¯Ê§°Ü·µ»Ø COMM_UART_TRANSFER_ERROR¡£
  */
-static uint32_t UART6_StartTextReceiveDma(uint16_t maxLen, uint16_t *dma_len_out)
+static uint32_t UART6_StartTextReceiveDma(uint16_t maxLen,
+                                         const DsmCommandFrameSpec *spec,
+                                         uint16_t *dma_len_out)
 {
+    uint16_t max_frame_len;
     uint16_t dma_len;
 
-    if ((dma_len_out == NULL) || (maxLen < 2U)) {
+    if ((dma_len_out == NULL) || (spec == NULL) || (maxLen < 2U)) {
         return SENSOR_RESP_FORMAT_ERROR;
     }
 
-    dma_len = (uint16_t)(maxLen - 1U);
-    if (dma_len > (uint16_t)sizeof(s_uart6_dma_rx_buf)) {
-        dma_len = (uint16_t)sizeof(s_uart6_dma_rx_buf);
+    max_frame_len = (spec->normal_len > spec->error_len)
+                    ? spec->normal_len
+                    : spec->error_len;
+    /* ¶à½ÓÊÕ 1 ×Ö½ÚÓÃÓÚ·¢ÏÖÒÑ¾­½øÈë DMA »º³åÇøµÄ³¬³¤Ö¡£»¾«È·³¤¶Èµ½´ïºó²»ÒÀÀµ CR/LF¡£ */
+    dma_len = (uint16_t)(max_frame_len + 1U);
+    if ((dma_len >= maxLen) || (dma_len > (uint16_t)sizeof(s_uart6_dma_rx_buf))) {
+        return SENSOR_RESP_FORMAT_ERROR;
     }
+
     memset(s_uart6_dma_rx_buf, 0, sizeof(s_uart6_dma_rx_buf));
     *dma_len_out = dma_len;
 
@@ -206,48 +350,58 @@ static uint32_t UART6_StartTextReceiveDma(uint16_t maxLen, uint16_t *dma_len_out
  *
  * @param response UART6 ÏìÓ¦ÎÄ×Ö»º³åÇø£»½ÓÊÕº¯Êı°´ response_size ÏŞÖÆĞ´Èë²¢±£Ö¤ NUL ½áÎ²£¬¸ñÊ½»¯º¯ÊıÖ»¶ÁÓĞĞ§ÄÚÈİ¡£
  * @param dma_len ÓÃÓÚ·µ»Ø UART6 DMA Êµ¼Ê½ÓÊÕ×Ö½ÚÊı£»½ö³É¹¦»òÒÑÈ¡µÃ²¿·ÖÊı¾İµÄÂ·¾¶ÓĞĞ§¡£
+ * @param spec µ±Ç°ÃüÁîµÄ¹Ì¶¨ºòÑ¡³¤¶ÈÅäÖÃ£»NULL ±íÊ¾ÑØÓÃÀúÊ·»»ĞĞ½áÊø¹æÔò¡£
  * @param recv_len_out ÓÃÓÚ·µ»Ø±¾´ÎÊÕµ½µÄÓĞĞ§ DSM ÎÄ±¾Ó¦´ğ³¤¶È£¬µ¥Î»×Ö½Ú¡£
  * @param timeout ±¾´Î²Ù×÷Ê¹ÓÃµÄ³¬Ê±ÃÅÏŞ¡£
  * @return NO_ERROR ±íÊ¾ÒÑÊÕµ½·Ç¿Õ¡¢Î´Òç³öµÄ NUL ½áÎ²ÎÄ±¾£»²ÎÊı»ò³¤¶È²»ºÏ·¨·µ»Ø SENSOR_RESP_FORMAT_ERROR£¬ÃüÁîÇĞ»»·µ»Ø STATE_SWITCH£¬HAL ´íÎó·µ»Ø COMM_UART_TRANSFER_ERROR£¬ÎŞÊı¾İ³¬Ê±·µ»Ø SENSOR_DEVICE_COMM_TIMEOUT£¬½öÓĞ²»ÍêÕûÊı¾İÊ±·µ»Ø SENSOR_RESP_FORMAT_ERROR¡£
  */
 static uint32_t UART6_WaitTextReceiveDma(char *response,
                                          uint16_t dma_len,
+                                         const DsmCommandFrameSpec *spec,
                                          uint16_t *recv_len_out,
                                          uint32_t timeout)
 {
     uint32_t startTick;
 
-    if ((response == NULL) || (dma_len == 0U)) {
+    if ((response == NULL) || (dma_len == 0U) || (spec == NULL)) {
         return SENSOR_RESP_FORMAT_ERROR;
     }
 
     startTick = HAL_GetTick();
     while ((HAL_GetTick() - startTick) < timeout) {
         uint16_t recvLen = UART6_GetDmaReceivedLength(dma_len);
+        uint16_t expectedLen = DSM_GetExpectedFrameLength(spec, s_uart6_dma_rx_buf, recvLen);
 
         if (HasEffectiveCommandSwitchRequest()) {
             UART6_StopDmaReceive();
             return STATE_SWITCH;
         }
 
-        /* ½ÓÊÕÎÄ±¾Ó¦´ğÆÚ¼ä·¢ÏÖ UART6 Ó²¼ş´íÎóÊ±Á¢¼´Í£Ö¹ DMA£»ÒÑÓĞ²¿·Ö×Ö½ÚÒ²²»µÃ¼ÌĞø°´ÍêÕûĞ­ÒéÖ¡½âÎö¡£ */
+        /* ½ÓÊÕÆÚ¼ä·¢ÏÖÓ²¼ş´íÎóÊ±Á¢¼´Ëø´æ²¢Í£Ö¹ DMA£¬²¿·Ö×Ö½Ú²»µÃ¼ÌĞø½øÈëĞ­Òé½âÎö¡£ */
         if (huart6.ErrorCode != HAL_UART_ERROR_NONE) {
-            s_uart6_last_error = huart6.ErrorCode;
+            s_uart6_last_error |= huart6.ErrorCode;
             UART6_StopDmaReceive();
             return COMM_UART_TRANSFER_ERROR;
         }
 
-        for (uint16_t i = 0U; i < recvLen; i++) {
-            if (s_uart6_dma_rx_buf[i] == 0x0AU) {
-                uint16_t frameLen = (uint16_t)(i + 1U);
-                memcpy(response, s_uart6_dma_rx_buf, frameLen);
-                response[frameLen] = '\0';
-                if (recv_len_out != NULL) {
-                    *recv_len_out = frameLen;
-                }
-                UART6_StopDmaReceive();
-                return NO_ERROR;
+        if ((expectedLen == 0U) || (recvLen > expectedLen)) {
+            memcpy(response, s_uart6_dma_rx_buf, recvLen);
+            response[recvLen] = '\0';
+            if (recv_len_out != NULL) {
+                *recv_len_out = recvLen;
             }
+            UART6_StopDmaReceive();
+            return SENSOR_RESP_FORMAT_ERROR;
+        }
+
+        if (DSM_IsFixedFrameCandidateComplete(spec, s_uart6_dma_rx_buf, recvLen) != 0U) {
+            memcpy(response, s_uart6_dma_rx_buf, recvLen);
+            response[recvLen] = '\0';
+            if (recv_len_out != NULL) {
+                *recv_len_out = recvLen;
+            }
+            UART6_StopDmaReceive();
+            return NO_ERROR;
         }
 
         if (recvLen >= dma_len) {
@@ -259,7 +413,6 @@ static uint32_t UART6_WaitTextReceiveDma(char *response,
             UART6_StopDmaReceive();
             return SENSOR_RESP_FORMAT_ERROR;
         }
-        /* ÎÄ±¾Ó¦´ğÂÖÑ¯Ã¿ 1 ms ¼ì²éÒ»´Î DMA ½ø¶È¡¢ÃüÁîÇĞ»»ºÍ UART ´íÎó£¬±ÜÃâ¿Õ×ªÕ¼ÂúÇ°Ì¨¡£ */
         HAL_Delay(1);
     }
 
@@ -276,6 +429,7 @@ static uint32_t UART6_WaitTextReceiveDma(char *response,
         return (recvLen == 0U) ? SENSOR_DEVICE_COMM_TIMEOUT : SENSOR_RESP_FORMAT_ERROR;
     }
 }
+
 /**
  * @brief È¡×ß²¢ÇåÀí UART6 Ó²¼ş´íÎó±êÖ¾¡£
  *
@@ -286,15 +440,13 @@ static uint32_t UART6_WaitTextReceiveDma(char *response,
  */
 static uint32_t UART6_TakeHardwareError(void)
 {
-    uint32_t error = huart6.ErrorCode;
-
-    /* ¶ÁÈ¡µ½ UART6 Ó²¼ş´íÎóºóÇå³ı ORE¡¢±£´æÔ­Ê¼ HAL ´íÎóÎ»²¢¸´Î»¾ä±ú£¬ÈÃµ÷ÓÃ·½È¡µÃÒ»´ÎĞÔ¹ÊÕÏ¿ìÕÕ¡£ */
-    if (error != HAL_UART_ERROR_NONE) {
+    /* ºÏ²¢Í£Ö¹ DMA Ç°ºóµÄ´íÎóÎ»£»±£Áô¿ìÕÕ¹©±¾´ÎÖØÊÔÈÕÖ¾Êä³ö£¬ÏÂÒ»ÊÂÎñ¿ªÊ¼Ê±Í³Ò»ÇåÁã¡£ */
+    s_uart6_last_error |= huart6.ErrorCode;
+    if (huart6.ErrorCode != HAL_UART_ERROR_NONE) {
         __HAL_UART_CLEAR_OREFLAG(&huart6);
-        s_uart6_last_error = error;
         huart6.ErrorCode = HAL_UART_ERROR_NONE;
     }
-    return error;
+    return s_uart6_last_error;
 }
 
 /**
@@ -349,12 +501,29 @@ static void UART6_FormatHexDetail(const char *prefix,
 }
 
 /**
- * @brief ¼ì²é WaterSendPack ÖĞ 7 ×Ö½ÚÊıÖµ×Ö¶ÎÊÇ·ñÖ»°üº¬Êı×ÖºÍ×î¶àÒ»¸öĞ¡Êıµã¡£
+ * @brief ¼ì²é 7 ×Ö½ÚÎŞ·ûºÅÕûÊı×Ö¶Î¡£
  *
- * ¸Ã¼ì²éÓÃÓÚ×èÖ¹¶ÌÖ¡»ò´íÎ»Ö¡ÈÆ¹ı BCC ºó±» atof() µ±³ÉÓĞĞ§µçÈİÖµ¡£
+ * @param value Ö¸ÏòĞ­Òé×Ö¶ÎÊ×µØÖ·¡£
+ * @return true ±íÊ¾ 7 ×Ö½ÚÈ«²¿ÎªÊ®½øÖÆÊı×Ö£¬false ±íÊ¾¸ñÊ½Òì³£¡£
+ */
+static bool DSM_IsSevenDigitInteger(const char *value)
+{
+    if (value == NULL) {
+        return false;
+    }
+    for (uint8_t i = 0U; i < 7U; i++) {
+        if (!isdigit((unsigned char)value[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * @brief ¼ì²é 7 ×Ö½ÚÎŞ·ûºÅĞ¡Êı×Ö¶Î¡£
  *
- * @param value ÓÃÓÚ·µ»ØÍ¨¹ıÆßÎ»Êı×Ö¸ñÊ½Ğ£ÑéµÄÕûÊıÖµ¡£
- * @return true ±íÊ¾ value ·Ç¿Õ£¬Ç° 7 ×Ö½ÚÈ«²¿ÎªÊ®½øÖÆÊı×ÖÇÒ×î¶àº¬Ò»¸öĞ¡Êıµã£»false ±íÊ¾Ö¸ÕëÎª¿Õ¡¢³öÏÖÆäËû×Ö·û£¬»òĞ¡Êıµã³¬¹ıÒ»¸ö¡£
+ * @param value Ö¸ÏòĞ­Òé×Ö¶ÎÊ×µØÖ·¡£
+ * @return true ±íÊ¾×Ö¶ÎÖ»º¬Êı×ÖÇÒÇ¡ºÃÒ»¸öĞ¡Êıµã£¬false ±íÊ¾¸ñÊ½Òì³£¡£
  */
 static bool DSM_IsSevenDigitValue(const char *value)
 {
@@ -370,7 +539,176 @@ static bool DSM_IsSevenDigitValue(const char *value)
             return false;
         }
     }
-    return dot_count <= 1U;
+    return dot_count == 1U;
+}
+
+/**
+ * @brief ¼ì²é DSM µÄ 7 ×Ö½ÚÓĞ·ûºÅÊıÖµ×Ö¶Î¡£
+ *
+ * @param value Ö¸Ïò 7 ×Ö½ÚĞ­ÒéÊıÖµ×Ö¶ÎÊ×µØÖ·¡£
+ * @param require_decimal ·ÇÁã±íÊ¾±ØĞë°üº¬Ò»¸öĞ¡Êıµã£¬0 ±íÊ¾ÔÊĞíÁùÎ»ÕûÊı¡£
+ * @return true ±íÊ¾×Ö¶Î·ûºÏÓĞ·ûºÅÊ®½øÖÆ¸ñÊ½£¬false ±íÊ¾¸ñÊ½Òì³£¡£
+ */
+static bool DSM_IsSignedSevenDigitValue(const char *value, uint8_t require_decimal)
+{
+    uint8_t dot_count = 0U;
+
+    if ((value == NULL) || ((value[0] != '+') && (value[0] != '-'))) {
+        return false;
+    }
+    for (uint8_t i = 1U; i < 7U; i++) {
+        if (value[i] == '.') {
+            dot_count++;
+        } else if (!isdigit((unsigned char)value[i])) {
+            return false;
+        }
+    }
+    return (dot_count <= 1U) && ((require_decimal == 0U) || (dot_count == 1U));
+}
+
+/**
+ * @brief Ö»½âÎöĞ­Òé¹æ¶¨µÄ 7 ×Ö½ÚÊıÖµ×Ö¶Î£¬½ûÖ¹°ÑºóĞø BCC µ±³ÉÊı×Ö¼ÌĞøÏû·Ñ¡£
+ *
+ * @param value Ö¸Ïò 7 ×Ö½ÚĞ­Òé×Ö¶ÎÊ×µØÖ·¡£
+ * @param result_out ÓÃÓÚ·µ»ØÓĞÏŞ¸¡µãÖµ¡£
+ * @return true ±íÊ¾È«²¿ 7 ×Ö½Ú±»³É¹¦½âÎöÎªÓĞÏŞÊıÖµ£¬false ±íÊ¾×ª»»Òì³£¡£
+ */
+static bool DSM_ParseSevenByteFloat(const char *value, float *result_out)
+{
+    char field[8];
+    char *end = NULL;
+    double parsed;
+
+    if ((value == NULL) || (result_out == NULL)) {
+        return false;
+    }
+    memcpy(field, value, 7U);
+    field[7] = '\0';
+    parsed = strtod(field, &end);
+    if ((end != &field[7]) || !isfinite(parsed)) {
+        return false;
+    }
+    *result_out = (float)parsed;
+    return true;
+}
+
+/**
+ * @brief Ğ£ÑéÃüÁî¹æ¸ñ¶ÔÓ¦µÄ¾«È·Ö¡³¤¶È¡¢¹Ì¶¨×Ö¶Î¡¢CRLF ºÍ BCC¡£
+ *
+ * @param spec µ±Ç°ÃüÁî¹æ¸ñ¡£
+ * @param response ÒÑ½ÓÊÕÖ¡»º³åÇø¡£
+ * @param recv_len ÒÑ½ÓÊÕÓĞĞ§×Ö½ÚÊı¡£
+ * @return NO_ERROR ±íÊ¾Ö¡½á¹¹ºÍ BCC ÍêÕû£»ÆäËûÖµÇø·Ö¸ñÊ½Òì³£ºÍ BCC ´íÎó¡£
+ */
+static uint32_t DSM_ValidateFixedFrame(const DsmCommandFrameSpec *spec,
+                                      const char *response,
+                                      uint16_t recv_len)
+{
+    uint32_t mapped_error;
+    uint8_t normal_shape = 0U;
+
+    if ((spec == NULL) || (response == NULL)) {
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+    if ((recv_len != spec->normal_len) &&
+        ((spec->error_len == 0U) || (recv_len != spec->error_len))) {
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+
+    if (spec->frame_type == DSM_FRAME_ACK) {
+        static const uint8_t exact_ack[3] = {0x25U, 0x0DU, 0x0AU};
+        return ((recv_len == 3U) && (memcmp(response, exact_ack, sizeof(exact_ack)) == 0))
+               ? NO_ERROR
+               : SENSOR_RESP_FORMAT_ERROR;
+    }
+
+    if ((spec->frame_type == DSM_FRAME_COMBINED_VERSION) ||
+        (spec->frame_type == DSM_FRAME_CPU1_VERSION)) {
+        if (recv_len != 6U) {
+            return SENSOR_RESP_FORMAT_ERROR;
+        }
+        if (spec->frame_type == DSM_FRAME_COMBINED_VERSION) {
+            normal_shape = (uint8_t)(isxdigit((unsigned char)response[0]) &&
+                                     isxdigit((unsigned char)response[1]) &&
+                                     isdigit((unsigned char)response[2]) &&
+                                     isdigit((unsigned char)response[3]) &&
+                                     isdigit((unsigned char)response[4]));
+        } else {
+            normal_shape = (uint8_t)(((isdigit((unsigned char)response[0])) ||
+                                      (response[0] == 'E') || (response[0] == 'e')) &&
+                                     isdigit((unsigned char)response[1]) &&
+                                     (response[2] == '.') &&
+                                     isdigit((unsigned char)response[3]) &&
+                                     isdigit((unsigned char)response[4]));
+        }
+        if (normal_shape == 0U) {
+            return SENSOR_RESP_FORMAT_ERROR;
+        }
+        return (CalculationBCC_DSM((char *)response, 5) == response[5])
+               ? NO_ERROR
+               : SENSOR_BCC_ERROR;
+    }
+
+    if ((recv_len < 3U) ||
+        (response[recv_len - 2U] != '\r') ||
+        (response[recv_len - 1U] != '\n')) {
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+
+    mapped_error = DSM_MapErrorResponse(response, recv_len);
+    if (mapped_error != NO_ERROR) {
+        normal_shape = 1U;
+    } else {
+        switch (spec->frame_type) {
+        case DSM_FRAME_SENSOR_NUMBER:
+            normal_shape = (uint8_t)((recv_len == 11U) &&
+                                     ((response[0] == 'N') || (response[0] == 'E') || (response[0] == 'e')) &&
+                                     DSM_IsSevenDigitInteger(&response[1]));
+            break;
+        case DSM_FRAME_SUPPLY_VOLTAGE:
+            normal_shape = (uint8_t)((recv_len == 11U) &&
+                                     ((response[0] == 'e') || (response[0] == 'E')) &&
+                                     DSM_IsSevenDigitValue(&response[1]));
+            break;
+        case DSM_FRAME_LEVEL_FREQUENCY:
+            normal_shape = (uint8_t)((recv_len == 11U) &&
+                                     ((response[0] == 'F') || (response[0] == 'E')) &&
+                                     DSM_IsSevenDigitInteger(&response[1]));
+            break;
+        case DSM_FRAME_DENSITY:
+            normal_shape = (uint8_t)((recv_len == 27U) &&
+                                     ((response[0] == 'F') || (response[0] == 'E')) &&
+                                     (response[8] == 'D') &&
+                                     (response[16] == 'T') &&
+                                     DSM_IsSignedSevenDigitValue(&response[1], 0U) &&
+                                     DSM_IsSignedSevenDigitValue(&response[9], 1U) &&
+                                     DSM_IsSignedSevenDigitValue(&response[17], 1U));
+            break;
+        case DSM_FRAME_GYRO_ANGLE:
+            normal_shape = (uint8_t)((recv_len == 19U) &&
+                                     ((response[0] == 'A') || (response[0] == 'E')) &&
+                                     (response[8] == 'B') &&
+                                     DSM_IsSignedSevenDigitValue(&response[1], 1U) &&
+                                     DSM_IsSignedSevenDigitValue(&response[9], 1U));
+            break;
+        case DSM_FRAME_WATER_CAPACITANCE:
+            normal_shape = (uint8_t)((recv_len == 11U) &&
+                                     ((response[0] == 'D') || (response[0] == 'E')) &&
+                                     DSM_IsSevenDigitValue(&response[1]));
+            break;
+        default:
+            normal_shape = 0U;
+            break;
+        }
+    }
+
+    if (normal_shape == 0U) {
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+    if (CalculationBCC_DSM((char *)response, (int)(recv_len - 3U)) != response[recv_len - 3U]) {
+        return SENSOR_BCC_ERROR;
+    }
+    return NO_ERROR;
 }
 
 /**
@@ -383,13 +721,35 @@ static bool DSM_IsSevenDigitValue(const char *value)
  * @param timeout ±¾´Î²Ù×÷Ê¹ÓÃµÄ³¬Ê±ÃÅÏŞ¡£
  * @return NO_ERROR ±íÊ¾ÃüÁî·¢ËÍ¡¢ÎÄ±¾½ÓÊÕºÍ BCC Ğ£ÑéÈ«²¿³É¹¦£»ÆäËûÖµÎª½ÓÊÕÆô¶¯»òµÈ´ı´íÎó¡¢UART6 ·¢ËÍ´íÎó¡¢ÎŞÏìÓ¦³¬Ê±¡¢ÏìÓ¦¸ñÊ½´íÎó»ò SENSOR_BCC_ERROR¡£
  */
-static int UART6_SendCommand(const char *cmd,
+static int UART6_SendCommand(const DsmCommandFrameSpec *frame_spec,
                              char *response,
                              uint16_t maxLen,
                              uint16_t *recv_len_out,
                              uint32_t timeout) {
-    char bcc;
+    uint32_t drain_ret;
     uint32_t uart_error;
+    const char *cmd;
+
+    if ((frame_spec == NULL) || (response == NULL) || (maxLen < 2U)) {
+        if (recv_len_out != NULL) {
+            *recv_len_out = 0U;
+        }
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+    cmd = frame_spec->command;
+
+    if (CH9141_AT_GetUart6LinkState() != CH9141_UART6_TRANSPARENT_READY) {
+        CH9141Uart6LinkState link_state = CH9141_AT_GetUart6LinkState();
+
+        if (recv_len_out != NULL) {
+            *recv_len_out = 0U;
+        }
+        printf("DSMÍ¨ĞÅ\t¾Ü¾ø·¢ËÍ\tcmd=%s\tUART6×´Ì¬=%u\r\n",
+               cmd,
+               (unsigned)link_state);
+        return SENSOR_MODE_NOT_READY;
+    }
+
     memset(response, 0, maxLen);
     uint16_t recvLen = 0;
 #if DEBUG_UART6
@@ -397,11 +757,17 @@ static int UART6_SendCommand(const char *cmd,
 #endif
 
     s_uart6_last_error = HAL_UART_ERROR_NONE;
-    UART6_DrainRX_UntilIdle(5);
+    drain_ret = UART6_DrainRX_UntilIdle(5U);
+    if (drain_ret != NO_ERROR) {
+        if (recv_len_out != NULL) {
+            *recv_len_out = 0U;
+        }
+        return (int)drain_ret;
+    }
 
-    /* ÏÈÆô¶¯½ÓÊÕ DMA£¬ÔÙÆô¶¯·¢ËÍ DMA£¬±ÜÃâ´Ó»ú¿ìËÙ»Ø°üÊ±¶ªµôÓ¦´ğ¿ªÍ·¡£ */
+    /* ÏÈÆô¶¯¾«È·³¤¶È½ÓÊÕ DMA£¬ÔÙÆô¶¯·¢ËÍ DMA£¬±ÜÃâ¿ìËÙÓ¦´ğ¶ªÍ·¡£ */
     uint16_t dma_len = 0U;
-    uint32_t rx_ret = UART6_StartTextReceiveDma(maxLen, &dma_len);
+    uint32_t rx_ret = UART6_StartTextReceiveDma(maxLen, frame_spec, &dma_len);
     if (rx_ret != NO_ERROR) {
         if (recv_len_out != NULL) {
             *recv_len_out = 0U;
@@ -410,9 +776,6 @@ static int UART6_SendCommand(const char *cmd,
     }
 
     if (HAL_UART_Transmit_DMA(&huart6, (uint8_t*)cmd, (uint16_t)strlen(cmd)) != HAL_OK) {
-#if DEBUG_UART6
-        printf("[UART6] ·¢ËÍÊ§°Ü£¡\n");
-#endif
         UART6_StopDmaReceive();
         if (recv_len_out != NULL) {
             *recv_len_out = 0U;
@@ -428,33 +791,31 @@ static int UART6_SendCommand(const char *cmd,
         return (int)rx_ret;
     }
 
-    /* ½ÓÊÕ DMA ÒÑÔÚ·¢ËÍÇ°Æô¶¯£¬ÕâÀïÖ»µÈ´ı»»ĞĞÖÕÖ¹·ûÈ·ÈÏÖ¡±ß½ç¡£ */
-    rx_ret = UART6_WaitTextReceiveDma(response, dma_len, &recvLen, timeout);
+    rx_ret = UART6_WaitTextReceiveDma(response, dma_len, frame_spec, &recvLen, timeout);
     if (rx_ret != NO_ERROR) {
+        uart_error = UART6_TakeHardwareError();
         if (recv_len_out != NULL) {
             *recv_len_out = recvLen;
         }
-        return (int)rx_ret;
+        return (uart_error != HAL_UART_ERROR_NONE)
+               ? COMM_UART_TRANSFER_ERROR
+               : (int)rx_ret;
     }
     if (recv_len_out != NULL) {
         *recv_len_out = recvLen;
     }
 
-    /* ÏìÓ¦Ğ£ÑéÇ°ÔÙÈ¡Ò»´ÎÓ²¼ş´íÎó£¬±ÜÃâ×îºóÒ»×Ö½ÚºóÁôÏÂ ORE/FE/NE È´¼ÌĞø½âÎö¡£ */
+    /* Í£Ö¹ DMA Ê±ÒÑ¾­Ëø´æ´íÎó£»Ğ­Òé½âÎöÇ°±ØĞëÏû·Ñ¸Ã¿ìÕÕ£¬²»ÄÜÖ»¶ÁÒÑÇåÁãµÄ HAL ×Ö¶Î¡£ */
     uart_error = UART6_TakeHardwareError();
-    /* Ó¦´ğĞ£ÑéÇ°×îºóÒ»´ÎÓ²¼ş¼ì²éÈô·¢ÏÖ ORE¡¢FE¡¢NE »ò PE£¬¼´Ê¹»º³åÇøÒÑÓĞ×Ö½ÚÒ²°´´«ÊäÊ§°Ü·µ»Ø¡£ */
     if (uart_error != HAL_UART_ERROR_NONE) {
         return COMM_UART_TRANSFER_ERROR;
     }
-    if (recvLen == 0) {
+    if (recvLen == 0U) {
         return SENSOR_DEVICE_COMM_TIMEOUT;
     }
-    if (recvLen < 3) {
-        return SENSOR_RESP_FORMAT_ERROR;
-    }
+
 #if DEBUG_UART6
     printf("[UART6] ½ÓÊÕ³É¹¦£¬¹² %d ×Ö½Ú\r\n", recvLen);
-    printf("[UART6] ÏìÓ¦×Ö·û´®: %s\r\n", response);
     printf("[UART6] ÏìÓ¦HEX: ");
     for (int i = 0; i < recvLen; i++) {
         printf("%02X ", (uint8_t)response[i]);
@@ -462,16 +823,7 @@ static int UART6_SendCommand(const char *cmd,
     printf("\r\n");
 #endif
 
-    /* Ğ£Ñé BCC */
-    bcc = CalculationBCC_DSM(response, (recvLen - 3));
-    if (bcc == response[recvLen - 3]) {
-#if DEBUG_UART6
-        printf("DSM: ½ÓÊÕBCCĞ£ÑéÍ¨¹ı£¡\r\n");
-#endif
-        return NO_ERROR;
-    } else {
-        return SENSOR_BCC_ERROR; /* Ğ£ÑéÊ§°Ü */
-    }
+    return (int)DSM_ValidateFixedFrame(frame_spec, response, recvLen);
 }
 
 /**
@@ -492,31 +844,70 @@ static int UART6_SendWithRetry(const char *cmd,
     uint32_t ret = SENSOR_DEVICE_COMM_TIMEOUT;
     uint16_t recvLen = 0;
     char detail[160];
+    CH9141Uart6LinkState link_state;
+    const DsmCommandFrameSpec *frame_spec = DSM_FindFrameSpec(cmd);
+    const char *operation;
+
+    if (frame_spec == NULL) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
+    operation = frame_spec->operation_name;
+
+    if (HasEffectiveCommandSwitchRequest()) {
+        return STATE_SWITCH;
+    }
+
+    link_state = CH9141_AT_GetUart6LinkState();
+    if (link_state == CH9141_UART6_NOT_READY) {
+        /* NOT_READY ±íÊ¾ÉÏÒ»ÂÖ AT ÊÕÎ²ÒÑ¾­½áÊøµ«½»½ÓÊ§°Ü£»ĞÂ DSM ÊÂÎñÇ°Ö»Ö´ĞĞÒ»´ÎÓĞ½ç»Ö¸´¡£ */
+        printf("DSMÍ¨ĞÅ\tUART6Í¸Ã÷Á´Â·»Ö¸´\tcmd=%s\tÔ­×´Ì¬=%u\r\n",
+               cmd,
+               (unsigned)link_state);
+        ret = CH9141_AT_RecoverRssiQuery();
+        link_state = CH9141_AT_GetUart6LinkState();
+        if ((ret != NO_ERROR) || (link_state != CH9141_UART6_TRANSPARENT_READY)) {
+            printf("DSMÍ¨ĞÅ\tUART6Í¸Ã÷Á´Â·»Ö¸´Ê§°Ü\tcmd=%s\t½á¹û=0x%08lX\t×´Ì¬=%u\r\n",
+                   cmd,
+                   (unsigned long)ret,
+                   (unsigned)link_state);
+            return (ret != NO_ERROR) ? (int)ret : SENSOR_MODE_NOT_READY;
+        }
+        printf("DSMÍ¨ĞÅ\tUART6Í¸Ã÷Á´Â·»Ö¸´³É¹¦\tcmd=%s\r\n", cmd);
+    } else if (link_state != CH9141_UART6_TRANSPARENT_READY) {
+        /* ENTERING_AT¡¢AT_ACTIVE ºÍ RECOVERING ÊôÓÚÕıÔÚÖ´ĞĞµÄ½»½Ó£¬DSM ²»µÃÇÀÕ¼¡£ */
+        printf("DSMÍ¨ĞÅ\tUART6Í¸Ã÷Á´Â·Ã¦\tcmd=%s\t×´Ì¬=%u\r\n",
+               cmd,
+               (unsigned)link_state);
+        return SENSOR_MODE_NOT_READY;
+    }
+
     for (int i = 0; i < DSM_UART_MAX_RETRY; i++) {
         if (HasEffectiveCommandSwitchRequest()) {
             return STATE_SWITCH;
         }
         if (i > 0) {
-            /* ÖØÊÔ·¢ËÍÇ°µÈ´ı DSM_PRE_SEND_DELAY£¬ÈÃÉÏÒ»ÊÂÎñµÄÎ²×Ö½ÚºÍ´«¸ĞÆ÷´¦Àí×´Ì¬½áÊøºóÔÙ·¢ĞÂÃüÁî¡£ */
             HAL_Delay(DSM_PRE_SEND_DELAY);
         }
-        ret = UART6_SendCommand(cmd, response, maxLen, &recvLen, timeout);
+        ret = UART6_SendCommand(frame_spec, response, maxLen, &recvLen, timeout);
         if (ret == STATE_SWITCH) {
-            /* ÃüÁîÇĞ»»ÊÇÕı³£´ò¶Ï£¬Ö±½ÓÏòÉÏÍ¸´«£¬²»½øÈë DSM Í¨ĞÅÖØÊÔÈÕÖ¾¡£ */
             return STATE_SWITCH;
         }
-        if (ret == 0) {
+        if (ret == SENSOR_MODE_NOT_READY) {
+            return SENSOR_MODE_NOT_READY;
+        }
+        if (ret == NO_ERROR) {
             uint32_t response_error;
 
             DSM_LogLowVoltageFrame(response);
-            response_error = DSM_MapErrorResponse(response);
+            response_error = DSM_MapErrorResponse(response, recvLen);
             if (response_error == NO_ERROR) {
                 if (recv_len_out != NULL) {
                     *recv_len_out = recvLen;
                 }
                 if (i > 0) {
+                    /* Êµ¼Ê´òÓ¡£º´íÎó£¬½×¶ÎÎªÖØÊÔ³É¹¦£¬²Ù×÷ÃûÀ´×Ôµ±Ç° DSM ÃüÁî¹æ¸ñ¡£ */
                     ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
-                                     ERROR_LOG_OP_READ_LEVEL,
+                                     operation,
                                      ERROR_LOG_REASON_COMM_FAIL,
                                      (uint32_t)(i + 1),
                                      DSM_UART_MAX_RETRY);
@@ -524,15 +915,15 @@ static int UART6_SendWithRetry(const char *cmd,
                 return NO_ERROR;
             }
 
+            /* Êµ¼Ê´òÓ¡£º´íÎóÖØÊÔ£¬²Ù×÷ÃûºÍÔ¶¶Ë´íÎóÔ­Òò¾ùÀ´×Ôµ±Ç° DSM ÃüÁî¡£ */
             ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
-                           ERROR_LOG_OP_READ_LEVEL,
+                           operation,
                            ErrorLog_GetReasonByCode(response_error),
                            (uint32_t)(i + 1),
                            DSM_UART_MAX_RETRY,
                            response_error);
             ret = response_error;
         } else {
-            /* ÖØÊÔÈÕÖ¾´øÉÏÔ­Ê¼Ö¡ºÍ UART ´íÎó±êÖ¾£¬ÏÖ³¡¿ÉÖ±½ÓÅĞ¶ÏÊ§°ÜÀàĞÍ¡£ */
             UART6_FormatHexDetail(ErrorLog_GetReasonByCode(ret),
                                   cmd,
                                   response,
@@ -540,8 +931,9 @@ static int UART6_SendWithRetry(const char *cmd,
                                   s_uart6_last_error,
                                   detail,
                                   sizeof(detail));
+            /* Êµ¼Ê´òÓ¡£º´íÎóÖØÊÔ£¬²Ù×÷ÃûÀ´×ÔÃüÁî¹æ¸ñ£¬ÏêÇé±£ÁôÃüÁî¡¢³¤¶È¡¢UART Î»Í¼ºÍ HEX¡£ */
             ErrorLog_RetryDetail(ERROR_LOG_MODULE_SENSOR,
-                                 ERROR_LOG_OP_READ_LEVEL,
+                                 operation,
                                  ErrorLog_GetReasonByCode(ret),
                                  (uint32_t)(i + 1),
                                  DSM_UART_MAX_RETRY,
@@ -561,6 +953,7 @@ static int UART6_SendWithRetry(const char *cmd,
 uint32_t Read_Sensor_Voltage(float *voltage_out) {
     uint32_t ret;
     char resp[RX_BUF_LEN];
+    float voltage;
 
     if (voltage_out == NULL) {
         return SYSTEM_CALL_CONDITION_ERROR;
@@ -570,15 +963,11 @@ uint32_t Read_Sensor_Voltage(float *voltage_out) {
     if (ret != NO_ERROR) {
         return ret;
     }
-
-    printf("[UART6] ½ÓÊÕ³É¹¦: %s\r\n", resp);
-    if ((resp[0] == 'E') || (resp[0] == 'e')) {
-        *voltage_out = (float)atof(resp + 1);
-        return NO_ERROR;
+    if (!DSM_ParseSevenByteFloat(&resp[1], &voltage)) {
+        return SENSOR_RESP_FORMAT_ERROR;
     }
-
-    printf("ÎŞĞ§µçÑ¹ÏìÓ¦: %x\r\n", resp[0]);
-    return SENSOR_RESP_FORMAT_ERROR;
+    *voltage_out = voltage;
+    return NO_ERROR;
 }
 
 /**
@@ -590,22 +979,12 @@ int Probe_EnableWaterSensor(void) {
     char resp[RX_BUF_LEN];
     uint32_t ret;
 
-    /* ·¢ËÍÃüÁî "CL\r\n" ²¢´ø 3 ´ÎÖØÊÔ */
     ret = UART6_SendWithRetry("CL", resp, RX_BUF_LEN, NULL, 500);
     if (ret == NO_ERROR) {
-        printf("[Ì½Õë] ¿ªÆô²âË®Ì½ÕëÏìÓ¦: %s\r\n", resp);
-
-        /* Ğ­ÒéÔ¼¶¨£ºÈç¹û·µ»Ø°üº¬ "%" »òÆäËû³É¹¦±êÊ¶£¬¾ÍÈÏÎª³É¹¦ */
-        if (strstr(resp, "%") != NULL) {
-            printf("[Ì½Õë] ²âË®Ì½Õë¿ªÆô³É¹¦£¡\r\n");
-            return NO_ERROR;
-        } else {
-            printf("[Ì½Õë] ÎŞĞ§ÏìÓ¦: %s\r\n", resp);
-            return SENSOR_RESP_FORMAT_ERROR;
-        }
-    } else {
-        return ret;
+        printf("[Ì½Õë] ¿ªÆô²âË®Ì½ÕëÏìÓ¦: %%\r\n");
+        printf("[Ì½Õë] ²âË®Ì½Õë¿ªÆô³É¹¦£¡\r\n");
     }
+    return (int)ret;
 }
 
 /**
@@ -617,22 +996,12 @@ int DSM_EnableLevelMode(void) {
     char resp[RX_BUF_LEN];
     uint32_t ret;
 
-    /* ·¢ËÍÃüÁî "CB\r\n" ²¢´ø 3 ´ÎÖØÊÔ */
     ret = UART6_SendWithRetry("CB", resp, RX_BUF_LEN, NULL, 500);
     if (ret == NO_ERROR) {
-        printf("[ÒºÎ»Ä£Ê½] ¿ªÆôÒºÎ»Ä£Ê½ÏìÓ¦: %s\r\n", resp);
-
-        /* Ğ­ÒéÔ¼¶¨£ºÈç¹û·µ»Ø°üº¬ "%" »òÆäËû³É¹¦±êÊ¶£¬¾ÍÈÏÎª³É¹¦ */
-        if (strstr(resp, "%") != NULL) {
-            printf("[ÒºÎ»Ä£Ê½] ¿ªÆô³É¹¦£¡\r\n");
-            return NO_ERROR;
-        } else {
-            printf("[ÒºÎ»Ä£Ê½] ÎŞĞ§ÏìÓ¦: %s\r\n", resp);
-            return SENSOR_RESP_FORMAT_ERROR;
-        }
-    } else {
-        return ret;
+        printf("[ÒºÎ»Ä£Ê½] ¿ªÆôÒºÎ»Ä£Ê½ÏìÓ¦: %%\r\n");
+        printf("[ÒºÎ»Ä£Ê½] ¿ªÆô³É¹¦£¡\r\n");
     }
+    return (int)ret;
 }
 
 /**
@@ -644,22 +1013,12 @@ int DSM_EnableDensityMode(void) {
     char resp[RX_BUF_LEN];
     uint32_t ret;
 
-    /* ·¢ËÍÃüÁî "CD\r\n" ²¢´ø 3 ´ÎÖØÊÔ */
     ret = UART6_SendWithRetry("CD", resp, RX_BUF_LEN, NULL, 500);
     if (ret == NO_ERROR) {
-        printf("[ÃÜ¶ÈÄ£Ê½] ¿ªÆôÃÜ¶ÈÄ£Ê½ÏìÓ¦: %s\r\n", resp);
-
-        /* Ğ­ÒéÔ¼¶¨£ºÈç¹û·µ»Ø°üº¬ "%" »òÆäËû³É¹¦±êÊ¶£¬¾ÍÈÏÎª³É¹¦ */
-        if (strstr(resp, "%") != NULL) {
-            printf("[ÃÜ¶ÈÄ£Ê½] ¿ªÆô³É¹¦£¡\r\n");
-            return NO_ERROR;
-        } else {
-            printf("[ÃÜ¶ÈÄ£Ê½] ÎŞĞ§ÏìÓ¦: %s\r\n", resp);
-            return SENSOR_RESP_FORMAT_ERROR;
-        }
-    } else {
-        return ret;
+        printf("[ÃÜ¶ÈÄ£Ê½] ¿ªÆôÃÜ¶ÈÄ£Ê½ÏìÓ¦: %%\r\n");
+        printf("[ÃÜ¶ÈÄ£Ê½] ¿ªÆô³É¹¦£¡\r\n");
     }
+    return (int)ret;
 }
 
 /**
@@ -671,23 +1030,10 @@ int DSM_EnableDensityMode(void) {
  */
 static int parse_freq_response(const char *resp, float *out_hz)
 {
-    if (!resp || !out_hz) return SYSTEM_CALL_CONDITION_ERROR;
-
-    /* 1) Ìø¹ıÆğÊ¼±êÖ¾£¨ÀıÈç 'E'£©ºÍÇ°µ¼¿Õ°× */
-    const char *p = resp;
-    while (*p && !isdigit((unsigned char)*p) && *p != '-' && *p != '+') {
-        ++p;
+    if ((resp == NULL) || (out_hz == NULL)) {
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
-    if (!*p) return -2;
-
-    /* 2) Ê¹ÓÃ strtod ½âÎöµ½·ÇÊı×Ö´¦£¨»á×Ô¶¯Í£ÔÚ 'V' »ò»Ø³µ£© */
-    char *endp = NULL;
-    double v = strtod(p, &endp);
-    if (endp == p) return -3;   /* Ã»½âÎöµ½Êı×Ö */
-    if (!isfinite(v)) return -4;
-
-    *out_hz = (float)v;
-    return 0;
+    return DSM_ParseSevenByteFloat(&resp[1], out_hz) ? 0 : SENSOR_RESP_FORMAT_ERROR;
 }
 
 /**
@@ -728,32 +1074,31 @@ uint32_t Read_Level_Frequency(uint32_t *frequency_out)
  *         ±íÊ¾Ó¦´ğ×Ö¶Î²»ÍêÕû£»ÆäËûÖµÎª UART6 ·¢ËÍ»ò½ÓÊÕ´íÎóÂë¡£
  */
 int DSM_Read_Frequency_Density_Temp(float *frequency, float *density, float *temp) {
-    if (!frequency || !density || !temp) {
+    int ret;
+    char resp[RX_BUF_LEN];
+    float parsed_frequency;
+    float parsed_density;
+    float parsed_temp;
+
+    if ((frequency == NULL) || (density == NULL) || (temp == NULL)) {
         return SYSTEM_CALL_CONDITION_ERROR;
     }
 
-    int ret = NO_ERROR;
-    char resp[RX_BUF_LEN];
-
     ret = UART6_SendWithRetry("Cd", resp, RX_BUF_LEN, NULL, 500);
-    if (ret == NO_ERROR) {
-        /* ¸ñÊ½: F+0000.0D+000.00T+19.570P */
-        if ((resp[0] == 'E') || (resp[0] == 'F')) {
-            char *pD = strchr(resp, 'D');
-            char *pT = strchr(resp, 'T');
-
-            if (pD && pT) {
-                *frequency = (float)atof(resp + 1);
-                *density   = (float)atof(pD + 1);
-                *temp      = (float)atof(pT + 1);
-                return NO_ERROR;
-            }
-        }
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+    if (!DSM_ParseSevenByteFloat(&resp[1], &parsed_frequency) ||
+        !DSM_ParseSevenByteFloat(&resp[9], &parsed_density) ||
+        !DSM_ParseSevenByteFloat(&resp[17], &parsed_temp)) {
         return SENSOR_RESP_FORMAT_ERROR;
     }
-    return ret;
-}
 
+    *frequency = parsed_frequency;
+    *density = parsed_density;
+    *temp = parsed_temp;
+    return NO_ERROR;
+}
 
 /**
  * @brief °´ÏÖÓĞ DSM Ö¡Ô¼¶¨¼ÆËã BCC Òì»òĞ£ÑéÂë¡£
@@ -879,88 +1224,48 @@ uint32_t Read_Water_Capacitance(float *cap_out)
     }
     /* resp[0]=='E' Ö»ÌáÊ¾´«¸ĞÆ÷µçÑ¹¹ıµÍ£¬²»Ó°ÏìË®Î»µçÈİÖµ½âÎö¡£ */
 
-    /* ½âÎöÊıÖµ£ºresp[1..7] ÊÇÊı×Ö/Ğ¡Êıµã×Ö·û´®¡£Ö±½Ó atof(resp+1) ¼´¿É */
-    *cap_out = (float)atof(resp + 1);
+    /* Ö»½âÎö¹Ì¶¨ 7 ×Ö½Ú×Ö¶Î£¬±ÜÃâÔ­Ê¼ BCC Ç¡ºÃÎªÊı×ÖÊ±±» atof ¼ÌĞøÏû·Ñ¡£ */
+    float parsed_cap;
+    if (!DSM_ParseSevenByteFloat(&resp[1], &parsed_cap)) {
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+    *cap_out = parsed_cap;
 	if (*cap_out < 30.0f) {
 		*cap_out = 99999.9;
 	}
     return NO_ERROR;
 }
 /**
- * @brief ½âÎöĞÎÈç "+0040.1" »ò "-12.3" µÄ¸¡µãÊı£¬p »á×Ô¶¯Ìø¹ıµ½Êı×ÖÆğÊ¼¡£
+ * @brief ¶ÁÈ¡ÍÓÂİÒÇ½Ç¶È£¨Ch Ö¸Áî£©¡£
  *
- * @param tag_pos Ö¸Ïò DSM ÏìÓ¦×Ö¶Î±êÇ©µÄÖ»¶ÁÎÄ±¾Î»ÖÃ¡£
- * @param out_val ÓÃÓÚ·µ»Ø´Ó±êÇ©ºó½âÎö³öµÄ¸¡µãÖµ¡£
- * @return 0 ±íÊ¾¸¡µãÖµ½âÎö³É¹¦£»-1 ±íÊ¾ÊäÈë»òÊä³öÖ¸ÕëÎª¿Õ£¬-2 ±íÊ¾±êÇ©ºóÃ»ÓĞÊıÖµ£¬-3 ±íÊ¾ÊıÖµ×ª»»Ê§°Ü¡£
- */
-static int dsm_parse_float_after_tag(const char *tag_pos, float *out_val)
-{
-    if (!tag_pos || !out_val) return -1;
-
-    const char *p = tag_pos;
-
-    /* Ìø¹ı±êÇ©×Ö·û±¾Éí£¨ÀıÈç 'A' »ò 'B'£© */
-    p++;
-
-    /* Ìø¹ı·ÇÊı×Ö/·ûºÅ×Ö·û */
-    while (*p && !isdigit((unsigned char)*p) && *p != '-' && *p != '+') {
-        p++;
-    }
-    if (!*p) return -2;
-
-    char *endp = NULL;
-    double v = strtod(p, &endp);
-    if (endp == p) return -3;
-
-    *out_val = (float)v;
-    return 0;
-}
-
-/**
- * @brief ¶ÁÈ¡ÍÓÂİÒÇ½Ç¶È£¨Ch Ö¸Áî£©
- * @param[out] angle_x_deg  XÖá½Ç¶È£¨A£©
- * @param[out] angle_y_deg  YÖá½Ç¶È£¨B£©
- * @return uint32_t ´íÎóÂë£¨NO_ERROR ³É¹¦£©
- *
- * ÆÚÍûÏìÓ¦Ê¾Àı£º
- *   A+0040.1B+0097.8+
- * £¨Êµ¼ÊÖ¡Î²Í¨³£»¹´ø BCC + \r\n£¬ÄãµÄ UART6_SendWithRetry ÒÑ×ö BCC Ğ£Ñé£©
+ * @param angle_x_deg ÓÃÓÚ·µ»Ø X Öá½Ç¶È¡£
+ * @param angle_y_deg ÓÃÓÚ·µ»Ø Y Öá½Ç¶È¡£
+ * @return NO_ERROR ±íÊ¾Ë«Öá½Ç¶È¾ùÓÉÑÏ¸ñ¶¨³¤Ö¡½âÎö³É¹¦£»ÆäËûÖµÎªÍ¨ĞÅ¡¢Ô¶¶Ë»ò¸ñÊ½´íÎó¡£
  */
 uint32_t Read_Gyro_Angle(float *angle_x_deg, float *angle_y_deg)
 {
-    if (!angle_x_deg || !angle_y_deg) {
+    char resp[RX_BUF_LEN] = {0};
+    uint32_t ret;
+    float ax;
+    float ay;
+
+    if ((angle_x_deg == NULL) || (angle_y_deg == NULL)) {
         return SYSTEM_CALL_CONDITION_ERROR;
     }
 
-    char resp[RX_BUF_LEN] = {0};
-    uint32_t ret = UART6_SendWithRetry("Ch", resp, RX_BUF_LEN, NULL, 500);
+    ret = UART6_SendWithRetry("Ch", resp, RX_BUF_LEN, NULL, 500);
     if (ret != NO_ERROR) {
         return ret;
     }
-
-    /* ²éÕÒ A/B ±êÇ© */
-    char *pA = strchr(resp, 'A');
-    if (!pA) {
-        pA = strchr(resp, 'E');   /* ¡ï ¼æÈİ E ×÷Îª X Öá±êÇ© */
-    }
-    char *pB = strchr(resp, 'B');
-
-    if (!pA || !pB) {
-        return SENSOR_RESP_FORMAT_ERROR;
-    }
-
-    float ax = 0.0f, ay = 0.0f;
-    int ea = dsm_parse_float_after_tag(pA, &ax);
-    int eb = dsm_parse_float_after_tag(pB, &ay);
-
-    if (ea != 0 || eb != 0) {
+    if (!DSM_ParseSevenByteFloat(&resp[1], &ax) ||
+        !DSM_ParseSevenByteFloat(&resp[9], &ay)) {
         return SENSOR_RESP_FORMAT_ERROR;
     }
 
     *angle_x_deg = ax;
     *angle_y_deg = ay;
-    g_measurement.debug_data.angle_x = ax*100;
-    g_measurement.debug_data.angle_y = ay*100;
+    g_measurement.debug_data.angle_x = ax * 100.0f;
+    g_measurement.debug_data.angle_y = ay * 100.0f;
     return NO_ERROR;
 }
 

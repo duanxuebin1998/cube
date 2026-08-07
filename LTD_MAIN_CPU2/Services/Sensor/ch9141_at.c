@@ -20,6 +20,7 @@
 #define CH9141_AT_PRE_COMMAND_IDLE_MS 30U /* CH9141K AT 指令参数：前置 命令 IDLE 毫秒。 */
 #define CH9141_AT_PRE_COMMAND_DRAIN_TIMEOUT_MS 200U /* CH9141K AT 指令参数：命令前清空总超时毫秒。 */
 #define CH9141_AT_SOFTWARE_IDLE_MS      500U /* CH9141K AT 指令参数：SOFTWARE IDLE 毫秒。 */
+#define CH9141_AT_RECOVERY_IDLE_MS      500U /* CH9141K AT 恢复透明传输后的最终连续空闲时间。 */
 #define CH9141_AT_PREPARE_DRAIN_TIMEOUT_MS 1000U /* CH9141K AT 指令参数：准备串口清空总超时毫秒。 */
 #define CH9141_AT_ENTER_TIMEOUT_MS      1000U /* CH9141K AT 指令参数：ENTER 超时 毫秒。 */
 
@@ -30,6 +31,21 @@
 
 /* 上电阶段已经收到孤立百分号、等待继续清理 RSSI 文本的标志。 */
 static uint8_t ch9141_boot_percent_pending = 0U;
+static volatile CH9141Uart6LinkState s_ch9141_uart6_link_state = CH9141_UART6_TRANSPARENT_READY;
+static uint32_t CH9141_AT_PrepareUart6Internal(uint32_t idle_ms, uint8_t check_command_switch);
+
+/**
+ * @brief 返回 UART6 当前透明传输与 AT 操作交接状态。
+ *
+ * 调用场景：DSM 事务发送前检查；该函数只读取状态，不执行串口操作。
+ * 关键约束：只有 CH9141_UART6_TRANSPARENT_READY 允许 DSM 启动新事务。
+ *
+ * @return UART6 当前链路交接状态。
+ */
+CH9141Uart6LinkState CH9141_AT_GetUart6LinkState(void)
+{
+    return s_ch9141_uart6_link_state;
+}
 
 /**
  * @brief 返回等待模式名称，便于现场日志确认当前 AT 命令在等什么结束条件。
@@ -164,9 +180,12 @@ static void CH9141_AT_ClearUartError(void)
  *
  * @param idle_ms 进入 AT 操作前要求 UART6 连续无数据的空闲时间，单位 ms。
  * @param total_timeout_ms 本次 UART6 接收排空允许占用的总时限，单位 ms。
+ * @param check_command_switch 非零表示排空期间响应命令切换，恢复收尾传 0 以保证 AT 退出动作不被半途跳过。
  * @return NO_ERROR 表示 UART6 已连续空闲达到 idle_ms；等待期间检测到命令切换返回 STATE_SWITCH，总时限内始终有残留字节返回 SENSOR_DEVICE_COMM_TIMEOUT。
  */
-static uint32_t CH9141_AT_DrainRxUntilIdle(uint32_t idle_ms, uint32_t total_timeout_ms)
+static uint32_t CH9141_AT_DrainRxUntilIdle(uint32_t idle_ms,
+                                          uint32_t total_timeout_ms,
+                                          uint8_t check_command_switch)
 {
     uint8_t dump;
     uint32_t start_tick = HAL_GetTick();
@@ -185,7 +204,7 @@ static uint32_t CH9141_AT_DrainRxUntilIdle(uint32_t idle_ms, uint32_t total_time
             }
         }
 
-        if (HasEffectiveCommandSwitchRequest()) {
+        if ((check_command_switch != 0U) && HasEffectiveCommandSwitchRequest()) {
             return STATE_SWITCH;
         }
         /* 持续透传数据会不断刷新空闲计时，必须用固定总时限保证主循环能够退出。 */
@@ -569,26 +588,47 @@ static uint32_t CH9141_AT_CollectResponse(CH9141AtWaitMode wait_mode,
  * @note 关键约束：仅在 AT... 已经发出且可能进入 AT 模式时发送 AT+EXIT，避免无谓污染透传传感器链路。
  *
  * @param send_exit true 表示恢复透明传输前先发送退出 AT 模式命令，false 表示只恢复串口状态。
+ * @return NO_ERROR 表示恢复动作和最终空闲确认均成功；其他值保留首次发送、排空或 UART 恢复错误。
  */
-static void CH9141_AT_RecoverTransparentMode(uint8_t send_exit)
+static uint32_t CH9141_AT_RecoverTransparentMode(uint8_t send_exit)
 {
     static const uint8_t exit_cmd[] = "AT+EXIT\r\n";
+    uint32_t first_error = NO_ERROR;
+    uint32_t step_ret;
+
+    s_ch9141_uart6_link_state = CH9141_UART6_RECOVERING;
 
     (void)HAL_UART_DMAStop(&huart6);
     CH9141_AT_ClearUartError();
     if (send_exit != 0U) {
-        (void)HAL_UART_Transmit(&huart6,
-                                (uint8_t *)exit_cmd,
-                                (uint16_t)(sizeof(exit_cmd) - 1U),
-                                CH9141_AT_COMMAND_TX_TIMEOUT_MS);
-        (void)CH9141_AT_DrainRxUntilIdle(CH9141_AT_PRE_COMMAND_IDLE_MS,
-                                         CH9141_AT_PRE_COMMAND_DRAIN_TIMEOUT_MS);
+        if (HAL_UART_Transmit(&huart6,
+                              (uint8_t *)exit_cmd,
+                              (uint16_t)(sizeof(exit_cmd) - 1U),
+                              CH9141_AT_COMMAND_TX_TIMEOUT_MS) != HAL_OK) {
+            first_error = COMM_UART_TRANSFER_ERROR;
+        }
+        step_ret = CH9141_AT_DrainRxUntilIdle(CH9141_AT_PRE_COMMAND_IDLE_MS,
+                                              CH9141_AT_PRE_COMMAND_DRAIN_TIMEOUT_MS,
+                                              0U);
+        if ((first_error == NO_ERROR) && (step_ret != NO_ERROR)) {
+            first_error = step_ret;
+        }
     }
-    (void)HAL_UART_Abort(&huart6);
+    if ((HAL_UART_Abort(&huart6) != HAL_OK) && (first_error == NO_ERROR)) {
+        first_error = COMM_UART_TRANSFER_ERROR;
+    }
     CH9141_AT_ClearUartError();
-    (void)CH9141_AT_DrainRxUntilIdle(CH9141_AT_PRE_COMMAND_IDLE_MS,
-                                     CH9141_AT_PRE_COMMAND_DRAIN_TIMEOUT_MS);
+    step_ret = CH9141_AT_DrainRxUntilIdle(CH9141_AT_PRE_COMMAND_IDLE_MS,
+                                          CH9141_AT_PRE_COMMAND_DRAIN_TIMEOUT_MS,
+                                          0U);
+    if ((first_error == NO_ERROR) && (step_ret != NO_ERROR)) {
+        first_error = step_ret;
+    }
     CH9141_AT_ClearUartError();
+    s_ch9141_uart6_link_state = (first_error == NO_ERROR)
+                                ? CH9141_UART6_TRANSPARENT_READY
+                                : CH9141_UART6_NOT_READY;
+    return first_error;
 }
 
 /**
@@ -598,35 +638,59 @@ static void CH9141_AT_RecoverTransparentMode(uint8_t send_exit)
  *
  * @note 忽略命令切换以完成 UART6 清场；只允许在主循环任务上下文调用。
  */
-void CH9141_AT_RecoverRssiQuery(void)
+uint32_t CH9141_AT_RecoverRssiQuery(void)
 {
     static const uint8_t rssi_off_cmd[] = "AT+RSSI=OFF\r\n";
     static const uint8_t exit_cmd[] = "AT+EXIT\r\n";
+    uint32_t first_error = NO_ERROR;
+    uint32_t step_ret;
+
+    s_ch9141_uart6_link_state = CH9141_UART6_RECOVERING;
 
     (void)HAL_UART_DMAStop(&huart6);
     CH9141_AT_ClearUartError();
     printf("CH9141K AT\tRSSI查询清理\t动作=强制关闭RSSI并退出AT\r\n");
 
-    (void)HAL_UART_Transmit(&huart6,
-                            (uint8_t *)rssi_off_cmd,
-                            (uint16_t)(sizeof(rssi_off_cmd) - 1U),
-                            CH9141_AT_COMMAND_TX_TIMEOUT_MS);
-    (void)CH9141_AT_DrainRxUntilIdle(CH9141_AT_PRE_COMMAND_IDLE_MS,
-                                     CH9141_AT_PRE_COMMAND_DRAIN_TIMEOUT_MS);
+    if (HAL_UART_Transmit(&huart6,
+                          (uint8_t *)rssi_off_cmd,
+                          (uint16_t)(sizeof(rssi_off_cmd) - 1U),
+                          CH9141_AT_COMMAND_TX_TIMEOUT_MS) != HAL_OK) {
+        first_error = COMM_UART_TRANSFER_ERROR;
+    }
+    step_ret = CH9141_AT_DrainRxUntilIdle(CH9141_AT_PRE_COMMAND_IDLE_MS,
+                                          CH9141_AT_PRE_COMMAND_DRAIN_TIMEOUT_MS,
+                                          0U);
+    if ((first_error == NO_ERROR) && (step_ret != NO_ERROR)) {
+        first_error = step_ret;
+    }
     CH9141_AT_ClearUartError();
 
-    (void)HAL_UART_Transmit(&huart6,
-                            (uint8_t *)exit_cmd,
-                            (uint16_t)(sizeof(exit_cmd) - 1U),
-                            CH9141_AT_COMMAND_TX_TIMEOUT_MS);
-    (void)CH9141_AT_DrainRxUntilIdle(CH9141_AT_PRE_COMMAND_IDLE_MS,
-                                     CH9141_AT_PRE_COMMAND_DRAIN_TIMEOUT_MS);
+    if ((HAL_UART_Transmit(&huart6,
+                           (uint8_t *)exit_cmd,
+                           (uint16_t)(sizeof(exit_cmd) - 1U),
+                           CH9141_AT_COMMAND_TX_TIMEOUT_MS) != HAL_OK) &&
+        (first_error == NO_ERROR)) {
+        first_error = COMM_UART_TRANSFER_ERROR;
+    }
+    step_ret = CH9141_AT_DrainRxUntilIdle(CH9141_AT_PRE_COMMAND_IDLE_MS,
+                                          CH9141_AT_PRE_COMMAND_DRAIN_TIMEOUT_MS,
+                                          0U);
+    if ((first_error == NO_ERROR) && (step_ret != NO_ERROR)) {
+        first_error = step_ret;
+    }
 
-    (void)HAL_UART_Abort(&huart6);
+    if ((HAL_UART_Abort(&huart6) != HAL_OK) && (first_error == NO_ERROR)) {
+        first_error = COMM_UART_TRANSFER_ERROR;
+    }
     CH9141_AT_ClearUartError();
-    (void)CH9141_AT_DrainRxUntilIdle(CH9141_AT_PRE_COMMAND_IDLE_MS,
-                                     CH9141_AT_PRE_COMMAND_DRAIN_TIMEOUT_MS);
-    CH9141_AT_ClearUartError();
+    step_ret = CH9141_AT_PrepareUart6Internal(CH9141_AT_RECOVERY_IDLE_MS, 0U);
+    if ((first_error == NO_ERROR) && (step_ret != NO_ERROR)) {
+        first_error = step_ret;
+    }
+    if (first_error != NO_ERROR) {
+        s_ch9141_uart6_link_state = CH9141_UART6_NOT_READY;
+    }
+    return first_error;
 }
 
 /**
@@ -635,11 +699,13 @@ void CH9141_AT_RecoverRssiQuery(void)
  * @param idle_ms 清场结束前 UART6 必须连续保持无数据的时间，单位 ms。
  * @return 返回清场结果码；NO_ERROR 表示 UART6 已达到连续空闲，其他值表示超时或通信错误。
  */
-uint32_t CH9141_AT_PrepareUart6(uint32_t idle_ms)
+static uint32_t CH9141_AT_PrepareUart6Internal(uint32_t idle_ms, uint8_t check_command_switch)
 {
     /* 切换到 CH9141 AT 前先清除安全协议同步传输状态，避免共享 UART6 保留忙标志。 */
     SensorSafeTransportUart6_Abort();
     uint32_t ret;
+
+    s_ch9141_uart6_link_state = CH9141_UART6_RECOVERING;
 
     if (CH9141_AT_VERBOSE_LOG != 0U) {
         printf("CH9141K AT\t准备UART6\t停止DMA并等待空闲=%lu ms\r\n", (unsigned long)idle_ms);
@@ -648,9 +714,42 @@ uint32_t CH9141_AT_PrepareUart6(uint32_t idle_ms)
     (void)HAL_UART_DMAStop(&huart6);
     (void)HAL_UART_Abort(&huart6);
     CH9141_AT_ClearUartError();
-    ret = CH9141_AT_DrainRxUntilIdle(idle_ms, CH9141_AT_PREPARE_DRAIN_TIMEOUT_MS);
+    ret = CH9141_AT_DrainRxUntilIdle(idle_ms,
+                                     CH9141_AT_PREPARE_DRAIN_TIMEOUT_MS,
+                                     check_command_switch);
     CH9141_AT_ClearUartError();
+    s_ch9141_uart6_link_state = (ret == NO_ERROR)
+                                ? CH9141_UART6_TRANSPARENT_READY
+                                : CH9141_UART6_NOT_READY;
     return ret;
+}
+
+/**
+ * @brief 按可中断模式准备 UART6，并发布透明传输交接结果。
+ *
+ * 调用场景：进入 CH9141K AT 前或正常 AT+EXIT 后由主循环调用。
+ * 关键约束：命令切换会终止普通准备；强制恢复流程改用内部不可中断入口。
+ *
+ * @param idle_ms 清场结束前 UART6 必须连续保持无数据的时间，单位 ms。
+ * @return NO_ERROR 表示透明传输已经就绪，其他值表示命令切换、超时或 UART 错误。
+ */
+uint32_t CH9141_AT_PrepareUart6(uint32_t idle_ms)
+{
+    return CH9141_AT_PrepareUart6Internal(idle_ms, 1U);
+}
+
+/**
+ * @brief 在 AT 退出或模块复位后完成不可中断的 UART6 透明传输交接。
+ *
+ * 调用场景：AT+EXIT 或 AT+RESET 已经发出后的收尾阶段；只能在主循环任务上下文调用。
+ * 关键约束：新命令可以打断业务等待，但不能把 UART6 留在 RECOVERING/NOT_READY 后直接启动下一次 DSM 事务。
+ *
+ * @param idle_ms 交接完成前 UART6 必须连续保持无数据的时间，单位 ms。
+ * @return NO_ERROR 表示透明传输已经就绪，其他值表示总时限内未达到连续空闲或 UART 错误。
+ */
+uint32_t CH9141_AT_CompleteTransparentHandoff(uint32_t idle_ms)
+{
+    return CH9141_AT_PrepareUart6Internal(idle_ms, 0U);
 }
 
 
@@ -674,6 +773,7 @@ uint32_t CH9141_AT_EnterSoftwareMode(CH9141AtResponse *response)
         return ret;
     }
 
+    s_ch9141_uart6_link_state = CH9141_UART6_ENTERING_AT;
     /* CH9141K 软件 AT 入口命令为 AT...，协议不使用裸 AT 作为入口。 */
     ret = CH9141_AT_SendCommand("AT...", CH9141_AT_WAIT_ACK, CH9141_AT_ENTER_TIMEOUT_MS, response);
     if ((ret != NO_ERROR) &&
@@ -700,6 +800,7 @@ uint32_t CH9141_AT_EnterSoftwareMode(CH9141AtResponse *response)
         CH9141_AT_ResetResponse(response);
         ret = CH9141_AT_PrepareUart6(CH9141_AT_SOFTWARE_IDLE_MS);
         if (ret == NO_ERROR) {
+            s_ch9141_uart6_link_state = CH9141_UART6_ENTERING_AT;
             ret = CH9141_AT_SendCommand("AT...",
                                         CH9141_AT_WAIT_ACK,
                                         CH9141_AT_ENTER_TIMEOUT_MS,
@@ -728,7 +829,9 @@ uint32_t CH9141_AT_EnterSoftwareMode(CH9141AtResponse *response)
             ((response != NULL) && (response->len != 0U))) {
             send_exit = 1U;
         }
-        CH9141_AT_RecoverTransparentMode(send_exit);
+        (void)CH9141_AT_RecoverTransparentMode(send_exit);
+    } else {
+        s_ch9141_uart6_link_state = CH9141_UART6_AT_ACTIVE;
     }
 
     return ret;
@@ -785,9 +888,17 @@ uint32_t CH9141_AT_SendCommand(const char *cmd,
     static const uint8_t line_end[] = "\r\n";
     uint16_t cmd_len;
     uint32_t ret;
+    uint8_t leaves_at_mode;
 
     if ((cmd == NULL) || (response == NULL)) {
         return SYSTEM_CALL_CONDITION_ERROR;
+    }
+
+    leaves_at_mode = (uint8_t)(((strcmp(cmd, "AT+EXIT") == 0) ||
+                                (strcmp(cmd, "AT+RESET") == 0)) ? 1U : 0U);
+    if (leaves_at_mode != 0U) {
+        /* EXIT/RESET 一旦开始，只有后续 PrepareUart6 成功才能重新声明透明传输就绪。 */
+        s_ch9141_uart6_link_state = CH9141_UART6_RECOVERING;
     }
 
     CH9141_AT_ResetResponse(response);
@@ -795,9 +906,13 @@ uint32_t CH9141_AT_SendCommand(const char *cmd,
     CH9141_AT_ClearUartError();
     /* 上一条命令可能遗留 RSSI 等异步尾包，发送新 AT 前先短暂清空。 */
     ret = CH9141_AT_DrainRxUntilIdle(CH9141_AT_PRE_COMMAND_IDLE_MS,
-                                     CH9141_AT_PRE_COMMAND_DRAIN_TIMEOUT_MS);
+                                     CH9141_AT_PRE_COMMAND_DRAIN_TIMEOUT_MS,
+                                     1U);
     CH9141_AT_ClearUartError();
     if (ret != NO_ERROR) {
+        if (leaves_at_mode != 0U) {
+            s_ch9141_uart6_link_state = CH9141_UART6_NOT_READY;
+        }
         CH9141_AT_PrintResult(cmd, wait_mode, timeout_ms, ret, response);
         return ret;
     }
@@ -814,6 +929,9 @@ uint32_t CH9141_AT_SendCommand(const char *cmd,
     if (HAL_UART_Transmit(&huart6, (uint8_t *)cmd, cmd_len, CH9141_AT_COMMAND_TX_TIMEOUT_MS) != HAL_OK) {
         CH9141_AT_ClearUartError();
         ret = COMM_UART_TRANSFER_ERROR;
+        if (leaves_at_mode != 0U) {
+            s_ch9141_uart6_link_state = CH9141_UART6_NOT_READY;
+        }
         CH9141_AT_PrintResult(cmd, wait_mode, timeout_ms, ret, response);
         return ret;
     }
@@ -821,11 +939,17 @@ uint32_t CH9141_AT_SendCommand(const char *cmd,
     if (HAL_UART_Transmit(&huart6, (uint8_t *)line_end, 2U, CH9141_AT_COMMAND_TX_TIMEOUT_MS) != HAL_OK) {
         CH9141_AT_ClearUartError();
         ret = COMM_UART_TRANSFER_ERROR;
+        if (leaves_at_mode != 0U) {
+            s_ch9141_uart6_link_state = CH9141_UART6_NOT_READY;
+        }
         CH9141_AT_PrintResult(cmd, wait_mode, timeout_ms, ret, response);
         return ret;
     }
 
     ret = CH9141_AT_CollectResponse(wait_mode, timeout_ms, response);
+    if ((leaves_at_mode != 0U) && (ret != NO_ERROR)) {
+        s_ch9141_uart6_link_state = CH9141_UART6_NOT_READY;
+    }
     CH9141_AT_PrintResult(cmd, wait_mode, timeout_ms, ret, response);
     return ret;
 }
