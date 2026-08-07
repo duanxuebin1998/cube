@@ -4,755 +4,417 @@
   <meta charset="utf-8" />
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <title>DM4四代数字驱动V6.0原理图详细分析</title>
+  <title>DM4 四代数字驱动 V6.0 原理图详细分析</title>
   <style>
-    /* Default styles provided by pandoc.
-    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
-    */
-    html {
-      color: #1a1a1a;
-      background-color: #fdfdfd;
-    }
-    body {
-      margin: 0 auto;
-      max-width: 36em;
-      padding-left: 50px;
-      padding-right: 50px;
-      padding-top: 50px;
-      padding-bottom: 50px;
-      hyphens: auto;
-      overflow-wrap: break-word;
-      text-rendering: optimizeLegibility;
-      font-kerning: normal;
-    }
-    @media (max-width: 600px) {
-      body {
-        font-size: 0.9em;
-        padding: 12px;
-      }
-      h1 {
-        font-size: 1.8em;
-      }
-    }
-    @media print {
-      html {
-        background-color: white;
-      }
-      body {
-        background-color: transparent;
-        color: black;
-        font-size: 12pt;
-      }
-      p, h2, h3 {
-        orphans: 3;
-        widows: 3;
-      }
-      h2, h3, h4 {
-        page-break-after: avoid;
-      }
-    }
-    p {
-      margin: 1em 0;
-    }
-    a {
-      color: #1a1a1a;
-    }
-    a:visited {
-      color: #1a1a1a;
-    }
-    img {
-      max-width: 100%;
-    }
-    svg {
-      height: auto;
-      max-width: 100%;
-    }
-    h1, h2, h3, h4, h5, h6 {
-      margin-top: 1.4em;
-    }
-    h5, h6 {
-      font-size: 1em;
-      font-style: italic;
-    }
-    h6 {
-      font-weight: normal;
-    }
-    ol, ul {
-      padding-left: 1.7em;
-      margin-top: 1em;
-    }
-    li > ol, li > ul {
-      margin-top: 0;
-    }
-    blockquote {
-      margin: 1em 0 1em 1.7em;
-      padding-left: 1em;
-      border-left: 2px solid #e6e6e6;
-      color: #606060;
-    }
-    code {
-      white-space: pre-wrap;
-      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
-      font-size: 85%;
-      margin: 0;
-      hyphens: manual;
-    }
-    pre {
-      margin: 1em 0;
-      overflow: auto;
-    }
-    pre code {
-      padding: 0;
-      overflow: visible;
-      overflow-wrap: normal;
-    }
-    .sourceCode {
-     background-color: transparent;
-     overflow: visible;
-    }
-    hr {
-      border: none;
-      border-top: 1px solid #1a1a1a;
-      height: 1px;
-      margin: 1em 0;
-    }
-    table {
-      margin: 1em 0;
-      border-collapse: collapse;
-      width: 100%;
-      overflow-x: auto;
-      display: block;
-      font-variant-numeric: lining-nums tabular-nums;
-    }
-    table caption {
-      margin-bottom: 0.75em;
-    }
-    tbody {
-      margin-top: 0.5em;
-      border-top: 1px solid #1a1a1a;
-      border-bottom: 1px solid #1a1a1a;
-    }
-    th {
-      border-top: 1px solid #1a1a1a;
-      padding: 0.25em 0.5em 0.25em 0.5em;
-    }
-    td {
-      padding: 0.125em 0.5em 0.25em 0.5em;
-    }
-    header {
-      margin-bottom: 4em;
-      text-align: center;
-    }
-    #TOC li {
-      list-style: none;
-    }
-    #TOC ul {
-      padding-left: 1.3em;
-    }
-    #TOC > ul {
-      padding-left: 0;
-    }
-    #TOC a:not(:hover) {
-      text-decoration: none;
-    }
-    span.smallcaps{font-variant: small-caps;}
-    div.columns{display: flex; gap: min(4vw, 1.5em);}
-    div.column{flex: auto; overflow-x: auto;}
-    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
-    /* The extra [class] is a hack that increases specificity enough to
-       override a similar rule in reveal.js */
-    ul.task-list[class]{list-style: none;}
-    ul.task-list li input[type="checkbox"] {
-      font-size: inherit;
-      width: 0.8em;
-      margin: 0 0.8em 0.2em -1.6em;
-      vertical-align: middle;
-    }
-    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
-  </style>
-  <style>
-  :root {
-    color-scheme: light;
-    --page: #eef4f7;
-    --paper: #ffffff;
-    --ink: #173042;
-    --muted: #607584;
-    --line: #d5e1e7;
-    --navy: #123f57;
-    --blue: #137ca5;
-    --blue-soft: #e9f6fb;
-    --green: #258069;
-    --green-soft: #e9f7f1;
-    --amber: #bd7217;
-    --amber-soft: #fff4df;
-    --red: #ae3c49;
-    --red-soft: #fff0f2;
-    --purple: #7253a5;
-    --purple-soft: #f2edfa;
-    --shadow: 0 12px 34px rgba(24, 61, 82, .08);
-  }
 
-  * { box-sizing: border-box; }
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
 
-  html {
-    scroll-behavior: smooth;
-    background: var(--page);
-  }
-
-  body {
-    max-width: 1120px;
-    min-width: 0;
-    margin: 0 auto;
-    padding: 36px 34px 90px 310px;
-    color: var(--ink);
-    background:
-      radial-gradient(circle at 16% 0, rgba(19, 124, 165, .10), transparent 34rem),
-      linear-gradient(180deg, #f8fbfd 0, var(--page) 34rem);
-    font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif;
-    font-size: 16px;
-    line-height: 1.72;
-  }
-
-  a {
-    color: #0b6f98;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 3px;
-  }
-
-  a:hover { color: #084e6b; }
-
-  #TOC {
-    position: fixed;
-    z-index: 10;
-    top: 24px;
-    left: max(20px, calc(50vw - 700px));
-    width: 262px;
-    max-height: calc(100vh - 48px);
-    overflow: auto;
-    padding: 18px 18px 20px;
-    border: 1px solid var(--line);
-    border-radius: 18px;
-    background: rgba(255, 255, 255, .96);
-    box-shadow: var(--shadow);
-    backdrop-filter: blur(12px);
-  }
-
-  #TOC::before {
-    content: "DM4 V6.0 · 文档导航";
-    display: block;
-    margin-bottom: 12px;
-    color: var(--navy);
-    font-size: 1.02rem;
-    font-weight: 800;
-  }
-
-  #TOC ul {
-    margin: 0;
-    padding-left: 1.1rem;
-  }
-
-  #TOC li { margin: 6px 0; }
-
-  #TOC a {
-    color: #496575;
-    text-decoration: none;
-  }
-
-  #TOC a:hover { color: var(--blue); }
-
-  h1, h2, h3, h4 {
-    color: var(--navy);
-    line-height: 1.35;
-  }
-
-  h1 {
-    margin: 0 0 12px;
-    padding: 36px 38px 18px;
-    border: 1px solid var(--line);
-    border-bottom: 0;
-    border-radius: 24px 24px 0 0;
-    background:
-      linear-gradient(135deg, rgba(232, 247, 252, .98), rgba(255, 255, 255, .98) 62%);
-    font-size: clamp(2rem, 4vw, 3rem);
-    letter-spacing: -.025em;
-  }
-
-  h2 {
-    margin: 0 0 24px;
-    padding-bottom: 12px;
-    border-bottom: 2px solid #e7eff3;
-    font-size: clamp(1.48rem, 2.7vw, 2rem);
-  }
-
-  h3 {
-    margin: 30px 0 12px;
-    color: #1e536e;
-    font-size: 1.28rem;
-  }
-
-  h4 {
-    margin: 24px 0 10px;
-    font-size: 1.08rem;
-  }
-
-  p { margin: 10px 0 16px; }
-
-  section.level1 > p:first-of-type {
-    margin-top: 0;
-  }
-
-  section.level2 {
-    margin: 0 0 22px;
-    padding: clamp(24px, 4vw, 38px);
-    border: 1px solid var(--line);
-    border-radius: 22px;
-    background: var(--paper);
-    box-shadow: var(--shadow);
-  }
-
-  .report-summary {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
-    margin: -12px 0 24px;
-    padding: 18px 38px 30px;
-    border: 1px solid var(--line);
-    border-top: 0;
-    border-radius: 0 0 24px 24px;
-    background: #fff;
-    box-shadow: var(--shadow);
-  }
-
-  .report-summary > div {
-    min-height: 98px;
-    padding: 15px;
-    border: 1px solid #d9e8ef;
-    border-radius: 14px;
-    background: #f8fbfd;
-  }
-
-  .report-summary span,
-  .report-summary strong {
-    display: block;
-  }
-
-  .report-summary span {
-    margin-bottom: 8px;
-    color: var(--muted);
-    font-size: .84rem;
-  }
-
-  .report-summary strong {
-    color: var(--navy);
-    font-size: .98rem;
-    line-height: 1.45;
-  }
-
-  .system-flow {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
-    align-items: stretch;
-    gap: 10px;
-    margin: 20px 0 28px;
-  }
-
-  .board {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    min-width: 0;
-    padding: 18px 14px;
-    border: 1px solid var(--line);
-    border-radius: 16px;
-  }
-
-  .board b {
-    margin-bottom: 4px;
-    font-size: 1.06rem;
-  }
-
-  .board span {
-    color: #4f6878;
-    font-size: .88rem;
-    line-height: 1.45;
-  }
-
-  .board-power { background: var(--amber-soft); border-color: #efd7ae; }
-  .board-control { background: var(--blue-soft); border-color: #bfe0ec; }
-  .board-analog { background: var(--purple-soft); border-color: #d8caef; }
-  .board-sensor { background: var(--green-soft); border-color: #bfe2d4; }
-
-  .flow-arrow {
-    display: grid;
-    place-items: center;
-    color: var(--blue);
-    font-size: 1.55rem;
-    font-weight: 800;
-  }
-
-  .signal-chain {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    margin: 16px 0 24px;
-    padding: 18px;
-    border: 1px solid #d8e6ed;
-    border-radius: 16px;
-    background: #f8fbfd;
-  }
-
-  .signal-chain span {
-    padding: 8px 11px;
-    border: 1px solid #cfe0e8;
-    border-radius: 10px;
-    background: #fff;
-    color: #244d64;
-    font-size: .91rem;
-  }
-
-  .signal-chain i {
-    color: var(--blue);
-    font-style: normal;
-    font-weight: 800;
-  }
-
-  .formula {
-    margin: 14px 0;
-    padding: 14px 18px;
-    overflow-x: auto;
-    border-left: 4px solid var(--blue);
-    border-radius: 0 12px 12px 0;
-    background: var(--blue-soft);
-    color: #164f69;
-    font-family: Cambria, "Times New Roman", serif;
-    font-size: 1.08rem;
-  }
-
-  table {
-    display: table;
-    width: 100%;
-    margin: 16px 0 24px;
-    border-collapse: separate;
-    border-spacing: 0;
-    border: 1px solid var(--line);
-    border-radius: 13px;
-    overflow: hidden;
-    font-size: .94rem;
-  }
-
-  thead th {
-    padding: 11px 12px;
-    color: #184c66;
-    background: #edf6fa;
-    text-align: left;
-  }
-
-  tbody td {
-    padding: 10px 12px;
-    border-top: 1px solid #e2ebef;
-    vertical-align: top;
-  }
-
-  tbody tr:nth-child(even) td { background: #fafcfd; }
-
-  th:not(:last-child),
-  td:not(:last-child) { border-right: 1px solid #e2ebef; }
-
-  code {
-    padding: .08em .35em;
-    border: 1px solid #d9e5eb;
-    border-radius: 5px;
-    color: #244d65;
-    background: #f5f9fb;
-    font-family: Consolas, "SFMono-Regular", monospace;
-    font-size: .91em;
-    overflow-wrap: anywhere;
-  }
-
-  ol, ul { padding-left: 1.45rem; }
-  li { margin: 6px 0; }
-
-  blockquote {
-    margin: 18px 0;
-    padding: 13px 18px;
-    border-left: 4px solid var(--amber);
-    background: var(--amber-soft);
-  }
-
-  section.level2:nth-of-type(11) h2,
-  section.level2:nth-of-type(12) h2 {
-    color: #9b3e47;
-  }
-
-  @media (max-width: 1180px) {
-    body {
-      max-width: 100%;
-      padding: 24px 24px 70px;
-    }
-    #TOC {
-      position: static;
-      width: 100%;
-      max-height: none;
-      margin: 0 0 20px;
-    }
-  }
-
-  @media (max-width: 820px) {
-    body { padding: 14px 12px 54px; }
-    h1 { padding: 24px 22px 16px; }
-    .report-summary {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      padding: 14px 22px 24px;
-    }
-    .system-flow {
-      grid-template-columns: 1fr;
-    }
-    .flow-arrow { transform: rotate(90deg); }
-    section.level2 { padding: 22px 18px; }
-    table {
-      display: block;
-      overflow-x: auto;
-      white-space: normal;
-    }
-  }
-
-  @media (max-width: 520px) {
-    .report-summary { grid-template-columns: 1fr; }
-  }
-
-  @media print {
-    @page { size: A4; margin: 16mm; }
-    html, body { background: #fff; }
-    body {
-      max-width: none;
-      padding: 0;
-      font-size: 10pt;
-    }
-    #TOC { display: none; }
-    h1, .report-summary, section.level2 {
-      box-shadow: none;
-    }
-    h1 {
-      padding: 0 0 12px;
-      border: 0;
-    }
-    .report-summary {
-      padding: 0 0 16px;
-      border: 0;
-    }
-    section.level2 {
-      break-inside: auto;
-      padding: 0;
-      border: 0;
-    }
-    table, .formula, .signal-chain {
-      break-inside: avoid;
-    }
-    a { color: inherit; text-decoration: none; }
-  }
-  </style>
+ul.task-list[class]{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+font-size: inherit;
+width: 0.8em;
+margin: 0 0.8em 0.2em -1.6em;
+vertical-align: middle;
+}
+.display.math{display: block; text-align: center; margin: 0.5rem auto;}
+</style>
+  <style type="text/css">:root {
+color-scheme: light;
+--ink: #1d2935;
+--muted: #5e6b75;
+--line: #d8e0e6;
+--soft: #f4f7f9;
+--accent: #1f5f78;
+--accent-soft: #eaf3f6;
+--paper: #ffffff;
+}
+* {
+box-sizing: border-box;
+}
+html {
+scroll-behavior: smooth;
+}
+body {
+max-width: 1500px;
+margin: 0 auto;
+padding: 0 3rem 4rem 21rem;
+color: var(--ink);
+background: var(--paper);
+font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+font-size: 16px;
+line-height: 1.78;
+}
+body > *:not(nav) {
+max-width: 980px;
+}
+nav#TOC {
+position: fixed;
+top: 0;
+bottom: 0;
+left: max(0px, calc((100vw - 1500px) / 2));
+width: 18rem;
+padding: 2rem 1.25rem;
+overflow-y: auto;
+border-right: 1px solid var(--line);
+background: #f8fafb;
+}
+nav#TOC > h2 {
+margin: 0 0 1rem;
+padding: 0 0 .65rem;
+border-bottom: 1px solid var(--line);
+color: var(--ink);
+font-size: 1rem;
+}
+nav#TOC ul {
+margin: 0;
+padding-left: 1rem;
+list-style: none;
+}
+nav#TOC > ul {
+padding-left: 0;
+}
+nav#TOC li {
+margin: .34rem 0;
+line-height: 1.42;
+}
+nav#TOC a {
+color: #40515e;
+text-decoration: none;
+font-size: .88rem;
+}
+nav#TOC a:hover,
+nav#TOC a:focus {
+color: var(--accent);
+text-decoration: underline;
+}
+h1 {
+margin: 0;
+padding-top: 3rem;
+color: #173f51;
+font-size: 2.05rem;
+line-height: 1.25;
+letter-spacing: .01em;
+}
+h2 {
+margin: 3rem 0 1rem;
+padding-bottom: .45rem;
+border-bottom: 1px solid var(--line);
+color: #173f51;
+font-size: 1.55rem;
+line-height: 1.35;
+}
+h3 {
+margin: 2rem 0 .75rem;
+color: #244f62;
+font-size: 1.15rem;
+line-height: 1.4;
+}
+p {
+margin: .75rem 0 1rem;
+}
+h1 + p {
+margin-top: .65rem;
+color: var(--muted);
+font-size: .92rem;
+}
+a {
+color: #17627e;
+text-decoration-thickness: .08em;
+text-underline-offset: .15em;
+}
+code {
+padding: .08rem .3rem;
+border-radius: 3px;
+color: #7a2f25;
+background: #f5f1ef;
+font-family: Consolas, "Cascadia Mono", monospace;
+font-size: .9em;
+}
+table {
+display: block;
+width: 100%;
+margin: 1rem 0 1.4rem;
+overflow-x: auto;
+border-collapse: collapse;
+border: 1px solid var(--line);
+font-size: .92rem;
+line-height: 1.55;
+}
+thead {
+background: #edf3f6;
+}
+th,
+td {
+min-width: 7.5rem;
+padding: .62rem .72rem;
+border: 1px solid var(--line);
+text-align: left;
+vertical-align: top;
+}
+th {
+color: #234857;
+font-weight: 650;
+}
+tbody tr:nth-child(even) {
+background: #fafcfd;
+}
+ol,
+ul {
+padding-left: 1.45rem;
+}
+li {
+margin: .28rem 0;
+}
+.formula {
+margin: 1rem 0;
+padding: .8rem 1rem;
+overflow-x: auto;
+border-left: 3px solid #6e9caf;
+background: var(--soft);
+color: #263f4a;
+font-family: Cambria, "Times New Roman", serif;
+text-align: center;
+white-space: nowrap;
+}
+.system-flow,
+.signal-chain {
+display: flex;
+align-items: stretch;
+gap: .55rem;
+margin: 1.2rem 0 1.5rem;
+padding: .9rem;
+overflow-x: auto;
+border: 1px solid var(--line);
+border-radius: 6px;
+background: #fafcfd;
+}
+.signal-chain {
+display: block;
+}
+.signal-chain > p {
+display: flex;
+align-items: stretch;
+gap: .55rem;
+margin: 0;
+}
+.system-flow .board,
+.signal-chain span {
+display: flex;
+min-width: 8.5rem;
+flex: 1 0 8.5rem;
+flex-direction: column;
+justify-content: center;
+padding: .7rem;
+border: 1px solid #bfd0d8;
+border-radius: 4px;
+background: #fff;
+text-align: center;
+}
+.system-flow .board b {
+margin-bottom: .32rem;
+color: #194f65;
+}
+.system-flow .board span {
+color: var(--muted);
+font-size: .84rem;
+}
+.flow-arrow,
+.signal-chain i {
+display: flex;
+align-items: center;
+color: #68808c;
+font-style: normal;
+font-weight: 700;
+}
+@media (max-width: 1050px) {
+body {
+max-width: none;
+padding: 0 2rem 3rem;
+}
+nav#TOC {
+position: static;
+width: auto;
+margin: 1.25rem 0 2rem;
+padding: 1rem 1.15rem;
+border: 1px solid var(--line);
+border-radius: 6px;
+}
+nav#TOC > ul {
+columns: 2;
+column-gap: 2rem;
+}
+}
+@media (max-width: 620px) {
+body {
+padding: 0 .95rem 2.5rem;
+font-size: 15px;
+}
+nav#TOC > ul {
+columns: 1;
+}
+h1 {
+padding-top: 1.75rem;
+font-size: 1.65rem;
+}
+h2 {
+margin-top: 2.35rem;
+font-size: 1.35rem;
+}
+h3 {
+font-size: 1.08rem;
+}
+th,
+td {
+min-width: 8.5rem;
+padding: .55rem .62rem;
+}
+.system-flow,
+.signal-chain {
+padding: .65rem;
+}
+}
+@media print {
+body {
+max-width: none;
+padding: 0;
+font-size: 10.5pt;
+}
+nav#TOC {
+position: static;
+width: auto;
+border: 0;
+}
+h2,
+h3 {
+break-after: avoid;
+}
+table,
+.formula,
+.system-flow,
+.signal-chain {
+break-inside: avoid;
+}
+}
+</style>
+  <meta name="artifact-source-sha256" content="D79014D635C9A5055C88A5EAB54B3D51A91F60B47714C2CE62F33F507E137537">
 </head>
 <body>
+<header id="title-block-header">
+<h1 class="title">DM4 四代数字驱动 V6.0 原理图详细分析</h1>
+</header>
 <nav id="TOC" role="doc-toc">
+<h2 id="toc-title">目录</h2>
 <ul>
-<li><a href="#dm4-四代数字驱动-v60-原理图详细分析"
-id="toc-dm4-四代数字驱动-v60-原理图详细分析">DM4 四代数字驱动 V6.0
-原理图详细分析</a>
+<li><a href="#1-文档目的与使用边界" id="toc-1-文档目的与使用边界">1.
+文档目的与使用边界</a>
 <ul>
-<li><a href="#1-结论先行" id="toc-1-结论先行">1. 结论先行</a>
-<ul>
-<li><a href="#11-证据等级" id="toc-11-证据等级">1.1 证据等级</a></li>
+<li><a href="#11-分析范围" id="toc-11-分析范围">1.1 分析范围</a></li>
+<li><a href="#12-原始资料" id="toc-12-原始资料">1.2 原始资料</a></li>
 </ul></li>
-<li><a href="#2-资料范围与来源" id="toc-2-资料范围与来源">2.
-资料范围与来源</a>
+<li><a href="#2-dm4-系统组成" id="toc-2-dm4-系统组成">2. DM4
+系统组成</a></li>
+<li><a href="#3-密度测量原理" id="toc-3-密度测量原理">3.
+密度测量原理</a>
 <ul>
-<li><a href="#21-原始资料" id="toc-21-原始资料">2.1 原始资料</a></li>
-<li><a href="#22-日期与版本边界" id="toc-22-日期与版本边界">2.2
-日期与版本边界</a></li>
-<li><a href="#23-与-s002-原理图的关系"
-id="toc-23-与-s002-原理图的关系">2.3 与 S002 原理图的关系</a></li>
+<li><a href="#31-测量对象与基本关系" id="toc-31-测量对象与基本关系">3.1
+测量对象与基本关系</a></li>
+<li><a href="#32-从激励到密度结果" id="toc-32-从激励到密度结果">3.2
+从激励到密度结果</a></li>
+<li><a href="#33-dds-扫频谐振点判定与反馈自激" id="toc-33-dds-扫频谐振点判定与反馈自激">3.3 DDS
+扫频、谐振点判定与反馈自激</a></li>
+<li><a href="#34-标定温度补偿与结果有效性" id="toc-34-标定温度补偿与结果有效性">3.4
+标定、温度补偿与结果有效性</a></li>
+<li><a href="#35-原理图中的关键信号" id="toc-35-原理图中的关键信号">3.5
+原理图中的关键信号</a></li>
 </ul></li>
-<li><a href="#3-四板系统架构" id="toc-3-四板系统架构">3.
-四板系统架构</a>
+<li><a href="#4-四块板的电路实现" id="toc-4-四块板的电路实现">4.
+四块板的电路实现</a>
 <ul>
-<li><a href="#31-各板职责" id="toc-31-各板职责">3.1 各板职责</a></li>
-<li><a href="#32-板间主要信号" id="toc-32-板间主要信号">3.2
-板间主要信号</a></li>
+<li><a href="#41-电源与-rs485-通信" id="toc-41-电源与-rs485-通信">4.1
+电源与 RS485 通信</a></li>
+<li><a href="#42-控制dds-与精密采样" id="toc-42-控制dds-与精密采样">4.2
+控制、DDS 与精密采样</a></li>
+<li><a href="#43-压电驱动采集与同步检测" id="toc-43-压电驱动采集与同步检测">4.3 压电驱动、采集与同步检测</a></li>
+<li><a href="#44-测水温度姿态与零点" id="toc-44-测水温度姿态与零点">4.4
+测水、温度、姿态与零点</a></li>
 </ul></li>
-<li><a href="#4-电源板详细分析" id="toc-4-电源板详细分析">4.
-电源板详细分析</a>
-<ul>
-<li><a href="#41-电源路径" id="toc-41-电源路径">4.1 电源路径</a></li>
-<li><a href="#42-powertest" id="toc-42-powertest">4.2 POWERTEST</a></li>
-<li><a href="#43-33-v-钳位和指示" id="toc-43-33-v-钳位和指示">4.3 3.3 V
-钳位和指示</a></li>
-<li><a href="#44-rs485-物理层" id="toc-44-rs485-物理层">4.4 RS485
-物理层</a></li>
-</ul></li>
-<li><a href="#5-驱动板详细分析" id="toc-5-驱动板详细分析">5.
-驱动板详细分析</a>
-<ul>
-<li><a href="#51-主控与时钟" id="toc-51-主控与时钟">5.1
-主控与时钟</a></li>
-<li><a href="#52-双-dds-激励" id="toc-52-双-dds-激励">5.2 双 DDS
-激励</a></li>
-<li><a href="#53-ads1247-温度电阻测量"
-id="toc-53-ads1247-温度电阻测量">5.3 ADS1247 温度/电阻测量</a></li>
-<li><a href="#54-姿态与零点" id="toc-54-姿态与零点">5.4
-姿态与零点</a></li>
-<li><a href="#55-复位捕获和维护接口的核对点"
-id="toc-55-复位捕获和维护接口的核对点">5.5
-复位、捕获和维护接口的核对点</a></li>
-</ul></li>
-<li><a href="#6-采集板详细分析" id="toc-6-采集板详细分析">6.
-采集板详细分析</a>
-<ul>
-<li><a href="#61-中点参考" id="toc-61-中点参考">6.1 中点参考</a></li>
-<li><a href="#62-压电驱动" id="toc-62-压电驱动">6.2 压电驱动</a></li>
-<li><a href="#63-压电差分采集" id="toc-63-压电差分采集">6.3
-压电差分采集</a></li>
-<li><a href="#64-液位检测与比较阈值" id="toc-64-液位检测与比较阈值">6.4
-液位检测与比较阈值</a></li>
-<li><a href="#65-dds-与自激反馈切换" id="toc-65-dds-与自激反馈切换">6.5
-DDS 与自激反馈切换</a></li>
-<li><a href="#66-33-v5-v-装配选项" id="toc-66-33-v5-v-装配选项">6.6 3.3
-V/5 V 装配选项</a></li>
-</ul></li>
-<li><a href="#7-测水连接板详细分析" id="toc-7-测水连接板详细分析">7.
-测水连接板详细分析</a>
-<ul>
-<li><a href="#71-fdc2212-链路" id="toc-71-fdc2212-链路">7.1 FDC2212
-链路</a></li>
-<li><a href="#72-物理量与风险" id="toc-72-物理量与风险">7.2
-物理量与风险</a></li>
-</ul></li>
-<li><a href="#8-按测量功能整理信号链" id="toc-8-按测量功能整理信号链">8.
-按测量功能整理信号链</a>
-<ul>
-<li><a href="#81-振动密度链路" id="toc-81-振动密度链路">8.1
-振动/密度链路</a></li>
-<li><a href="#82-温度链路" id="toc-82-温度链路">8.2 温度链路</a></li>
-<li><a href="#83-水电容链路" id="toc-83-水电容链路">8.3
-水电容链路</a></li>
-<li><a href="#84-姿态与零点链路" id="toc-84-姿态与零点链路">8.4
-姿态与零点链路</a></li>
-</ul></li>
-<li><a href="#9-与新一代安全协议的对应关系"
-id="toc-9-与新一代安全协议的对应关系">9. 与新一代安全协议的对应关系</a>
-<ul>
-<li><a href="#91-硬件信号到协议状态的候选映射"
-id="toc-91-硬件信号到协议状态的候选映射">9.1
-硬件信号到协议状态的候选映射</a></li>
-<li><a href="#92-协议不能替代的硬件工作"
-id="toc-92-协议不能替代的硬件工作">9.2 协议不能替代的硬件工作</a></li>
-</ul></li>
-<li><a href="#10-安全相关静态评估" id="toc-10-安全相关静态评估">10.
-安全相关静态评估</a>
-<ul>
-<li><a href="#101-有利基础" id="toc-101-有利基础">10.1 有利基础</a></li>
-<li><a href="#102-主要缺口" id="toc-102-主要缺口">10.2 主要缺口</a></li>
-<li><a href="#103-初始-fmea故障注入矩阵"
-id="toc-103-初始-fmea故障注入矩阵">10.3 初始 FMEA/故障注入矩阵</a></li>
-</ul></li>
-<li><a href="#11-问题优先级" id="toc-11-问题优先级">11. 问题优先级</a>
-<ul>
-<li><a href="#111-p0上电和安全评审前必须关闭"
-id="toc-111-p0上电和安全评审前必须关闭">11.1
-P0：上电和安全评审前必须关闭</a></li>
-<li><a href="#112-p1样机联调阶段关闭"
-id="toc-112-p1样机联调阶段关闭">11.2 P1：样机联调阶段关闭</a></li>
-<li><a href="#113-p2资料和量产治理" id="toc-113-p2资料和量产治理">11.3
-P2：资料和量产治理</a></li>
-</ul></li>
-<li><a href="#12-建议的板级验证顺序" id="toc-12-建议的板级验证顺序">12.
-建议的板级验证顺序</a></li>
-<li><a href="#13-最终判断" id="toc-13-最终判断">13. 最终判断</a></li>
-<li><a href="#附录-a主要器件清单" id="toc-附录-a主要器件清单">附录
-A：主要器件清单</a></li>
+<li><a href="#5-mcu-可观测信号与诊断" id="toc-5-mcu-可观测信号与诊断">5.
+MCU 可观测信号与诊断</a></li>
+<li><a href="#6-主要风险和待确认问题" id="toc-6-主要风险和待确认问题">6.
+主要风险和待确认问题</a></li>
+<li><a href="#7-板级验证建议" id="toc-7-板级验证建议">7.
+板级验证建议</a></li>
+<li><a href="#8-结论" id="toc-8-结论">8. 结论</a></li>
+<li><a href="#附录-a主要器件" id="toc-附录-a主要器件">附录
+A：主要器件</a></li>
 <li><a href="#附录-b静态计算汇总" id="toc-附录-b静态计算汇总">附录
 B：静态计算汇总</a></li>
-<li><a href="#附录-c解析提示" id="toc-附录-c解析提示">附录
-C：解析提示</a></li>
-</ul></li>
+<li><a href="#附录-c故障注入要点" id="toc-附录-c故障注入要点">附录
+C：故障注入要点</a></li>
+<li><a href="#附录-d原理图解析提示" id="toc-附录-d原理图解析提示">附录
+D：原理图解析提示</a></li>
 </ul>
 </nav>
-<section id="dm4-四代数字驱动-v60-原理图详细分析" class="level1">
-<h1>DM4 四代数字驱动 V6.0 原理图详细分析</h1>
-<p>分析日期：2026-08-04</p>
-<div class="report-summary">
-  <div><span>硬件形态</span><strong>四板堆叠式多参数传感器</strong></div>
-  <div><span>主控平台</span><strong>STM32G071RBT6</strong></div>
-  <div><span>主要测量</span><strong>振动、温度、电容、姿态与零点</strong></div>
-  <div><span>安全结论</span><strong>具备诊断信号基础，尚不能证明 SIL</strong></div>
-</div>
-
-<section id="1-结论先行" class="level2">
-<h2>1. 结论先行</h2>
+<p>分析日期：2026-08-04；结构与密度章节整理：2026-08-06；扫频判定说明补充：2026-08-07</p>
 <p>DM4 V6.0
-不是一张单板原理图，而是由电源板、驱动板、采集板和测水连接板组成的四板堆叠式传感器平台。四块板通过排针/排母把供电、RS485、调试、DDS
-激励、压电采集、温度 ADC、FDC2212
-测水、姿态、零点和诊断信号串成一个完整系统。</p>
-<p>从原理图静态证据看，可以确认以下结论：</p>
-<ol type="1">
-<li>电源板把外部 <code>VCC</code> 转换为 5 V 和 3.3 V，并提供
-<code>SN65HVD72</code> 半双工 RS485、<code>POWERTEST</code> 电压监测以及
-SWD/测试信号的板间转接。</li>
-<li>驱动板是系统控制核心，使用 <code>STM32G071RBT6</code>，控制双
-<code>AD9832</code> DDS、<code>ADS1247</code> 精密
-ADC、<code>ADXL345</code>、Hall 零点和板间模拟/数字信号。</li>
-<li>采集板完成压电驱动差分输出、压电采集差分放大、液位比较、模拟选通以及
-DDS/自激反馈模式切换。</li>
-<li>测水连接板使用 <code>FDC2212</code> 和 18 uH/33 pF LC
-网络完成电容式测水，同时转接压电、温度和测试端子。</li>
-<li>图中有
-<code>POWERTEST</code>、<code>LEVEL_INT</code>、<code>TA1CLK</code>、<code>IN_AD</code>、<code>ADC_SV</code>、<code>DRDY</code>、<code>INTB</code>、<code>SD</code>、<code>ZERO</code>
-等诊断入口，可作为安全传感器状态和诊断位的数据来源。</li>
-<li>原理图没有证明传感器端已经实现安全协议，也没有给出完整的电源诊断、看门狗、RS485
-隔离/浪涌、长线终端、故障注入、FMEDA 或 SIL
-定量证据。因此只能表述为“硬件具备实现安全通信与部分自诊断的基础”，不能表述为“硬件已满足
-SIL”。</li>
-</ol>
-<section id="11-证据等级" class="level3">
-<h3>1.1 证据等级</h3>
+由电源板、驱动板、采集板和测水连接板组成。四块板共同完成供电与 RS485
+通信、振动式密度测量、温度采集、电容式测水、姿态和零点检测。本文按“测量原理—电路实现—可观测信号—风险与验证”的顺序整理四份原理图，便于设计评审、固件对接和后续安全分析使用。</p>
+<h2 id="1-文档目的与使用边界">1. 文档目的与使用边界</h2>
+<h3 id="11-分析范围">1.1 分析范围</h3>
+<p>本文回答三个问题：DM4
+各板如何配合；密度等物理量怎样从传感器信号得到；现有硬件为诊断和安全通信提供了哪些观测入口。</p>
+<p>分析依据只有四份 V6.0 原理图及其转换 PDF。没有
+BOM、PCB、装配图、机械图纸、传感器端固件、标定记录和台架数据，因此文中的结论分为四类：</p>
 <table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
 <thead>
 <tr>
-<th>等级</th>
-<th>本文口径</th>
-<th>示例</th>
+<th>结论类型</th>
+<th>含义</th>
+<th>典型内容</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>已确认</td>
-<td>原理图可直接辨认的器件、网络、阻容值和板间信号</td>
+<td>原理图确认</td>
+<td>可直接从器件、网络和标注中读取</td>
 <td>STM32G071、双 AD9832、ADS1247、FDC2212、SN65HVD72</td>
 </tr>
 <tr>
-<td>静态推导</td>
-<td>根据理想阻容值或拓扑计算，未包含器差、温漂和负载</td>
-<td>POWERTEST 约等于 VCC/11、MidV 约 1.65 V、差分增益约 41</td>
+<td>静态计算</td>
+<td>按图中理想阻容值计算，未计入公差和负载</td>
+<td>POWERTEST 约为 VCC/11、MidV 约为 1.65 V、差分增益约为 41</td>
 </tr>
 <tr>
 <td>功能推断</td>
-<td>由信号名、器件类别和图纸注释推断，必须由传感器固件或实测确认</td>
-<td>SWAP 的业务模式、TA1CLK 的计数用途、诊断位映射</td>
+<td>根据信号名和拓扑判断，需由固件或实测确认</td>
+<td>SWAP 的工作时序、TA1CLK 的计数方式、诊断位映射</td>
 </tr>
 <tr>
-<td>待取证</td>
-<td>原理图本身不能证明</td>
-<td>PCB 走线、BOM 实装值、200 米 RS485、故障覆盖率、FTTI、SIL 认证</td>
+<td>待补证据</td>
+<td>无法由原理图单独判断</td>
+<td>实装参数、测量精度、标定算法、故障覆盖率、FTTI 和 SIL 符合性</td>
 </tr>
 </tbody>
 </table>
-</section>
-</section>
-<section id="2-资料范围与来源" class="level2">
-<h2>2. 资料范围与来源</h2>
-<section id="21-原始资料" class="level3">
-<h3>2.1 原始资料</h3>
+<p>原理图可以证明 DM4
+具备多参数测量和部分诊断所需的硬件链路，但不能证明传感器端已经实现安全协议，也不能替代
+BOM 核对、样机测试、故障注入和功能安全认证。</p>
+<h3 id="12-原始资料">1.2 原始资料</h3>
 <table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
 <thead>
 <tr>
 <th>板卡</th>
@@ -765,155 +427,138 @@ SIL”。</li>
 <tr>
 <td>电源板</td>
 <td><code>DM4电源板V6.0.SchDoc</code></td>
-<td><a
-href="00_原始资料/DM4四代数字驱动V6.0/DM4电源板V6.0.pdf">DM4电源板V6.0.pdf</a></td>
+<td><a href="00_原始资料/DM4四代数字驱动V6.0/DM4电源板V6.0.pdf">DM4电源板V6.0.pdf</a></td>
 <td><code>E15863B8D6A9390E54DE44D2D0B7FB24E2710EF94FB930B1E5E06C64D2D02629</code></td>
 </tr>
 <tr>
 <td>驱动板</td>
 <td><code>DM4驱动板V6.0.SchDoc</code></td>
-<td><a
-href="00_原始资料/DM4四代数字驱动V6.0/DM4驱动板V6.0.pdf">DM4驱动板V6.0.pdf</a></td>
+<td><a href="00_原始资料/DM4四代数字驱动V6.0/DM4驱动板V6.0.pdf">DM4驱动板V6.0.pdf</a></td>
 <td><code>FC79E560E497B83C1F3F8D5289EFA8DA1F2EBBD08602663232D53E90CDCC7B45</code></td>
 </tr>
 <tr>
 <td>采集板</td>
 <td><code>DM4采集板V6.0.SchDoc</code></td>
-<td><a
-href="00_原始资料/DM4四代数字驱动V6.0/DM4采集板V6.0.pdf">DM4采集板V6.0.pdf</a></td>
+<td><a href="00_原始资料/DM4四代数字驱动V6.0/DM4采集板V6.0.pdf">DM4采集板V6.0.pdf</a></td>
 <td><code>DDF63B793EDD441FAB12EE67C671887B3522ED46493B9832B5CDE046ADD4980B</code></td>
 </tr>
 <tr>
 <td>测水连接板</td>
 <td><code>DM4测水连接板V6.0.SchDoc</code></td>
-<td><a
-href="00_原始资料/DM4四代数字驱动V6.0/DM4测水连接板V6.0.pdf">DM4测水连接板V6.0.pdf</a></td>
+<td><a href="00_原始资料/DM4四代数字驱动V6.0/DM4测水连接板V6.0.pdf">DM4测水连接板V6.0.pdf</a></td>
 <td><code>BB46F68F6566EFAD17B0022326B9858E40D17BC3F23A10C88ACEC51204FB0709</code></td>
 </tr>
 </tbody>
 </table>
-<p>转换和校验过程见 <a
-href="00_原始资料/DM4四代数字驱动V6.0/README.md">原始资料
-README</a>。</p>
-</section>
-<section id="22-日期与版本边界" class="level3">
-<h3>2.2 日期与版本边界</h3>
-<ul>
-<li>四个 SchDoc 的标题栏没有填写独立 Title、Number、Revision
-或原始发布日期。</li>
-<li>转换 PDF 中显示的 <code>8/03/2026</code>
-是转换渲染时生成的日期。解析模型中的原始标题栏日期为空，因此不能把它当作
-V6.0 的设计批准日期或生产发布日期。</li>
-<li>本文只分析名称为 V6.0 的四份原理图。没有
-BOM、PCB、装配图、传感器端固件和更改记录，无法确认 V6.0
-与实际生产批次完全一致。</li>
-</ul>
-</section>
-<section id="23-与-s002-原理图的关系" class="level3">
-<h3>2.3 与 S002 原理图的关系</h3>
-<p>DM4 的双 DDS、压电采集、ADS1247、FDC2212、ADXL345、Hall 零点和 RS485
-功能分区，与现有 <a href="LTD传感器S002-2026-V1.1原理图整理.md">LTD
-传感器 S002 原理图整理</a>高度相似。但 DM4 改为四板模块化结构，主控为
-STM32G071；S002 文档中的 MCU
-引脚、固件平台、实装参数和验证结论不能直接移植到 DM4。</p>
-</section>
-</section>
-<section id="3-四板系统架构" class="level2">
-<h2>3. 四板系统架构</h2>
+<p>转换过程和文件校验见 <a href="00_原始资料/DM4四代数字驱动V6.0/README.md">原始资料
+README</a>。四份图的标题栏没有填写独立的 Title、Number、Revision
+或原始发布日期；转换 PDF 中的 <code>8/03/2026</code>
+是渲染日期，不能作为设计批准日期。本文也不把相似的 <a href="LTD传感器S002-2026-V1.1原理图整理.md">LTD 传感器 S002
+原理图整理</a>中的 MCU 引脚、固件参数或测试结论直接移植到 DM4。</p>
+<h2 id="2-dm4-系统组成">2. DM4 系统组成</h2>
 <div class="system-flow">
-  <div class="board board-power"><b>电源板</b><span>VCC → 5 V / 3.3 V</span><span>RS485 A+ / B-</span><span>POWERTEST / SWD</span></div>
-  <div class="flow-arrow">→</div>
-  <div class="board board-control"><b>驱动板</b><span>STM32G071</span><span>DDS / ADC / 姿态 / 零点</span><span>安全协议候选执行端</span></div>
-  <div class="flow-arrow">→</div>
-  <div class="board board-analog"><b>采集板</b><span>压电差分驱动与采集</span><span>液位比较</span><span>DDS / 自激切换</span></div>
-  <div class="flow-arrow">→</div>
-  <div class="board board-sensor"><b>测水连接板</b><span>FDC2212 + LC</span><span>水电极 / 温度 / 压电端子</span><span>传感器物理接口</span></div>
+<div class="board board-power">
+<b>电源板</b><span>VCC → 5 V / 3.3
+V</span><span>RS485</span><span>POWERTEST / SWD</span>
 </div>
-
-<section id="31-各板职责" class="level3">
-<h3>3.1 各板职责</h3>
+<div class="flow-arrow">
+→
+</div>
+<div class="board board-control">
+<b>驱动板</b><span>STM32G071</span><span>DDS / ADC / 姿态 /
+零点</span><span>测量控制与通信</span>
+</div>
+<div class="flow-arrow">
+→
+</div>
+<div class="board board-analog">
+<b>采集板</b><span>压电差分驱动与采集</span><span>同步检测</span><span>DDS
+/ 自激切换</span>
+</div>
+<div class="flow-arrow">
+→
+</div>
+<div class="board board-sensor">
+<b>测水连接板</b><span>FDC2212 + LC</span><span>温度 / 压电 /
+水电极端子</span><span>传感器物理接口</span>
+</div>
+</div>
 <table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
 <thead>
 <tr>
 <th>板卡</th>
 <th>核心器件</th>
 <th>主要职责</th>
-<th>关键输出/状态</th>
+<th>关键网络</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>电源板</td>
 <td>ADP7102-3.3、ADP7102-5、MCP6241、SN65HVD72</td>
-<td>供电、总线收发、电源监测、调试信号转接</td>
-<td>3.3 V、5 V、RXD/TXD/DE、POWERTEST</td>
+<td>供电、总线收发、电源监测和调试信号转接</td>
+<td>3.3 V、5 V、RXD、TXD、DE、POWERTEST</td>
 </tr>
 <tr>
 <td>驱动板</td>
-<td>STM32G071RBT6、双 AD9832、ADS1247、ADXL345、DRV5055、TLV9061</td>
-<td>控制、激励、精密采样、姿态、零点、协议通信</td>
-<td>Drive_A/B、START/DRDY、ZERO、LEVEL_INT、TA1CLK</td>
+<td>STM32G071RBT6、AD9832×2、ADS1247、ADXL345、DRV5055、TLV9061</td>
+<td>控制激励和采样，处理姿态、零点与外部通信</td>
+<td>Drive_A/B、DRDY、ZERO、TA1CLK、IN_AD</td>
 </tr>
 <tr>
 <td>采集板</td>
 <td>AD8630、MAX942、ADG702、TS5A3160</td>
-<td>压电驱动、差分采集、液位判定、模拟选通、自激反馈</td>
-<td>Aout1/2、LEVEL、LEVEL_INT、IN_AD、TA1CLK</td>
+<td>压电驱动与接收、同步检测、液位比较和激励模式切换</td>
+<td>Aout1/2、Ain1/2、LEVEL_INT、IN_AD、SWAP</td>
 </tr>
 <tr>
 <td>测水连接板</td>
 <td>FDC2212、18 uH、33 pF、18 pF</td>
-<td>电容测水、I2C 接口、电极和其他传感器端子转接</td>
+<td>电容测水，并转接压电、温度和测试端子</td>
 <td>TWater、INTB、SD、FDC_SCL/SDA</td>
 </tr>
 </tbody>
 </table>
-</section>
-<section id="32-板间主要信号" class="level3">
-<h3>3.2 板间主要信号</h3>
+<p>板间信号可分为供电、通信、激励、采集和维护五组：</p>
 <table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
 <thead>
 <tr>
 <th>信号组</th>
-<th>信号</th>
-<th>链路含义</th>
+<th>主要信号</th>
+<th>作用</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>电源</td>
+<td>供电</td>
 <td>VCC、5V、3.3V、GND</td>
-<td>电源板生成低压电源，经堆叠连接器分配到驱动、采集和测水板</td>
+<td>电源板产生低压电源并分配给其余板卡</td>
 </tr>
 <tr>
-<td>RS485</td>
+<td>通信</td>
 <td>A+、B-、TXD、RXD、DE</td>
-<td>外部总线进入电源板收发器，再由板间连接器连接驱动板 MCU</td>
+<td>外部 RS485 总线经电源板收发器连接驱动板 MCU</td>
 </tr>
 <tr>
-<td>DDS/激励</td>
-<td>Drive_A、Drive_B、SWAP</td>
-<td>驱动板生成 DDS，采集板按 SWAP 选择 DDS 或反馈自激</td>
+<td>密度测量</td>
+<td>Drive_A、Drive_B、SWAP、Aout1/2、Ain1/2、IN_AD、TA1CLK</td>
+<td>形成激励、机械响应采集、同步检测和频率观测链路</td>
 </tr>
 <tr>
-<td>压电</td>
-<td>Aout1、Aout2、Ain1、Ain2</td>
-<td>采集板连接压电驱动组和采集组，最终转接到测水连接板端子</td>
-</tr>
-<tr>
-<td>温度 ADC</td>
-<td>AIN1+、AIN1-、I+、I-、ADC_SV</td>
-<td>ADS1247 差分测量、激励电流和辅助模拟量</td>
-</tr>
-<tr>
-<td>水电容</td>
-<td>FDC_SCL、FDC_SDA、INTB、SD、TWater</td>
-<td>驱动板 MCU 控制测水板 FDC2212</td>
-</tr>
-<tr>
-<td>诊断/计数</td>
-<td>LEVEL_INT、TA1CLK、IN_AD、POWERTEST、ZERO</td>
-<td>供 MCU 判断液位、频率/时钟、模拟幅值、电源和零点</td>
+<td>其他测量</td>
+<td>AIN1+/AIN1-、I+/I-、FDC_SCL/SDA、INTB、SD、ZERO</td>
+<td>温度、电容式测水和零点测量</td>
 </tr>
 <tr>
 <td>维护</td>
@@ -922,837 +567,662 @@ STM32G071；S002 文档中的 MCU
 </tr>
 </tbody>
 </table>
-<p>连接器一侧标注“插针，底层”，另一侧标注“插母，顶层”。同一物理连接在两块板上的奇偶脚号可能因镜像方向不同而错一位，不能只对照相同脚号判断连通性；必须用装配方向、PCB
-封装和实物导通测试确认。</p>
-</section>
-</section>
-<section id="4-电源板详细分析" class="level2">
-<h2>4. 电源板详细分析</h2>
-<section id="41-电源路径" class="level3">
-<h3>4.1 电源路径</h3>
-<p>电源板使用两颗 ADP7102 系列 LDO：</p>
-<table>
-<thead>
-<tr>
-<th>路径</th>
-<th>图纸连接</th>
-<th>静态判断</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>VCC → 3.3 V</td>
-<td>UE，标注 ADP7102-3.3</td>
-<td>给 MCU、RS485、DDS、FDC 和数字/模拟前端提供 3.3 V</td>
-</tr>
-<tr>
-<td>VCC → 5 V</td>
-<td>UH，标注 ADP7102-5</td>
-<td>给采集板及可能的 ADC/模拟装配选项提供 5 V</td>
-</tr>
-</tbody>
-</table>
-<p>两颗 LDO 的 <code>EN/UVLO</code> 都直接接 VCC，<code>PG</code>
-未见进入 MCU 或连接器。由此得到两个工程结论：</p>
-<ol type="1">
-<li>图中没有独立的可编程欠压门限，也没有把 3.3 V/5 V
-电源良好信号纳入诊断。</li>
-<li><code>POWERTEST</code> 只监测 VCC 分压，不等价于分别验证 3.3 V 和 5
-V 已经正常建立。</li>
-</ol>
-<p>LDO 热耗散应按下式在实际输入电压和负载下核算：</p>
-<div class="formula">P<sub>LDO</sub> ≈ (V<sub>CC</sub> − V<sub>OUT</sub>) × I<sub>OUT</sub></div>
-
-<p>由于缺少 VCC
-额定范围、各板最大电流、铜皮和热阻资料，本文不能给出温升合格结论。</p>
-</section>
-<section id="42-powertest" class="level3">
-<h3>4.2 POWERTEST</h3>
-<p><code>RF01=100 kΩ</code>、<code>RF02=10 kΩ</code> 构成 VCC
-分压，MCP6241 作为缓冲器输出 <code>POWERTEST</code>。理想值为：</p>
-<div class="formula">POWERTEST ≈ VCC × 10 / (100 + 10) = VCC / 11</div>
-
-<p>因此 MCU 看到 1.00 V 时，理想对应 VCC 约 11.0
-V。实际换算必须加入电阻容差、运放输入/输出范围、ADC
-参考误差和软件校准。</p>
-<p>建议把 <code>POWERTEST</code> 用于 VCC
-欠压/过压趋势诊断，但不要单独用它证明 5 V、3.3 V
-或各板局部供电正常。若它参与安全诊断，协议至少应上报原始值、换算值、范围状态、稳定状态和诊断位。</p>
-</section>
-<section id="43-33-v-钳位和指示" class="level3">
-<h3>4.3 3.3 V 钳位和指示</h3>
-<ul>
-<li>3.3 V 上有 PWR LED 和 10 kΩ 限流电阻。</li>
-<li>D1、D2 均标注 <code>SMB5338A</code>，并联在 3.3 V 与 GND
-之间，静态上属于过压钳位候选。</li>
-<li>两只同型号齐纳并联的均流、实际钳位电压、脉冲功率和失效模式必须以
-BOM、器件规格和实测确认，不能仅凭图纸认为已经形成冗余保护。</li>
-</ul>
-</section>
-<section id="44-rs485-物理层" class="level3">
-<h3>4.4 RS485 物理层</h3>
-<p><code>SN65HVD72</code> 的连接关系清楚：</p>
-<table>
-<thead>
-<tr>
-<th>引脚/网络</th>
-<th>连接</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>DI</td>
-<td>TXD</td>
-</tr>
-<tr>
-<td>RO</td>
-<td>RXD，并由 RG01=10 kΩ 上拉到 3.3 V</td>
-</tr>
-<tr>
-<td>DE 与 /RE</td>
-<td>同接 DE，由 MCU 控制半双工方向</td>
-</tr>
-<tr>
-<td>A</td>
-<td>A+，由 RG02=10 kΩ 上拉到 3.3 V</td>
-</tr>
-<tr>
-<td>B</td>
-<td>B-，由 RG03=10 kΩ 下拉到 GND</td>
-</tr>
-</tbody>
-</table>
-<p>这形成弱空闲偏置，但图中没有看到 120 Ω 终端、总线
-TVS、共模电感、浪涌保护或隔离器。它们可能位于其他板、线束或 PCB
-未显示区域，必须核对。对于安全协议规划中的 200 米 9600 bps
-链路，应冻结：</p>
-<ul>
-<li>线缆阻抗、屏蔽和接地方式；</li>
-<li>两端终端电阻位置和阻值；</li>
-<li>空闲偏置的唯一位置；</li>
-<li>A/B 对地共模范围；</li>
-<li>ESD、EFT、浪涌和接地环路策略；</li>
-<li>DE/RE 建立、释放和发送完成时序；</li>
-<li>隔离需求及其故障反应。</li>
-</ul>
-<p>RS485
-收发器本身不提供上层协议完整性。CRC32C、地址、会话、序号、数据年龄和状态诊断仍必须由传感器固件实现。</p>
-</section>
-</section>
-<section id="5-驱动板详细分析" class="level2">
-<h2>5. 驱动板详细分析</h2>
-<section id="51-主控与时钟" class="level3">
-<h3>5.1 主控与时钟</h3>
-<p>主控为 <code>STM32G071RBT6</code>，外接 7.3728 MHz 晶振和两只 22 pF
-电容。该频率便于得到常用串口时钟，但真实 UART 误差仍需结合
-PLL、分频和传感器固件配置确认。</p>
-<p>驱动板把 MCU 引脚分为以下功能组：</p>
-<table>
-<thead>
-<tr>
-<th>功能</th>
-<th>主要网络</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>RS485</td>
-<td>TXD、RXD、DE</td>
-</tr>
-<tr>
-<td>双 DDS</td>
-<td>MCLK、SCLK、SDATA、FSY1/2、FSELECTA/B、PL0_1/2、PL1_1/2</td>
-</tr>
-<tr>
-<td>ADS1247</td>
-<td>SCLK-W、DIN、DOUT、CS、START、DRDY</td>
-</tr>
-<tr>
-<td>FDC2212</td>
-<td>FDC_SCL、FDC_SDA、INTB、SD</td>
-</tr>
-<tr>
-<td>ADXL345</td>
-<td>ADX_SCLK、ADX_MOSI、ADX_MISO、ADX_CS、ADX_INT1/2</td>
-</tr>
-<tr>
-<td>模拟/计数</td>
-<td>IN_AD、ADC_SV、POWERTEST、TA1CLK、CAPTURE</td>
-</tr>
-<tr>
-<td>模式/状态</td>
-<td>SWAP、LEVEL_INT、ZERO、ZERO_EN</td>
-</tr>
-<tr>
-<td>调试</td>
-<td>JTMS-SWDIO、JTCK-SWCLK、RESET</td>
-</tr>
-</tbody>
-</table>
-</section>
-<section id="52-双-dds-激励" class="level3">
-<h3>5.2 双 DDS 激励</h3>
-<p>U2、U3 均为 <code>AD9832BRUZ</code>，共用
-<code>MCLK/SCLK/SDATA</code>，分别由独立的同步、频率选择和相位选择信号控制，输出
-<code>Drive_A</code> 与 <code>Drive_B</code>。</p>
-<p>双 DDS 可以形成不同相位或不同频率的激励/参考组合，但它们共用
-MCU、时钟、供电和串行控制链路。因此“双
-DDS”是双通道功能结构，不应直接当作安全冗余。若要形成诊断覆盖，传感器固件需要比较命令值、实际采集响应、相位关系、幅值、频率和稳定性，而不是只确认寄存器写入成功。</p>
-</section>
-<section id="53-ads1247-温度电阻测量" class="level3">
-<h3>5.3 ADS1247 温度/电阻测量</h3>
-<p>U9 标注 <code>ADS1247</code>，完成精密差分采样：</p>
-<ul>
-<li><code>AIN1+</code>、<code>AIN1-</code> 经两只 47 Ω 串联电阻进入
-ADC。</li>
-<li>两端各有 47 pF 对 AGND，小信号差分端有 100 nF 电容。</li>
-<li><code>IOUT1</code> 提供激励电流候选，外部端子为
-<code>I+</code>/<code>I-</code>。</li>
-<li><code>REFIN(+)</code>/<code>REFIN(-)</code>、<code>VREFOUT</code> 和
-5 kΩ/电容网络构成参考链路。</li>
-<li><code>R900=0 Ω</code> 把 AGND/参考负端相关网络做单点连接。</li>
-</ul>
-<p>按两只 47 Ω 与 100 nF 差分电容近似，差分 RC 截止频率约为：</p>
-<div class="formula">f<sub>c</sub> ≈ 1 / [2π × (47 Ω + 47 Ω) × 100 nF] ≈ 16.9 kHz</div>
-
-<p>这个计算只反映图中理想 RC，不包含 ADC
-数字滤波、传感器阻值、走线和寄生参数。安全使用时至少要诊断参考异常、输入开路/短路、饱和、DRDY
-停滞、采样计数停滞和温度变化率越界。</p>
-</section>
-<section id="54-姿态与零点" class="level3">
-<h3>5.4 姿态与零点</h3>
-<ul>
-<li><code>ADXL345BCCZ-RL7</code> 通过 SPI 和两个中断脚连接
-MCU，用于姿态、冲击或安装方向数据。</li>
-<li><code>DRV5055A1QLPG</code> Hall 传感器输出 <code>HALL_OUT</code>，经
-TLV9061 电路形成 <code>ZERO</code>。</li>
-<li><code>ZERO_EN</code> 控制 Q1（标注
-SI4559ADY）相关电源/使能网络，允许 MCU 对 Hall
-路径进行开关或诊断激励。</li>
-<li><code>3V3</code> 与 <code>3.3V</code> 在图中是不同网络名，Hall
-路径可能经过 Q1 才获得 3V3。必须在 PCB/BOM
-中确认两者关系，不能仅按文字认为完全同网。</li>
-</ul>
-<p>如果零点信号进入安全逻辑，建议做“关闭—开启—输出响应”的受控自检，并把超时、固定高、固定低、抖动和电源异常分别编码；仅持续读取一个稳定电平无法覆盖粘连故障。</p>
-</section>
-<section id="55-复位捕获和维护接口的核对点" class="level3">
-<h3>5.5 复位、捕获和维护接口的核对点</h3>
-<ol type="1">
-<li>复位监控器图纸值为 <code>TLV809I50_DBV_3</code>，供电标为 3.3
-V。必须用 BOM 和完整料号确认其复位阈值；若实装阈值高于 3.3 V，MCU
-可能被长期保持复位。这是上电前必须关闭的 P0 核对项。</li>
-<li>解析网络显示 <code>CAPTURE</code> 同时连接 MCU 的 PC9 和
-PA15。若一个脚配置为输出、另一个脚也输出相反电平，会产生管脚争用；若设计意图是内部定时器外部回接，应在原理图、固件和测试方案中明确两脚方向、上电默认态和故障反应。</li>
-<li>SWD 和 TEST
-信号经堆叠连接器外露。量产配置需要定义读出保护、调试口锁定、维护解锁和物理访问边界。CRC
-是功能安全完整性校验，不是调试口访问控制。</li>
-</ol>
-</section>
-</section>
-<section id="6-采集板详细分析" class="level2">
-<h2>6. 采集板详细分析</h2>
-<section id="61-中点参考" class="level3">
-<h3>6.1 中点参考</h3>
-<p>R610=10 kΩ、R611=10 kΩ 对 3.3 V 分压，U6C 缓冲后形成
-<code>MidV</code>：</p>
-<div class="formula">MidV ≈ 3.3 V × 10 kΩ / (10 kΩ + 10 kΩ) = 1.65 V</div>
-
-<p>该中点为单电源模拟链路提供虚拟地。MidV
-漂移会同时影响压电采集、比较阈值、自激反馈和 ADC
-输入，因此它是公共原因节点，建议上电和周期自检时通过 ADC 监测。</p>
-</section>
-<section id="62-压电驱动" class="level3">
-<h3>6.2 压电驱动</h3>
-<p>Drive 输入进入 U4C/U4D 和电阻网络，形成两路反相/同相驱动：</p>
-<ul>
-<li><code>Aout1</code> 经 R415=51 Ω 接压电驱动组正极；</li>
-<li><code>Aout2</code> 经 R416=51 Ω 接压电驱动组负极；</li>
-<li>图纸明确标注 AOUT1/AOUT2 分别连接驱动组压电陶瓷正、负极。</li>
-</ul>
-<p>这是一种差分驱动方式，可以提高压电两端有效摆幅并减少相对地共模影响。需要实测确认
-AD8630 的供电、电压摆幅、负载稳定性、压电等效电容和 51 Ω 电阻温升。</p>
-</section>
-<section id="63-压电差分采集" class="level3">
-<h3>6.3 压电差分采集</h3>
-<p>Ain1、Ain2 经 1 uF 交流耦合进入双运放结构，图纸给出：</p>
-<div class="formula">Uo2 = 20(Ui2 − Ui1) + Ui2</div>
-<div class="formula">Uo1 = 20(Ui1 − Ui2) + Ui1</div>
-
-<p>两式相减得到理想差分增益：</p>
-<div class="formula">Uo1 − Uo2 = 41(Ui1 − Ui2)</div>
-
-<p>这与 R604/R605=15 kΩ、R603=750 Ω
-的两运放仪表放大结构一致，理想差分增益为 <code>1 + 2×15k/750 =
-41</code>。实际增益和共模抑制取决于电阻配对、运放参数、压电源阻抗和 PCB
-对称性。</p>
-</section>
-<section id="64-液位检测与比较阈值" class="level3">
-<h3>6.4 液位检测与比较阈值</h3>
-<p><code>LEVEL</code> 进入 MAX942 比较器 U5B。R503=4.7 kΩ、R504=9.1 kΩ
-对 3.3 V 分压，理想阈值约为：</p>
-<div class="formula">V<sub>LEVEL_TH</sub> ≈ 3.3 V × 9.1 / (4.7 + 9.1) ≈ 2.176 V</div>
-
-<p>比较器输出为 <code>LEVEL_INT</code>，直接进入
-MCU。原理图未明确给出迟滞量；若没有足够迟滞，LEVEL
-在阈值附近的噪声可能造成中断抖动。固件应记录原始
-LEVEL/IN_AD、比较输出、持续时间和稳定判定，避免只凭瞬时数字沿进入安全状态。</p>
-</section>
-<section id="65-dds-与自激反馈切换" class="level3">
-<h3>6.5 DDS 与自激反馈切换</h3>
-<p>TS5A3160 U7 由 <code>SWAP</code> 控制：</p>
-<table>
-<thead>
-<tr>
-<th>SWAP/IN</th>
-<th>开关状态</th>
-<th>图纸说明</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>低</td>
-<td>NC 导通</td>
-<td>DDS 输出</td>
-</tr>
-<tr>
-<td>高</td>
-<td>NO 导通</td>
-<td>反馈输出</td>
-</tr>
-</tbody>
-</table>
-<p>自激区域由 AD8630、移相和增益网络组成，图纸标注“移相 90
-度”“Au=11.9”以及不同装配电阻下的增益说明。该结构允许探头从受控 DDS
-扫频切换到模拟反馈振荡。</p>
-<p>安全相关的关键点不是“能振荡”，而是：</p>
-<ul>
-<li>切换命令是否有模式确认；</li>
-<li>DDS 和自激输出是否可能同时争用；</li>
-<li>切换后频率、幅值、相位和稳定时间是否在允许范围；</li>
-<li>自激停振、假振荡、饱和或谐波锁定如何诊断；</li>
-<li>模式变化是否使旧采样快照和旧上报流立即失效。</li>
-</ul>
-</section>
-<section id="66-33-v5-v-装配选项" class="level3">
-<h3>6.6 3.3 V/5 V 装配选项</h3>
-<p>图纸明确写有：</p>
-<ul>
-<li>5 V 供电时焊接 R609，3.3 V 供电时 R609 不焊；</li>
-<li>5 V 供电时焊接 R408，3.3 V 供电时 R408 不焊。</li>
-</ul>
-<p>这表示至少存在两种模拟前端装配配置。装配选项会改变偏置、增益或输出范围，必须作为
-BOM 版本、硬件配置 ID 和标定配置的一部分管理。安全协议的
-<code>safety_param_crc</code> 或配置摘要若不包含硬件装配版本，CPU2
-可能按错误量程解释数据。</p>
-</section>
-</section>
-<section id="7-测水连接板详细分析" class="level2">
-<h2>7. 测水连接板详细分析</h2>
-<section id="71-fdc2212-链路" class="level3">
-<h3>7.1 FDC2212 链路</h3>
-<p>FDC2212 由 3.3 V 供电，SCL/SDA 各有 4.7 kΩ 上拉，<code>INTB</code> 和
-<code>SD</code> 接驱动板 MCU。当前只使用一组输入：</p>
-<ul>
-<li>LD01=18 uH；</li>
-<li>CD06=33 pF；</li>
-<li>两侧各有 18 pF 对地电容；</li>
-<li>外部电极网络为 <code>TWater</code> 与 GND/GW；</li>
-<li>另一通道引脚未见完整传感器网络。</li>
-</ul>
-<p>只按 18 uH 和 33 pF 计算的基础谐振频率约为：</p>
-<div class="formula">f<sub>0</sub> ≈ 1 / [2π√(18 uH × 33 pF)] ≈ 6.53 MHz</div>
-
-<p>实际频率会受到两只 18 pF、电极电容、线缆、PCB
-寄生、油水介电常数、污垢和安装结构影响，不能把 6.53 MHz
-当作实测标称值。</p>
-</section>
-<section id="72-物理量与风险" class="level3">
-<h3>7.2 物理量与风险</h3>
-<p>TWater
-电极对环境介电常数和寄生电容敏感。水相介电常数通常显著高于油相，但最终“电容—含水率/界面”的关系仍取决于电极几何、温度、盐度、乳化状态、附着层和标定算法。</p>
-<p>应至少覆盖以下故障：</p>
-<ul>
-<li>电极开路、短路、对壳泄漏；</li>
-<li>线缆松动和屏蔽接地异常；</li>
-<li>谐振频率超范围或振荡幅值不足；</li>
-<li>INTB 固定、SD 异常、I2C 超时；</li>
-<li>原始电容冻结、跳变、变化率异常；</li>
-<li>上电后配置寄存器或通道映射错误。</li>
-</ul>
-<p>测水板还转接 Aout1/2、Ain1/2、AIN1+/-、I+/- 和
-TEST，因此连接器故障可能同时影响多个测量通道，是明显的公共原因点。</p>
-</section>
-</section>
-<section id="8-按测量功能整理信号链" class="level2">
-<h2>8. 按测量功能整理信号链</h2>
-<section id="81-振动密度链路" class="level3">
-<h3>8.1 振动/密度链路</h3>
-<div class="signal-chain">
-  <span>STM32G071 模式与参数</span><i>→</i>
-  <span>双 AD9832 DDS</span><i>→</i>
-  <span>采集板差分驱动</span><i>→</i>
-  <span>压电驱动组</span><i>→</i>
-  <span>机械振动与介质响应</span><i>→</i>
-  <span>压电采集组</span><i>→</i>
-  <span>差分放大/选通/比较</span><i>→</i>
-  <span>TA1CLK / IN_AD / LEVEL_INT</span><i>→</i>
-  <span>传感器固件计算</span>
+<p>堆叠连接器一侧标注“插针，底层”，另一侧标注“插母，顶层”。同一物理连接在两张图上的脚号可能因镜像方向产生偏移，不能只按相同脚号判断连通性，最终应结合
+PCB、装配方向和实物导通测试确认。</p>
+<h2 id="3-密度测量原理">3. 密度测量原理</h2>
+<h3 id="31-测量对象与基本关系">3.1 测量对象与基本关系</h3>
+<p>密度表示单位体积内包含多少质量。对同样大小的一杯液体，质量越大，密度越高。DM4
+并不是直接称量液体，而是让一个机械敏感结构在液体中振动，再根据谐振频率反推密度。</p>
+<p>这套结构可以近似理解为“弹簧上挂着砝码”：弹簧越硬，振动越快；参与振动的质量越大，振动越慢。对应的简化关系为：</p>
+<div class="formula">
+f<sub>r</sub> = [1 / (2π)] × √(k<sub>eff</sub> / m<sub>eff</sub>)
 </div>
-
-<p>原理图支持 DDS
-扫频和反馈自激两类路径。密度、频率或液位的最终算法、标定系数、质量评价和安全状态由传感器端固件决定，原理图不能给出最终计算公式。</p>
-</section>
-<section id="82-温度链路" class="level3">
-<h3>8.2 温度链路</h3>
-<div class="signal-chain">
-  <span>I+/I- 激励</span><i>→</i>
-  <span>温度敏感元件</span><i>→</i>
-  <span>AIN1+/AIN1-</span><i>→</i>
-  <span>RC 滤波</span><i>→</i>
-  <span>ADS1247</span><i>→</i>
-  <span>SPI + DRDY</span><i>→</i>
-  <span>温度换算与诊断</span>
+<p>其中 <code>f_r</code> 是谐振频率，<code>k_eff</code>
+是等效刚度，<code>m_eff</code>
+是探头本体与周围液体共同形成的等效质量。对几何结构固定的探头，可作一阶近似：</p>
+<div class="formula">
+m<sub>eff</sub> = m<sub>0</sub> + αρ
 </div>
-
-</section>
-<section id="83-水电容链路" class="level3">
-<h3>8.3 水电容链路</h3>
-<div class="signal-chain">
-  <span>TWater 电极</span><i>→</i>
-  <span>LC 谐振网络</span><i>→</i>
-  <span>FDC2212</span><i>→</i>
-  <span>I2C / INTB / SD</span><i>→</i>
-  <span>电容、质量和故障状态</span>
+<p>由此可看出，在结构、温度和安装状态相近时，液体密度 <code>ρ</code>
+增大通常会使谐振频率下降。工程上常用下式说明标定曲线的大致方向：</p>
+<div class="formula">
+ρ ≈ K<sub>0</sub> + K<sub>1</sub> / f<sub>r</sub><sup>2</sup>
 </div>
-
-</section>
-<section id="84-姿态与零点链路" class="level3">
-<h3>8.4 姿态与零点链路</h3>
+<p>这个式子只是物理近似，不是已经确认的 DM4
+产品公式。实际算法还可能考虑温度、黏度、幅值、相位和探头个体标定，形式更接近
+<code>ρ = F(f_r, T, A, Q, C_cal)</code>。</p>
+<h3 id="32-从激励到密度结果">3.2 从激励到密度结果</h3>
+<div class="signal-chain">
+<p><span>STM32G071</span><i>→</i> <span>DDS A / Drive_A</span><i>→</i>
+<span>压电差分驱动</span><i>→</i> <span>机械结构与液体</span><i>→</i>
+<span>压电差分采集</span><i>→</i> <span>放大与同步检测</span><i>→</i>
+<span>频率、幅值和相位观测</span><i>→</i>
+<span>温度补偿与标定</span><i>→</i> <span>密度及质量状态</span></p>
+</div>
+<p>一次测量从 MCU 设置激励频率开始。DDS A 产生
+<code>Drive_A</code>，采集板把它变成 <code>Aout1/Aout2</code>
+差分电压，驱动组压电陶瓷再把电信号变成机械振动。机械结构受到液体的附加质量和阻尼影响，其振动由采集组压电陶瓷转换为
+<code>Ain1/Ain2</code> 微弱差分信号。</p>
+<p>接收信号经放大后，一路用于幅值门限和同步检测，另一路进入反馈与周期观测链路。MCU据此寻找并测量稳定的谐振频率，同时检查幅值、相位和振荡状态。最后，固件结合温度与该探头的标定参数，把谐振频率换算成密度。</p>
+<p>因此，硬件直接提供的是电压、边沿、周期和状态，密度是后续计算结果。<code>IN_AD</code>
+不是“密度电压”，<code>LEVEL_INT</code>
+也不是密度值；它们只用于判断当前机械响应是否足够、稳定和可信。</p>
+<h3 id="33-dds-扫频谐振点判定与反馈自激">3.3 DDS
+扫频、谐振点判定与反馈自激</h3>
+<p>两颗 AD9832 的作用并不相同：</p>
 <table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>通道</th>
+<th>原理图连接</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DDS A / <code>Drive_A</code></td>
+<td>经 C701 和 TS5A3160 U7 进入 <code>Drive</code></td>
+<td>实际压电激励，可用于定频或扫频</td>
+</tr>
+<tr>
+<td>DDS B / <code>Drive_B</code></td>
+<td>经 C501、MAX942 U5A 形成 <code>Select_A</code>，控制 ADG702 U8</td>
+<td>为同步检测提供同频、相位可控的选通参考</td>
+</tr>
+</tbody>
+</table>
+<p>DDS
+扫频并不是“扫到有信号就结束”，而是逐点建立“激励频率—探头响应”曲线。MCU
+在每个频点设置 DDS A 的激励频率，同时保持 DDS B
+的同步参考关系；等待机械振动和 <code>IN_AD</code>
+低通链路稳定；连续读取若干组 <code>IN_AD</code> 和
+<code>LEVEL_INT</code>，若捕获链路已经配置则同时记录周期信息；剔除切换瞬态后，再对有效样本进行平均或稳定性判断。</p>
+<p><code>IN_AD</code> 由同步选通和低通电路产生，既受接收幅值影响，也与
+<code>Drive_B</code> 的参考相位有关。因此，最终谐振判据可能是
+<code>IN_AD</code>
+的最大值、绝对值最大点，或某个规定的相位/过零条件。原理图能够确认这些观测入口，但没有给出
+STM32G071
+固件，不能据此确定产品实际采用哪一种选峰算法。<code>LEVEL_INT</code>
+只用于确认响应是否越过门限，不能单独确定谐振点。</p>
+<p>下表用一组示意数据说明幅值峰值法。数值只用于解释方法，不是 DM4
+的实测参数：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">激励频率</th>
+<th style="text-align: right;">响应值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">980 Hz</td>
+<td style="text-align: right;">0.42</td>
+</tr>
+<tr>
+<td style="text-align: right;">990 Hz</td>
+<td style="text-align: right;">0.81</td>
+</tr>
+<tr>
+<td style="text-align: right;">1000 Hz</td>
+<td style="text-align: right;">1.36</td>
+</tr>
+<tr>
+<td style="text-align: right;">1010 Hz</td>
+<td style="text-align: right;">0.88</td>
+</tr>
+<tr>
+<td style="text-align: right;">1020 Hz</td>
+<td style="text-align: right;">0.45</td>
+</tr>
+</tbody>
+</table>
+<p>如果 1000 Hz 附近形成清晰且唯一的峰，可先把它作为候选谐振频率，再在
+990～1010 Hz
+范围内减小步长进行精扫，并通过邻近点拟合或规定相位条件得到更精确的
+<code>f_r</code>。实际流程通常是：</p>
+<div class="signal-chain">
+<p><span>宽范围粗扫</span><i>→</i> <span>确定主响应区</span><i>→</i>
+<span>小步长精扫</span><i>→</i> <span>峰值或相位判定</span><i>→</i>
+<span>自激频率复核</span><i>→</i> <span>确认谐振频率</span></p>
+</div>
+<p>候选点还必须通过质量检查：峰值不能位于扫描边界；峰应明显高于背景且不能同时出现多个相近峰；正向扫频、反向扫频和重复扫描的结果应在允许偏差内；<code>IN_AD</code>
+不应饱和，<code>LEVEL_INT</code>
+应保持稳定；切换到自激模式后，<code>TA1CLK</code>
+测得的频率应与扫频结果一致。任一条件不满足时，应报告无峰、多峰、信号过弱、模式不一致或频率不稳定，而不是继续换算密度。</p>
+<p><code>SWAP</code> 控制 TS5A3160 在 DDS
+激励和模拟反馈之间切换。切入反馈后，接收信号经增益和移相网络返回驱动端，环路在满足增益和相位条件的频率附近自激，<code>TA1CLK</code>
+可作为 MCU
+的周期观测入口。扫频适合主动搜索和验证谐振点，自激适合连续跟踪；两种模式得到的频率如果明显不一致，应先判为测量质量异常。</p>
+<p>双 DDS 共用
+MCU、时钟、供电和串行控制链路，且只连接一套机械测量结构，因此它们构成激励与同步参考，不是两套独立的安全冗余密度通道。</p>
+<h3 id="34-标定温度补偿与结果有效性">3.4 标定、温度补偿与结果有效性</h3>
+<p>标定用于建立“已知密度—实测频率”的对应关系。通常需要在受控温度下使用若干已知密度的参考介质，记录谐振频率和信号质量，再拟合每支探头或受控批次的标定系数，并用独立参考点验证误差。探头的机械尺寸、粘接、预紧和压电装配存在差异，标定系数应与硬件身份、标定版本和适用温度范围绑定。</p>
+<p>温度补偿不可省略。温度既会改变液体密度，也会改变敏感结构的刚度和压电、模拟前端特性。DM4
+的 ADS1247
+温度/电阻通道为补偿提供了硬件入口，但原理图没有给出实际温度元件、补偿模型和标定系数。</p>
+<p>影响密度结果的主要因素如下：</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>因素</th>
+<th>对测量的影响</th>
+<th>常见表现</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>温度</td>
+<td>改变液体性质和机械刚度</td>
+<td>同一介质的频率随温度缓慢漂移</td>
+</tr>
+<tr>
+<td>黏度</td>
+<td>增加机械阻尼</td>
+<td>幅值降低、峰变宽、建立时间变长</td>
+</tr>
+<tr>
+<td>气泡或未完全浸没</td>
+<td>改变参与振动的介质</td>
+<td>频率跳变、多峰或结果不稳定</td>
+</tr>
+<tr>
+<td>污垢和沉积</td>
+<td>增加长期附加质量</td>
+<td>零点持续偏移，清洗前后读数变化</td>
+</tr>
+<tr>
+<td>安装应力或机械松动</td>
+<td>改变等效刚度和振动模态</td>
+<td>重复性下降或谐振点迁移</td>
+</tr>
+<tr>
+<td>压电、电源或时钟故障</td>
+<td>激励或接收链路失真</td>
+<td>无峰、停振、饱和或频率不一致</td>
+</tr>
+<tr>
+<td>标定错配</td>
+<td>使用了错误的换算参数</td>
+<td>频率稳定但密度持续偏差</td>
+</tr>
+</tbody>
+</table>
+<p>出现无峰、多峰、响应过小、频率越界或跳变、温度无效、扫频与自激不一致、标定身份不一致时，本次密度应标为无效并报告原因，不能沿用旧值或强行输出平滑结果。</p>
+<h3 id="35-原理图中的关键信号">3.5 原理图中的关键信号</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>信号或器件</th>
+<th>原理图可确认的作用</th>
+<th>在密度测量中的用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Drive_A</code></td>
+<td>DDS A 的实际激励输出</td>
+<td>设置扫频或定频激励</td>
+</tr>
+<tr>
+<td><code>Drive_B</code></td>
+<td>经比较器整形的同步参考</td>
+<td>控制同步选通的频率和相位</td>
+</tr>
+<tr>
+<td><code>Aout1/Aout2</code></td>
+<td>驱动组压电陶瓷的差分输出</td>
+<td>把电激励转换为机械振动</td>
+</tr>
+<tr>
+<td><code>Ain1/Ain2</code></td>
+<td>采集组压电陶瓷的差分输入</td>
+<td>接收机械振动产生的微弱信号</td>
+</tr>
+<tr>
+<td>U6A/U6B</td>
+<td>理想差分增益约 41 的接收放大器</td>
+<td>提高接收信号幅值和共模抑制能力</td>
+</tr>
+<tr>
+<td><code>IN_AD</code></td>
+<td>同步选通并低通后的慢速模拟量</td>
+<td>观测与激励同频、相位相关的响应质量</td>
+</tr>
+<tr>
+<td><code>LEVEL_INT</code></td>
+<td><code>LEVEL</code> 越过比较阈值后的数字状态</td>
+<td>判断响应是否达到门限，不能直接表示密度</td>
+</tr>
+<tr>
+<td><code>TA1CLK</code></td>
+<td>反馈链的周期信号</td>
+<td>供 MCU 测量周期、频率和稳定度</td>
+</tr>
+<tr>
+<td>ADS1247 温度通道</td>
+<td>精密差分温度/电阻采样入口</td>
+<td>为密度换算和结果有效性提供温度信息</td>
+</tr>
+</tbody>
+</table>
+<p>一条可用的密度结果至少应同时满足：谐振频率有效、响应幅值和相位稳定、温度有效、标定身份正确、关键诊断无故障。只有密度数值而没有这些质量信息，接收方无法区分真实介质变化与传感器故障。</p>
+<h2 id="4-四块板的电路实现">4. 四块板的电路实现</h2>
+<h3 id="41-电源与-rs485-通信">4.1 电源与 RS485 通信</h3>
+<p>电源板使用 ADP7102-3.3 和 ADP7102-5，把外部 <code>VCC</code> 转换为
+3.3 V 和 5 V。两颗 LDO 的 <code>EN/UVLO</code> 直接接
+VCC，<code>PG</code> 未进入 MCU 或板间连接器，因此图中没有独立的 3.3
+V、5 V 电源良好诊断。LDO 功耗仍需按实际输入电压和负载核算：</p>
+<div class="formula">
+P<sub>LDO</sub> ≈ (V<sub>CC</sub> − V<sub>OUT</sub>) × I<sub>OUT</sub>
+</div>
+<p><code>RF01=100 kΩ</code>、<code>RF02=10 kΩ</code> 对 VCC
+分压，MCP6241 缓冲后形成 <code>POWERTEST</code>：</p>
+<div class="formula">
+POWERTEST ≈ VCC × 10 / (100 + 10) = VCC / 11
+</div>
+<p>该信号适合监测 VCC 的欠压、过压和变化趋势，但不能单独证明 5 V、3.3 V
+或各板局部供电正常。3.3 V 上还有 PWR 指示灯以及两只并联的
+<code>SMB5338A</code> 钳位器件；其钳位电压、功率和并联均流必须以 BOM
+和实测确认。</p>
+<p>RS485 使用 <code>SN65HVD72</code>，DI 接 TXD，RO 接 RXD，DE 与
+<code>/RE</code> 同接 MCU 的 DE。A+ 由 10 kΩ 上拉，B- 由 10 kΩ
+下拉，形成弱空闲偏置。图中未见 120 Ω 终端、总线
+TVS、共模电感、隔离和浪涌保护；这些器件是否位于线束或其他板卡需要另行核对。长线使用前应冻结线缆阻抗、终端位置、唯一偏置点、屏蔽接地、DE/RE
+时序和 EMC 方案。</p>
+<h3 id="42-控制dds-与精密采样">4.2 控制、DDS 与精密采样</h3>
+<p>驱动板主控为 <code>STM32G071RBT6</code>，外接 7.3728 MHz 晶振。MCU
+管理双 DDS、ADS1247、FDC2212、ADXL345、Hall 零点、RS485
+以及采集板的模拟和数字信号。</p>
+<p>两颗 <code>AD9832BRUZ</code> 共用
+<code>MCLK/SCLK/SDATA</code>，分别保留独立的同步、频率选择和相位选择信号。这种结构便于建立相干激励和同步参考，但公共
+MCU、时钟、供电与控制总线仍是共同故障点。</p>
+<p><code>ADS1247</code>
+用于精密差分温度/电阻测量。<code>AIN1+</code>、<code>AIN1-</code> 各经
+47 Ω 串联，两端各有 47 pF 对 AGND，差分端之间有 100
+nF。按理想值计算，差分 RC 截止频率约为：</p>
+<div class="formula">
+f<sub>c</sub> ≈ 1 / [2π × (47 Ω + 47 Ω) × 100 nF] ≈ 16.9 kHz
+</div>
+<p><code>IOUT1</code>
+是外部温度敏感元件的激励电流候选，<code>DRDY</code>
+为采样就绪信号。参考异常、输入开短路、饱和、DRDY
+停滞和样本冻结都需要由固件诊断。</p>
+<p>驱动板还包含 <code>ADXL345</code> 姿态传感器和
+<code>DRV5055 + TLV9061</code> Hall 零点通道。<code>ZERO_EN</code>
+可控制 Hall 相关供电或使能路径，为“关闭—开启—检查 ZERO
+响应”的主动自检提供条件。图中 <code>3V3</code> 与 <code>3.3V</code>
+使用了不同网络名，两者关系必须通过 PCB/BOM 确认。</p>
+<p>有三个上电前需要核对的细节：复位器件标注为
+<code>TLV809I50_DBV_3</code>，其完整料号和阈值必须适配 3.3
+V；<code>CAPTURE</code> 同时连接 MCU 的 PC9 和
+PA15，固件必须避免双输出争用；SWD 和 TEST
+信号经连接器外露，量产时应明确调试口保护和维护解锁策略。</p>
+<h3 id="43-压电驱动采集与同步检测">4.3 压电驱动、采集与同步检测</h3>
+<p>采集板用两只 10 kΩ 电阻对 3.3 V 分压，并由 U6C 缓冲形成
+<code>MidV≈1.65 V</code>。MidV
+是单电源模拟链路的公共参考，漂移会同时影响接收放大、比较阈值、自激反馈和
+ADC 读数。</p>
+<p><code>Drive</code> 经 AD8630 U4C/U4D 形成 <code>Aout1/Aout2</code>
+差分驱动，两路分别通过 51 Ω 电阻连接驱动组压电陶瓷。接收组输出
+<code>Ain1/Ain2</code>，经 1 uF 交流耦合和 U6A/U6B
+两运放结构放大。图中给出的关系为：</p>
+<div class="formula">
+Uo2 = 20(Ui2 − Ui1) + Ui2
+</div>
+<div class="formula">
+Uo1 = 20(Ui1 − Ui2) + Ui1
+</div>
+<p>两式相减后，理想差分增益为：</p>
+<div class="formula">
+Uo1 − Uo2 = 41(Ui1 − Ui2)
+</div>
+<p>这个 41
+倍只表示理想差分电压增益。实际结果还受电阻匹配、运放参数、压电源阻抗、PCB
+对称性和输出饱和裕量影响。</p>
+<p><code>Drive_B</code> 经 MAX942 U5A 整形成 <code>Select_A</code>，控制
+ADG702 U8 对 <code>LEVEL</code> 同步选通。选通后的信号进入 U6D，R606=100
+kΩ 与 C603=1 uF 形成约 0.1 s 的名义时间常数，对应低通截止频率约 1.59
+Hz。由此得到的 <code>IN_AD</code>
+是慢速幅值/相位相关观测量，不是原始波形和密度数值。</p>
+<p><code>LEVEL</code> 同时进入 MAX942 U5B。R503=4.7 kΩ、R504=9.1 kΩ
+形成约 2.176 V 的理想比较阈值，输出
+<code>LEVEL_INT</code>。原理图未明确迟滞量，阈值附近可能抖动，因此固件应结合模拟值、数字状态和持续时间判断。</p>
+<p>TS5A3160 U7 由 <code>SWAP</code> 控制：低电平选择 DDS
+输出，高电平选择反馈输出。自激区标注“移相 90 度”和
+<code>Au=11.9</code>，名义 RC 转折点约为 79.6 Hz 和 1.59
+kHz。真实环路相位还包含机械结构、压电、运放、线缆和寄生参数，不能仅凭图纸标注判断一定在正确模态稳定振荡。</p>
+<p>图中还给出了 R408、R609 的 3.3 V/5 V
+装配选项。装配差异会改变模拟前端的偏置或范围，应纳入硬件配置 ID、BOM
+和标定版本管理。</p>
+<h3 id="44-测水温度姿态与零点">4.4 测水、温度、姿态与零点</h3>
+<p>温度测量链路为
+<code>I+/I- 激励 → 温度敏感元件 → AIN1+/AIN1- → RC 滤波 → ADS1247 → SPI/DRDY → 温度换算</code>。原理图没有给出外部温度元件的完整参数，实际量程、接线和换算公式需要结合探头资料确认。</p>
+<p>测水连接板使用 <code>FDC2212</code> 和 LC 网络测量 TWater
+电极电容。当前可见通道采用 18 uH、33 pF 以及两只 18 pF 对地电容，仅按 18
+uH 和 33 pF 计算的基础谐振频率约为：</p>
+<div class="formula">
+f<sub>0</sub> ≈ 1 / [2π√(18 uH × 33 pF)] ≈ 6.53 MHz
+</div>
+<p>实际频率还受电极、线缆、PCB
+寄生、油水介电常数、盐度、乳化和附着层影响，6.53 MHz
+不能当作产品标称值。应覆盖电极开路、短路、对壳泄漏、I2C 超时、INTB
+固定、原始值冻结和配置错误。</p>
+<table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
 <thead>
 <tr>
 <th>功能</th>
 <th>物理入口</th>
 <th>电路</th>
 <th>MCU 接口</th>
-<th>安全使用要求</th>
+<th>主要诊断</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>姿态/冲击</td>
-<td>传感器板运动</td>
+<td>板卡运动</td>
 <td>ADXL345</td>
 <td>SPI、INT1/2</td>
-<td>范围、冻结、通信和安装方向诊断</td>
+<td>通信、自检、冻结、范围和安装方向</td>
 </tr>
 <tr>
 <td>磁零点</td>
 <td>Hall 磁场</td>
 <td>DRV5055 + TLV9061</td>
 <td>ZERO、ZERO_EN</td>
-<td>使能切换自检、固定高/低和抖动诊断</td>
+<td>受控使能、固定高低、抖动和超时</td>
+</tr>
+<tr>
+<td>水电容</td>
+<td>TWater 电极</td>
+<td>FDC2212 + LC</td>
+<td>I2C、INTB、SD</td>
+<td>开短路、超范围、变化率和配置一致性</td>
 </tr>
 </tbody>
 </table>
-</section>
-</section>
-<section id="9-与新一代安全协议的对应关系" class="level2">
-<h2>9. 与新一代安全协议的对应关系</h2>
-<p>当前 CUBE <a
-href="../01_协议与寄存器/传感器通信协议/传感器安全协议SIL/传感器新一代安全通信协议卷.md">传感器安全协议
-V1</a>已经定义
-CRC32C、地址、会话、序号、采样计数、数据年龄、状态位、诊断位和配置一致性。CPU2
-设备侧已有静态/构建证据，但传感器端实现和真实硬件验证仍未完成。</p>
-<p>DM4 驱动板上的 STM32G071
-是传感器端协议执行节点的合理候选，但原理图只证明 UART/RS485
-和测量硬件存在，不能证明固件已经实现 V1。</p>
-<section id="91-硬件信号到协议状态的候选映射" class="level3">
-<h3>9.1 硬件信号到协议状态的候选映射</h3>
+<p>测水板同时转接压电、温度和测试端子，堆叠连接器故障可能一次影响多个测量通道，应按公共原因故障处理。</p>
+<h2 id="5-mcu-可观测信号与诊断">5. MCU 可观测信号与诊断</h2>
+<p>驱动板上的 STM32G071
+是所有测量状态的汇聚点，也是传感器端安全协议执行节点的合理候选。当前
+CUBE <a href="../01_协议与寄存器/传感器通信协议/传感器安全协议SIL/传感器新一代安全通信协议卷.md">传感器安全协议
+V1</a>已定义
+CRC32C、会话、序号、采样计数、数据年龄、状态位、诊断位和配置一致性，但
+DM4 传感器端实现及硬件联调仍需单独取证。</p>
 <table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
 <thead>
 <tr>
-<th>硬件信息</th>
-<th>协议候选字段</th>
-<th>传感器端必须完成的处理</th>
+<th>硬件观测</th>
+<th>可反映的状态</th>
+<th>建议的诊断处理</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>POWERTEST</td>
-<td>READ_POWER、POWER_FAULT 诊断位</td>
-<td>范围、迟滞、持续时间、ADC/参考自检</td>
-</tr>
-<tr>
-<td>LEVEL_INT、IN_AD</td>
-<td>液位状态、通道质量</td>
-<td>数字沿与模拟值交叉确认，阈值附近防抖</td>
+<td>外部 VCC 水平</td>
+<td>范围、迟滞、持续时间和 ADC/参考合理性</td>
 </tr>
 <tr>
 <td>TA1CLK、CAPTURE</td>
-<td>频率、sample_counter、通道质量</td>
-<td>停滞、跳变、超范围和模式一致性</td>
+<td>周期、频率和振荡稳定性</td>
+<td>停滞、跳变、超范围以及模式一致性</td>
+</tr>
+<tr>
+<td>IN_AD、LEVEL_INT</td>
+<td>压电响应强度和同步检测状态</td>
+<td>模拟/数字交叉确认、阈值防抖和饱和检查</td>
 </tr>
 <tr>
 <td>ADS1247 DRDY、AIN、REF</td>
-<td>温度、ADC_FAULT</td>
-<td>DRDY 停滞、参考故障、饱和、开短路</td>
+<td>温度采样及精密 ADC 状态</td>
+<td>DRDY 停滞、参考故障、开短路和饱和</td>
 </tr>
 <tr>
-<td>FDC INTB、SD、原始频率</td>
-<td>water_cap、FDC_FAULT</td>
-<td>I2C 错误、开短路、原始值和变化率检查</td>
+<td>FDC 原始频率、INTB、SD</td>
+<td>水电容测量和接口状态</td>
+<td>I2C 错误、开短路、原始值冻结和变化率</td>
 </tr>
 <tr>
 <td>ADXL345 INT1/2</td>
-<td>gyro/姿态、MOTION_FAULT</td>
-<td>SPI、自检、冻结、范围和方向合理性</td>
+<td>姿态、运动和冲击</td>
+<td>通信、自检、冻结和方向合理性</td>
 </tr>
 <tr>
 <td>ZERO、ZERO_EN</td>
-<td>ZERO_FAULT、维护自检结果</td>
-<td>受控激励与输出响应检查</td>
+<td>Hall 零点及主动自检</td>
+<td>使能后响应、固定高低和抖动</td>
 </tr>
 <tr>
-<td>SWAP、DDS 状态</td>
-<td>measure_mode、MODE_MISMATCH</td>
-<td>切换确认、稳定时间、旧快照失效</td>
+<td>SWAP、DDS 配置</td>
+<td>当前激励模式</td>
+<td>切换确认、稳定时间和旧快照失效</td>
 </tr>
 <tr>
-<td>装配配置/标定版本</td>
-<td>safety_param_crc、config_epoch</td>
-<td>把 3.3/5 V 装配选项、量程和标定纳入配置摘要</td>
+<td>硬件/标定身份</td>
+<td>量程与换算配置</td>
+<td>纳入配置摘要，错配时拒绝测量结果</td>
 </tr>
 </tbody>
 </table>
-</section>
-<section id="92-协议不能替代的硬件工作" class="level3">
-<h3>9.2 协议不能替代的硬件工作</h3>
-<ul>
-<li>CRC32C 只能检测传输损坏，不能检测测量前端在错误但稳定地输出。</li>
-<li>sample_counter
-只能证明快照前进，不能证明机械振动、电容或温度数值正确。</li>
-<li>data_age_ms 只能约束新鲜度，不能替代传感器通道自检。</li>
-<li>diag_flags
-必须由真实硬件诊断产生，不能用“通信正常”代替“测量正常”。</li>
-<li>session_id 和 seq
-防止旧帧/错配，不提供硬件隔离、浪涌能力或认证。</li>
-</ul>
-</section>
-</section>
-<section id="10-安全相关静态评估" class="level2">
-<h2>10. 安全相关静态评估</h2>
-<section id="101-有利基础" class="level3">
-<h3>10.1 有利基础</h3>
-<ol type="1">
-<li>测量功能分区清楚，MCU
-能访问电源、频率、模拟量、ADC、FDC、姿态和零点状态。</li>
-<li>双
-DDS、差分压电驱动和差分采集为幅值、相位和频率交叉诊断提供了数据基础。</li>
-<li>ADS1247 的 DRDY、FDC2212 的 INTB/SD、ADXL345 的双中断和 ZERO_EN
-提供了主动/被动诊断入口。</li>
-<li>RS485 DE/RE 由 MCU统一控制，适合实现受控半双工事务和周期上报。</li>
-<li>装配上分板清晰，便于单板测试和故障定位。</li>
-</ol>
-</section>
-<section id="102-主要缺口" class="level3">
-<h3>10.2 主要缺口</h3>
+<p>安全协议不能替代硬件诊断。CRC
+只能发现传输损坏，<code>sample_counter</code>
+只能证明快照在更新，<code>data_age_ms</code>
+只能约束数据新鲜度；它们都不能证明机械响应、温度或电容值本身正确。密度上报应在同一采样快照中至少包含原始频率或周期、测量模式、信号质量、温度有效性、诊断状态、采样计数、数据年龄以及硬件/标定配置身份。</p>
+<h2 id="6-主要风险和待确认问题">6. 主要风险和待确认问题</h2>
+<p>下表按处理时机归并原理图评审中最重要的问题。优先级表示建议的关闭顺序，不代表现场故障频率。</p>
 <table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
 <thead>
 <tr>
-<th>类别</th>
-<th>静态缺口</th>
+<th>优先级</th>
+<th>问题</th>
 <th>影响</th>
+<th>关闭依据</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>电源诊断</td>
-<td>LDO PG 未接入，POWERTEST 只看 VCC</td>
-<td>5 V/3.3 V 异常可能缺少独立诊断</td>
+<td>P0</td>
+<td>TLV809 完整料号和复位阈值未确认</td>
+<td>阈值不匹配可能造成复位长期不释放或欠压保护不足</td>
+<td>BOM、上电/掉电和慢升压波形</td>
 </tr>
 <tr>
-<td>复位/看门狗</td>
-<td>复位监控器阈值待确认，未见外部独立看门狗</td>
-<td>MCU 冻结和欠压恢复证据不足</td>
+<td>P0</td>
+<td>CAPTURE 同时连接 PC9 与 PA15</td>
+<td>两脚均输出时可能发生管脚争用</td>
+<td>原理图意图、固件方向和上电默认态测试</td>
 </tr>
 <tr>
-<td>通信物理层</td>
-<td>图中未见 120 Ω、TVS、隔离和浪涌方案</td>
-<td>200 米长线、EMC 和接地故障风险未关闭</td>
+<td>P0</td>
+<td>堆叠连接器存在镜像脚号理解风险</td>
+<td>错位可同时损坏供电和多个测量通道</td>
+<td>PCB/装配图、逐针导通表和实物检查</td>
 </tr>
 <tr>
-<td>通道独立性</td>
-<td>双 DDS 共用 MCU、时钟、供电和串行链路</td>
-<td>不能把双通道直接计为硬件冗余</td>
+<td>P0</td>
+<td>VCC 范围、LDO 负载和热设计未冻结</td>
+<td>压差、启动和温升裕量未知</td>
+<td>输入范围、最大负载、铜皮与温升测试</td>
 </tr>
 <tr>
-<td>模拟配置</td>
-<td>3.3 V/5 V 有装配选项</td>
-<td>错装可能造成量程、阈值和标定错误</td>
+<td>P0</td>
+<td>RS485 图中未见终端、TVS、隔离和浪涌方案</td>
+<td>长线、EMC 和接地故障风险未关闭</td>
+<td>总线图、BOM、线缆规范和 200 米测试</td>
 </tr>
 <tr>
-<td>连接器</td>
-<td>多功能信号集中穿过堆叠连接器</td>
-<td>松动、污染或错位可形成公共原因故障</td>
+<td>P0</td>
+<td>R408/R609 对应的 3.3 V/5 V 装配版本未冻结</td>
+<td>错装会引起量程、阈值和标定错误</td>
+<td>硬件 ID、BOM、标定与配置摘要一致</td>
 </tr>
 <tr>
-<td>安全固件</td>
-<td>未提供 DM4 传感器端代码</td>
-<td>CRC、会话、状态诊断、自检和安全状态均未证明</td>
+<td>P0</td>
+<td>未提供 STM32G071 传感器端安全固件</td>
+<td>协议、诊断和安全状态尚无实现证据</td>
+<td>源码、协议对拍、真实硬件状态和故障注入</td>
 </tr>
 <tr>
-<td>生产证据</td>
-<td>缺 BOM、PCB、测试规范和变更记录</td>
-<td>不能确认图纸值等于实装值</td>
+<td>P1</td>
+<td>只用 POWERTEST 监测 VCC，LDO PG 未接入</td>
+<td>3.3 V/5 V 局部故障可能缺少独立诊断</td>
+<td>分别监测各电源并验证掉电恢复</td>
+</tr>
+<tr>
+<td>P1</td>
+<td>双 DDS 共用 MCU、时钟、供电和控制链路</td>
+<td>不能把双 DDS 计为独立冗余</td>
+<td>共同故障分析和外部观测交叉诊断</td>
+</tr>
+<tr>
+<td>P1</td>
+<td>LEVEL 迟滞、滤波和持续时间未冻结</td>
+<td>阈值附近可能抖动或误判</td>
+<td>示波器波形、噪声测试和固件判据</td>
+</tr>
+<tr>
+<td>P1</td>
+<td>压电、ADS1247、FDC2212、ADXL345、ZERO 的故障阈值未建立</td>
+<td>测量前端可能稳定地输出错误值</td>
+<td>开短路、冻结、越界和模式错配注入</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>图纸标题栏、网络别名和版本链不完整</td>
+<td>生产追溯和变更控制不足</td>
+<td>原理图—BOM—PCB—固件—标定—协议矩阵</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>调试口、测试点和装配选项缺少量产规则</td>
+<td>维护边界和返修一致性不足</td>
+<td>生产检验表、调试口策略和返修复测规范</td>
 </tr>
 </tbody>
 </table>
-</section>
-<section id="103-初始-fmea故障注入矩阵" class="level3">
-<h3>10.3 初始 FMEA/故障注入矩阵</h3>
+<p>目前有利的基础是测量功能分区清楚，MCU
+能观察电源、频率、模拟量、ADC、FDC、姿态和零点状态；主要缺口集中在独立电源诊断、复位与看门狗证据、通信物理层、共同故障、传感器端固件和生产配置管理。安全评审应围绕这些可观测量建立诊断覆盖，而不是把“双
+DDS”或“多个传感器”直接解释为冗余。</p>
+<h2 id="7-板级验证建议">7. 板级验证建议</h2>
 <table>
-<thead>
-<tr>
-<th>故障</th>
-<th>可用观测</th>
-<th>期望诊断/安全反应</th>
-<th>仍需证据</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>VCC 欠压/过压</td>
-<td>POWERTEST、MCU 复位</td>
-<td>数据失效、会话重建、锁存或恢复条件明确</td>
-<td>阈值、迟滞、反应时间、LDO 实测</td>
-</tr>
-<tr>
-<td>3.3 V/5 V LDO 异常</td>
-<td>MCU 行为、模拟量异常</td>
-<td>不发布安全快照，报告电源/硬件故障</td>
-<td>独立 PG/ADC 监测方案</td>
-</tr>
-<tr>
-<td>RS485 A/B 开路、短路、反接</td>
-<td>超时、CRC、UART FE/NE/ORE</td>
-<td>当前数据立即无效，按 FTTI 进入整机安全状态</td>
-<td>200 米、终端、EMC、浪涌注入</td>
-</tr>
-<tr>
-<td>MCU 卡死</td>
-<td>上报静默、看门狗</td>
-<td>复位或由 CPU2 静默超时撤销快照</td>
-<td>IWDG 配置、最坏复位时间</td>
-</tr>
-<tr>
-<td>DDS A/B 停止或频率错误</td>
-<td>TA1CLK、IN_AD、LEVEL、采集幅值</td>
-<td>通道诊断置位，禁止使用错误频率/密度</td>
-<td>扫频、自激和寄存器读回测试</td>
-</tr>
-<tr>
-<td>压电开路/短路</td>
-<td>幅值、频率、相位、驱动电流候选</td>
-<td>信号质量无效，进入传感器故障</td>
-<td>故障电阻/电容注入与阈值</td>
-</tr>
-<tr>
-<td>ADS1247 输入/参考开短路</td>
-<td>DRDY、饱和码、参考值</td>
-<td>温度无效并保留具体 ADC/参考错误</td>
-<td>原始码范围和激励诊断</td>
-</tr>
-<tr>
-<td>FDC 电极开路/短路/对壳漏电</td>
-<td>原始频率、电容、INTB/SD</td>
-<td>水电容无效，区分开路/短路/超范围</td>
-<td>电极和线缆故障注入</td>
-</tr>
-<tr>
-<td>ADXL345 冻结/总线故障</td>
-<td>SPI 错、中断、变化率</td>
-<td>姿态无效；是否影响安全输出由 SRS 决定</td>
-<td>自检和安装方向基准</td>
-</tr>
-<tr>
-<td>ZERO 固定高/低</td>
-<td>ZERO_EN 激励、ZERO 响应</td>
-<td>零点通道故障，不接受伪零点</td>
-<td>主动切换测试</td>
-</tr>
-<tr>
-<td>连接器松动/错位</td>
-<td>多信号同时异常</td>
-<td>识别公共原因，不逐项误判为独立传感器故障</td>
-<td>振动、插拔、污染和接触电阻测试</td>
-</tr>
-<tr>
-<td>配置/标定错配</td>
-<td>safety_param_crc、config_epoch</td>
-<td>拒绝数据并重新确认配置</td>
-<td>硬件装配 ID 和标定版本纳入摘要</td>
-</tr>
-</tbody>
-</table>
-</section>
-</section>
-<section id="11-问题优先级" class="level2">
-<h2>11. 问题优先级</h2>
-<section id="111-p0上电和安全评审前必须关闭" class="level3">
-<h3>11.1 P0：上电和安全评审前必须关闭</h3>
-<table>
-<thead>
-<tr>
-<th>项目</th>
-<th>核对动作</th>
-<th>关闭标准</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>复位监控器</td>
-<td>确认 TLV809 完整料号、阈值和实装器件</td>
-<td>3.3 V 全范围内复位释放/拉低符合时序</td>
-</tr>
-<tr>
-<td>CAPTURE 双引脚同网</td>
-<td>核对 PC9/PA15 原理图意图和固件方向</td>
-<td>无输出争用，上电默认态和故障处理有测试</td>
-</tr>
-<tr>
-<td>连接器镜像</td>
-<td>用 PCB/装配图生成四板针脚对照表</td>
-<td>所有电源和关键信号逐针导通、无错位</td>
-</tr>
-<tr>
-<td>VCC 与热设计</td>
-<td>冻结输入范围和各路最大负载</td>
-<td>LDO 压差、功耗、温升和启动裕量通过</td>
-</tr>
-<tr>
-<td>RS485 物理层</td>
-<td>核对终端、偏置、TVS、隔离和接地</td>
-<td>硬件图、BOM、线缆规范和测试方案一致</td>
-</tr>
-<tr>
-<td>模拟装配版本</td>
-<td>冻结 R408/R609 及 3.3/5 V BOM</td>
-<td>硬件 ID、量程、标定和协议配置摘要一致</td>
-</tr>
-<tr>
-<td>传感器安全固件</td>
-<td>提供 STM32G071 工程和 V1 协议实现</td>
-<td>与 golden frame 对拍，状态/诊断来自真实硬件</td>
-</tr>
-</tbody>
-</table>
-</section>
-<section id="112-p1样机联调阶段关闭" class="level3">
-<h3>11.2 P1：样机联调阶段关闭</h3>
-<ul>
-<li>分别监测 VCC、5 V、3.3 V，补电源时序和掉电恢复测试。</li>
-<li>对 DDS、压电、ADS1247、FDC2212、ADXL345、ZERO
-做开路、短路、冻结和越界注入。</li>
-<li>冻结 LEVEL 阈值、迟滞、滤波和持续时间。</li>
-<li>测量 9600 bps 下 DE/RE、44 字节快报、控制窗口和最坏调度抖动。</li>
-<li>验证 IWDG、Brownout、复位后 session/config/sample_counter
-的重新建立。</li>
-<li>完成短线、200 米线、终端错配、屏蔽接地和 EMC 测试。</li>
-</ul>
-</section>
-<section id="113-p2资料和量产治理" class="level3">
-<h3>11.3 P2：资料和量产治理</h3>
-<ul>
-<li>补齐四张图的 Title、Revision、批准日期、设计人和更改记录。</li>
-<li>清理或解释多网络名提示：<code>AGND/REFIN(-)</code>、<code>REFIN(+)/I-</code>、<code>IOUT1/I+</code>、<code>LEVEL/OUT</code>、<code>AIN1-/I-</code>、<code>AIN1+/I+</code>。</li>
-<li>建立原理图—BOM—PCB—固件—标定—协议版本矩阵。</li>
-<li>为测试点、装配选项和未用引脚建立生产检验表。</li>
-<li>定义调试口锁定、维修解锁、参数变更审计和返修后复测。</li>
-</ul>
-</section>
-</section>
-<section id="12-建议的板级验证顺序" class="level2">
-<h2>12. 建议的板级验证顺序</h2>
-<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
 <thead>
 <tr>
 <th>阶段</th>
 <th>主要测试</th>
-<th>关键记录</th>
+<th>需要记录的证据</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>1. 无 MCU 上电</td>
-<td>VCC、5 V、3.3 V、静态电流、LDO 温升</td>
-<td>输入范围、启动波形、纹波、钳位器件温升</td>
+<td>1. 供电</td>
+<td>VCC、5 V、3.3 V、静态电流、启动和 LDO 温升</td>
+<td>输入范围、纹波、压差、慢升压和钳位器件温升</td>
 </tr>
 <tr>
 <td>2. 复位与时钟</td>
 <td>RESET、7.3728 MHz、SWD、IWDG</td>
-<td>复位阈值、释放时间、欠压/慢升压行为</td>
+<td>复位阈值、释放时间、欠压和看门狗最坏恢复时间</td>
 </tr>
 <tr>
-<td>3. 通信</td>
-<td>RXD/TXD/DE、A/B 波形</td>
-<td>终端、偏置、方向切换、短线和 200 米统计</td>
+<td>3. RS485</td>
+<td>RXD、TXD、DE、A/B 波形</td>
+<td>终端、偏置、方向切换、短线和 200 米误码统计</td>
 </tr>
 <tr>
-<td>4. DDS/压电</td>
+<td>4. DDS 与压电</td>
 <td>Drive_A/B、Aout1/2、Ain1/2</td>
 <td>频率、相位、幅值、失真、负载和温升</td>
 </tr>
 <tr>
 <td>5. 采集前端</td>
-<td>MidV、LEVEL、IN_AD、LEVEL_INT</td>
-<td>增益、阈值、迟滞、噪声和饱和恢复</td>
+<td>MidV、LEVEL、IN_AD、LEVEL_INT、TA1CLK</td>
+<td>增益、阈值、迟滞、噪声、饱和恢复和频率稳定度</td>
 </tr>
 <tr>
-<td>6. ADS1247</td>
-<td>IOUT1、AIN、REF、DRDY</td>
-<td>原始码、参考、开短路、温漂和数字滤波</td>
+<td>6. 温度与测水</td>
+<td>ADS1247 的 AIN/REF/DRDY；FDC 的 TWater/INTB/SD</td>
+<td>原始码、温漂、空载、油、水、污染和线缆寄生</td>
 </tr>
 <tr>
-<td>7. FDC2212</td>
-<td>TWater、原始频率、INTB/SD</td>
-<td>空载、油、水、污染、开短路、线缆寄生</td>
-</tr>
-<tr>
-<td>8. 姿态/零点</td>
+<td>7. 姿态与零点</td>
 <td>ADXL345、ZERO_EN/ZERO</td>
-<td>自检、固定故障、安装方向和冲击</td>
+<td>自检、固定故障、安装方向和冲击响应</td>
 </tr>
 <tr>
-<td>9. 安全协议</td>
-<td>HELLO、组合快照、快报、退出、恢复</td>
-<td>CRC、会话、序号、年龄、状态、诊断、配置摘要</td>
+<td>8. 测量与标定</td>
+<td>扫频、自激、参考介质、温度点</td>
+<td>峰值、模式一致性、补偿曲线、重复性和无效条件</td>
+</tr>
+<tr>
+<td>9. 安全通信</td>
+<td>HELLO、组合快照、快报、退出与恢复</td>
+<td>CRC、会话、序号、年龄、状态、诊断和配置摘要</td>
 </tr>
 <tr>
 <td>10. 整机故障注入</td>
-<td>掉电、重启、噪声、连接器、传感器故障</td>
+<td>掉电、重启、噪声、连接器及传感器故障</td>
 <td>从故障发生到安全输出动作的端到端时间</td>
 </tr>
 </tbody>
 </table>
-</section>
-<section id="13-最终判断" class="level2">
-<h2>13. 最终判断</h2>
-<p>DM4 V6.0 已经具备一套完整多参数传感器硬件骨架：双 DDS
-和压电前端承担振动/密度或液位测量，ADS1247
-承担精密温度/电阻测量，FDC2212 承担电容式测水，ADXL345 和 Hall
-通道提供姿态与零点，STM32G071 汇总所有状态并通过 RS485 对外通信。</p>
-<p>从安全工程角度看，当前最有价值的不是把“双
-DDS、多个传感器”直接描述成冗余，而是把已有的
-POWERTEST、LEVEL_INT、TA1CLK、IN_AD、DRDY、INTB、SD、ZERO
-和姿态信息转化为可验证的硬件诊断，再由安全协议用同一采样快照、数据年龄、采样计数、状态位、诊断位和配置摘要可靠传出。</p>
+<p>验证时应保留原始波形、配置、环境条件、样机编号和判定标准。静态检查、协议对拍和构建结果不能替代真实探头、长线、温度、介质和故障注入试验。</p>
+<h2 id="8-结论">8. 结论</h2>
+<p>DM4 V6.0 已形成完整的多参数传感器硬件骨架。双 DDS
+与压电前端承担振动式密度测量，ADS1247 提供温度/电阻采样，FDC2212
+承担电容式测水，ADXL345 和 Hall 通道提供姿态与零点信息，STM32G071
+汇总状态并通过 RS485 对外通信。</p>
+<p>密度测量的核心不是把某个模拟电压直接换算为密度，而是通过压电激励和接收获得机械谐振频率，再结合响应质量、温度和探头标定得到密度。<code>Drive_A</code>
+是实际激励，<code>Drive_B</code> 是同步检测参考，<code>IN_AD</code> 和
+<code>LEVEL_INT</code> 用于判断信号质量，<code>TA1CLK</code>
+提供频率观测；这些信号共同构成测量与诊断基础。</p>
 <p>在复位器件、CAPTURE 同网、连接器镜像、供电热设计、RS485
-物理层、模拟装配版本和传感器端安全固件关闭之前，这套原理图只能作为安全传感器研发输入，不能作为
-SIL、硬件合格或量产放行证明。</p>
-</section>
-<section id="附录-a主要器件清单" class="level2">
-<h2>附录 A：主要器件清单</h2>
+物理层、模拟装配版本和传感器端安全固件等问题关闭之前，这四份原理图只能作为研发和安全分析输入，不能作为测量精度、量产合格或
+SIL 达成的证明。</p>
+<h2 id="附录-a主要器件">附录 A：主要器件</h2>
 <table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
 <thead>
 <tr>
 <th>板卡</th>
@@ -1778,9 +1248,7 @@ SIL、硬件合格或量产放行证明。</p>
 </tr>
 </tbody>
 </table>
-</section>
-<section id="附录-b静态计算汇总" class="level2">
-<h2>附录 B：静态计算汇总</h2>
+<h2 id="附录-b静态计算汇总">附录 B：静态计算汇总</h2>
 <table>
 <thead>
 <tr>
@@ -1793,17 +1261,17 @@ SIL、硬件合格或量产放行证明。</p>
 <tr>
 <td>POWERTEST 分压</td>
 <td style="text-align: right;">VCC/11</td>
-<td>未含电阻、运放、ADC 和参考误差</td>
+<td>未计入电阻、运放、ADC 和参考误差</td>
 </tr>
 <tr>
 <td>MidV</td>
 <td style="text-align: right;">1.65 V</td>
-<td>未含负载、偏置和温漂</td>
+<td>未计入负载、偏置和温漂</td>
 </tr>
 <tr>
 <td>压电差分增益</td>
 <td style="text-align: right;">41 V/V</td>
-<td>未含电阻配对、运放和源阻抗</td>
+<td>未计入电阻匹配、运放和源阻抗</td>
 </tr>
 <tr>
 <td>LEVEL 阈值</td>
@@ -1811,24 +1279,101 @@ SIL、硬件合格或量产放行证明。</p>
 <td>未确认比较器迟滞和器差</td>
 </tr>
 <tr>
+<td>同步检测低通</td>
+<td style="text-align: right;">τ≈0.1 s，f_c≈1.59 Hz</td>
+<td>未计入开关、运放和采样影响</td>
+</tr>
+<tr>
 <td>ADS1247 差分 RC 截止</td>
 <td style="text-align: right;">约 16.9 kHz</td>
-<td>未含 ADC 数字滤波和传感器阻抗</td>
+<td>未计入 ADC 数字滤波和传感器阻抗</td>
 </tr>
 <tr>
 <td>FDC 基础 LC 频率</td>
 <td style="text-align: right;">约 6.53 MHz</td>
-<td>未含 18 pF、电极、线缆和寄生参数</td>
+<td>未计入 18 pF、电极、线缆和寄生参数</td>
 </tr>
 </tbody>
 </table>
-</section>
-<section id="附录-c解析提示" class="level2">
-<h2>附录 C：解析提示</h2>
+<h2 id="附录-c故障注入要点">附录 C：故障注入要点</h2>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>故障</th>
+<th>可用观测</th>
+<th>期望处理</th>
+<th>仍需确定</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>VCC 或 LDO 异常</td>
+<td>POWERTEST、复位、模拟量</td>
+<td>数据失效、会话重建并报告电源故障</td>
+<td>阈值、迟滞、反应时间和独立监测</td>
+</tr>
+<tr>
+<td>RS485 开路、短路或反接</td>
+<td>超时、CRC、UART 错误</td>
+<td>撤销当前快照，在 FTTI 内进入定义的安全状态</td>
+<td>终端、200 米、EMC 和浪涌条件</td>
+</tr>
+<tr>
+<td>MCU 卡死</td>
+<td>上报静默、看门狗</td>
+<td>复位或由 CPU2 超时撤销数据</td>
+<td>IWDG 配置和最坏恢复时间</td>
+</tr>
+<tr>
+<td>DDS 或压电故障</td>
+<td>TA1CLK、IN_AD、LEVEL_INT</td>
+<td>密度通道无效并报告具体故障</td>
+<td>扫频、自激、开短路和寄存器测试</td>
+</tr>
+<tr>
+<td>ADS1247 输入/参考故障</td>
+<td>DRDY、饱和码、参考值</td>
+<td>温度无效，保留 ADC 或参考错误</td>
+<td>原始码范围和激励诊断</td>
+</tr>
+<tr>
+<td>FDC 电极故障</td>
+<td>原始频率、INTB、SD</td>
+<td>水电容无效，区分开路、短路和超范围</td>
+<td>电极、线缆和对壳泄漏注入</td>
+</tr>
+<tr>
+<td>ADXL345 或 ZERO 冻结</td>
+<td>SPI、中断、ZERO_EN/ZERO</td>
+<td>对应通道无效，不接受伪姿态或伪零点</td>
+<td>自检和安装方向基准</td>
+</tr>
+<tr>
+<td>连接器松动或错位</td>
+<td>多个信号同时异常</td>
+<td>按公共原因故障处理</td>
+<td>振动、插拔、污染和接触电阻测试</td>
+</tr>
+<tr>
+<td>配置或标定错配</td>
+<td>配置摘要、标定版本</td>
+<td>拒绝结果并重新确认配置</td>
+<td>硬件 ID 和标定身份管理</td>
+</tr>
+</tbody>
+</table>
+<h2 id="附录-d原理图解析提示">附录 D：原理图解析提示</h2>
 <p><code>altium-toolkit 1.4.3</code>
-原生解析时没有报告丢页或组件恢复失败，但报告少量“同一网络恢复到多个显式网络名”的提示。它们可能是设计者有意使用的别名，也可能反映连接/标注需要清理。本文没有自动合并或改写这些网络，最终网络表应由
+原生解析时没有报告丢页或组件恢复失败，但报告少量“同一网络恢复到多个显式网络名”的提示，包括
+<code>AGND/REFIN(-)</code>、<code>REFIN(+)/I-</code>、<code>IOUT1/I+</code>、<code>LEVEL/OUT</code>、<code>AIN1-/I-</code>
+和
+<code>AIN1+/I+</code>。这些名称可能是设计者有意使用的别名，也可能反映连接或标注需要清理。本文没有自动合并或改写网络，最终网络表应由
 Altium 官方工程、PCB 和硬件评审确认。</p>
-</section>
-</section>
 </body>
 </html>
