@@ -1,17 +1,18 @@
 /*
- * dsm_v2.h
+ * multiparam_v3_communication.h
+ * 本文件提供多参数传感器通信协议 V3.0 接口，与 DSM 传感器协议命名隔离。
  *	与LTD传感器通信
  *  Created on: Nov 10, 2025
  *      Author: Duan Xuebin
  */
-#ifndef DSM_V2_H
-/* DSM_V2_H 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
-#define DSM_V2_H
+#ifndef MULTIPARAM_V3_COMMUNICATION_H
+/* MULTIPARAM_V3_COMMUNICATION_H 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
+#define MULTIPARAM_V3_COMMUNICATION_H
 
 #include <stdint.h>
 #include "main.h"
 #include "sensor.h"
-/*****************通讯协议说明V3.0，2025.5.15***********
+/*****************多参数传感器通信协议 V3.0，2025.5.15***********
 一、协议包说明：
 通讯协议包长为8个字节，
 1.首字节为地址，保留，目前使用00
@@ -175,58 +176,58 @@
 */
 /* 模式枚举 */
 typedef enum {
-    DSM_V2_MODE_LEVEL   = 'T',   /* 液位模式 */
-    DSM_V2_MODE_DENSITY = 'D',   /* 密度模式 */
-} dsm_v2_mode_t;
+    MULTIPARAM_V3_MODE_LEVEL   = 'T',   /* 液位模式 */
+    MULTIPARAM_V3_MODE_DENSITY = 'D',   /* 密度模式 */
+} multiparam_v3_mode_t;
 
 /* === 对外 API === */
 
 /**
- * @brief 向 LTD/DSM V2 传感器下发模式切换请求并核对模式回显。
+ * @brief 向 多参数传感器通信协议 V3.0 传感器下发模式切换请求并核对模式回显。
  *
  * 模式切换（param 固定 0x00）。
  *
- * @param mode 准备写入 LTD/DSM V2 模式切换帧的 dsm_v2_mode_t 模式字符。
- * @return NO_ERROR 表示向 LTD/DSM V2 传感器下发模式切换请求并核对模式回显已完成；其他值为调用链原样传播的参数、状态、通信、传感器或电机错误码。
+ * @param mode 准备写入 多参数传感器通信协议 V3.0 模式切换帧的 multiparam_v3_mode_t 模式字符。
+ * @return NO_ERROR 表示向 多参数传感器通信协议 V3.0 传感器下发模式切换请求并核对模式回显已完成；其他值为调用链原样传播的参数、状态、通信、传感器或电机错误码。
  */
-int DSM_V2_SwitchMode(dsm_v2_mode_t mode);
+int MULTIPARAM_V3_SwitchMode(multiparam_v3_mode_t mode);
 /**
- * @brief 通过 LTD/DSM V2 命令切换传感器到液位模式。
+ * @brief 通过 多参数传感器通信协议 V3.0 命令切换传感器到液位模式。
  * @return 返回液位模式切换结果码；NO_ERROR 表示传感器已确认，其他值为条件、通信或应答校验错误。
  */
-int DSM_V2_SwitchToLevelMode(void);
+int MULTIPARAM_V3_SwitchToLevelMode(void);
 /**
- * @brief 将 LTD/DSM V2 传感器切换到密度模式。
+ * @brief 将 多参数传感器通信协议 V3.0 传感器切换到密度模式。
  * @return 0 表示成功，非 0 表示通信或模式切换失败。
  */
-int DSM_V2_SwitchToDensityMode(void);
+int MULTIPARAM_V3_SwitchToDensityMode(void);
 
 /**
- * @brief 读取指定 LTD/DSM V2 浮点参数，并统一执行重试、应答校验和错误日志。
+ * @brief 读取指定 多参数传感器通信协议 V3.0 浮点参数，并统一执行重试、应答校验和错误日志。
  *
  * 通用读取。
  *
- * @param param LTD/DSM V2 参数码，决定本次读写的传感器寄存器。
+ * @param param 多参数传感器通信协议 V3.0 参数码，决定本次读写的传感器寄存器。
  * @param out_value 用于返回读取或解析得到的参数值。
  * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
-int DSM_V2_Read_FloatParam(uint8_t param, float *out_value);
+int MULTIPARAM_V3_Read_FloatParam(uint8_t param, float *out_value);
 /**
- * @brief 正式读取 LTD/DSM V2 整数寄存器，并使用统一重试和日志策略。
+ * @brief 正式读取 多参数传感器通信协议 V3.0 整数寄存器，并使用统一重试和日志策略。
  *
- * @param param LTD/DSM V2 参数码，决定本次读写的传感器寄存器。
+ * @param param 多参数传感器通信协议 V3.0 参数码，决定本次读写的传感器寄存器。
  * @param out_value 用于返回读取或解析得到的参数值。
  * @return 返回整机错误码；NO_ERROR 表示整数参数已写入 out_value，其他值表示参数非法、命令切换、通信或应答校验失败。
  */
-int DSM_V2_Read_IntParam  (uint8_t param, int32_t *out_value);
+int MULTIPARAM_V3_Read_IntParam  (uint8_t param, int32_t *out_value);
 
 /**
- * @brief 读取 LTD/DSM V2 传感器软件版本参数。
+ * @brief 读取 多参数传感器通信协议 V3.0 传感器软件版本参数。
  *
- * @param v 用于返回 LTD/DSM V2 应答中的软件版本浮点值。
+ * @param v 用于返回 多参数传感器通信协议 V3.0 应答中的软件版本浮点值。
  * @return 返回软件版本参数读取结果码；NO_ERROR 表示 v 已更新，其他值为条件、通信或应答校验错误。
  */
-int DSM_V2_Read_SoftwareVersion(float *v);        /* R 00 */
+int MULTIPARAM_V3_Read_SoftwareVersion(float *v);        /* R 00 */
 /**
  * @brief 读取 LTD 传感器液位通道频率。
  *
@@ -234,7 +235,7 @@ int DSM_V2_Read_SoftwareVersion(float *v);        /* R 00 */
  * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行。
  * @note 该接口读取参数码 R04 的液位频率整数值。
  */
-int DSM_V2_Read_LevelFrequency(uint32_t *freq_hz);   /* R 04 */
+int MULTIPARAM_V3_Read_LevelFrequency(uint32_t *freq_hz);   /* R 04 */
 /**
  * @brief 读取密度探头主频和两路参考频率。
  * @param freq_hz 主频输出指针。
@@ -242,57 +243,57 @@ int DSM_V2_Read_LevelFrequency(uint32_t *freq_hz);   /* R 04 */
  * @param freq_225 225 度参考频率输出指针。
  * @return 0 表示成功，非 0 表示通信异常。
  */
-int DSM_V2_Read_DensityFrequency(float *freq_hz,float *freq_45,float *freq_225) ; /* R 17/18 (0x11/12) */
+int MULTIPARAM_V3_Read_DensityFrequency(float *freq_hz,float *freq_45,float *freq_225) ; /* R 17/18 (0x11/12) */
 /**
- * @brief 读取 LTD/DSM V2 传感器温度。
+ * @brief 读取 多参数传感器通信协议 V3.0 传感器温度。
  * @param t 温度输出指针。
  * @return 0 表示成功，非 0 表示通信异常。
  */
-int DSM_V2_Read_Temperature    (float *t);        /* R 06 */
+int MULTIPARAM_V3_Read_Temperature    (float *t);        /* R 06 */
 /**
  * @brief 读取 LTD 传感器实时密度。
  *
- * @param rho 用于返回传感器应答中的实时密度值，工程单位沿用 LTD/DSM V2 协议。
- * @return NO_ERROR 表示 LTD/DSM V2 R07 浮点密度已写入 rho；输出指针非法、命令切换、传输失败或应答校验失败时返回对应错误码。
+ * @param rho 用于返回传感器应答中的实时密度值，工程单位按多参数传感器通信协议 V3.0定义。
+ * @return NO_ERROR 表示 多参数传感器通信协议 V3.0 R07 浮点密度已写入 rho；输出指针非法、命令切换、传输失败或应答校验失败时返回对应错误码。
  */
-int DSM_V2_Read_Density        (float *rho);      /* R 07 */
+int MULTIPARAM_V3_Read_Density        (float *rho);      /* R 07 */
 /**
  * @brief 读取 LTD 传感器动力黏度。
  *
- * @param mu 用于返回传感器应答中的动力黏度值，工程单位沿用 LTD/DSM V2 协议。
- * @return NO_ERROR 表示 LTD/DSM V2 R08 动力黏度浮点值已写入 mu；输出指针非法、命令切换、传输失败或应答校验失败时返回对应错误码。
+ * @param mu 用于返回传感器应答中的动力黏度值，工程单位按多参数传感器通信协议 V3.0定义。
+ * @return NO_ERROR 表示 多参数传感器通信协议 V3.0 R08 动力黏度浮点值已写入 mu；输出指针非法、命令切换、传输失败或应答校验失败时返回对应错误码。
  */
-int DSM_V2_Read_DynamicViscosity(float *mu);      /* R 08 动力粘度 */
+int MULTIPARAM_V3_Read_DynamicViscosity(float *mu);      /* R 08 动力粘度 */
 /**
  * @brief 读取 LTD 传感器运动黏度。
  *
- * @param nu 用于返回传感器应答中的运动黏度值，工程单位沿用 LTD/DSM V2 协议。
- * @return NO_ERROR 表示 LTD/DSM V2 R09 运动黏度浮点值已写入 nu；输出指针非法、命令切换、传输失败或应答校验失败时返回对应错误码。
+ * @param nu 用于返回传感器应答中的运动黏度值，工程单位按多参数传感器通信协议 V3.0定义。
+ * @return NO_ERROR 表示 多参数传感器通信协议 V3.0 R09 运动黏度浮点值已写入 nu；输出指针非法、命令切换、传输失败或应答校验失败时返回对应错误码。
  */
-int DSM_V2_Read_KinematicViscosity(float *nu);    /* R 09 运动粘度 */
+int MULTIPARAM_V3_Read_KinematicViscosity(float *nu);    /* R 09 运动粘度 */
 /**
  * @brief 读取 LTD 传感器 45° 均方值。
  *
  * @param msq45 用于返回传感器 45° 振动通道的均方值。
  * @return 返回 45° 均方值读取结果码；NO_ERROR 表示 msq45 已更新，其他值为通信或应答校验错误。
  */
-int DSM_V2_Read_MeanSquare45   (float *msq45);    /* R 17 (0x11) */
+int MULTIPARAM_V3_Read_MeanSquare45   (float *msq45);    /* R 17 (0x11) */
 /**
  * @brief 读取 LTD 传感器 22.5° 均方值。
  *
  * @param msq22p5 用于返回传感器 22.5° 振动通道的均方值。
  * @return 返回 22.5° 均方值读取结果码；NO_ERROR 表示 msq22p5 已更新，其他值为通信或应答校验错误。
  */
-int DSM_V2_Read_MeanSquare22p5 (float *msq22p5);  /* R 18 (0x12) */
+int MULTIPARAM_V3_Read_MeanSquare22p5 (float *msq22p5);  /* R 18 (0x12) */
 /**
  * @brief 读取 LTD 传感器设备编号。
  *
  * @param sensor_id 用于返回探测到的传感器编号。
  * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行。
  */
-int DSM_V2_Read_SensorID       (uint32_t *sensor_id); /* R 22 (0x16) 整型 */
+int MULTIPARAM_V3_Read_SensorID       (uint32_t *sensor_id); /* R 22 (0x16) 整型 */
 /**
- * @brief 在传感器自动识别阶段静默读取 LTD/DSM V2 的 R22 设备编号。
+ * @brief 在传感器自动识别阶段静默读取 多参数传感器通信协议 V3.0 的 R22 设备编号。
  *
  * 函数以参数码 R22 调用无日志版本的整数读取接口，只有完整通信和应答校验成功时才写入 sensor_id。
  *
@@ -301,7 +302,7 @@ int DSM_V2_Read_SensorID       (uint32_t *sensor_id); /* R 22 (0x16) 整型 */
  *         传输、累加和、应答格式或远端错误码。
  * @note 探测失败仅作为候选未命中返回；底层读取关闭重试错误日志，避免自动识别阶段反复刷屏。
  */
-int DSM_V2_Probe_SensorID      (uint32_t *sensor_id); /* R 22 (0x16) 识别探测 */
+int MULTIPARAM_V3_Probe_SensorID      (uint32_t *sensor_id); /* R 22 (0x16) 识别探测 */
 
 
-#endif /* DSM_V2_H */
+#endif /* MULTIPARAM_V3_COMMUNICATION_H */

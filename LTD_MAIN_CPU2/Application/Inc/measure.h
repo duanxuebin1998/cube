@@ -23,6 +23,12 @@ int MeasureStart(void);
  */
 void ProcessMeasureCmd(CommandType command);
 /**
+ * @brief 判断正式命令是否依赖本次运行期确认的传感器身份。
+ * @param command 待执行的正式命令。
+ * @return 1 表示必须先识别传感器，0 表示该命令可在传感器离线时执行。
+ */
+uint8_t Measure_CommandRequiresDetectedSensor(CommandType command);
+/**
  * @brief 处理测量流程中的 process_command 逻辑。
  *
  * @param command 命令值。

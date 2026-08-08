@@ -28,7 +28,7 @@
 #define UNVALID_GSW 0                      /* 质量无效值 */
 
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数。 */
-#define DEVICE_PROTOCOL_VERSION 31u /* CPU2/CPU3共享协议版本；协议31复用未使用的扭力参数槽传递扭力模块温度。 */
+#define DEVICE_PROTOCOL_VERSION 32u /* CPU2/CPU3共享协议版本；协议32新增MULTIPARAM_V4_SENSOR=15共享语义，协议31扭力温度槽继续沿用。 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u /* 故障自动恢复默认重试次数。 */
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u /* 故障自动恢复最大重试次数。 */
 
@@ -216,6 +216,7 @@ typedef enum {
 	DSM_SENSOR = 12,   /* 一体机传感器 */
 	LTD_SENSOR = 13,   /* LTD传感器 */
 	SAFE_SENSOR = 14,  /* 新一代安全协议传感器 */
+	MULTIPARAM_V4_SENSOR = 15, /* 多参数V4传感器，不绑定具体产品型号 */
 } SENSOR_TYPE;
 
 #define TEMP_TO_RAW(t)  ((uint32_t)((t) * 100.0f + 20000.0f)) /* 温度存储到寄存器 */
@@ -724,6 +725,12 @@ typedef struct {
     /* 电机状态相关 */
     uint32_t motor_speed;          /* /< 电机速度（0.01m/min） */
     uint32_t  motor_state;          /* /< 电机状态: 0 停止, 1 上行, 2 下行 */
+
+    /* 多参数传感器调试测量结果 */
+    float magnetic_zero_voltage;   /* /< 磁零点电压，单位 V */
+    float dynamic_viscosity_cp;    /* /< 动力黏度，单位 cP */
+    float kinematic_viscosity_cst; /* /< 运动黏度，单位 cSt */
+    float supply_voltage_v;        /* /< 传感器供电电压，单位 V */
 } DebugData;
 
 

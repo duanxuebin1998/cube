@@ -32,6 +32,8 @@
 #include "encoder.h"
 #include "adc.h"
 #include "power_monitor.h"
+#include "multiparam_v4_communication.h"
+#include "multiparam_v4_measurement.h"
 #include "../../Services/Relay/relay_output.h"
 #include "../../Services/AoOutput/ao_output.h"
 /* USER CODE END Includes */
@@ -391,10 +393,14 @@ void PendSV_Handler(void)
   /* USER CODE BEGIN PendSV_IRQn 1 */
   /*
    * 先消费SSI事件更新RAM累计位置，再提交对应编码器快照；
-   * AO和CPU2通信延后服务随后执行，所有处理都必须保持有界。
+   * 多参数V4主动帧随后在有界PendSV中解包并直接发布运行数据；
+   * AO和CPU2通信延后服务最后执行，所有处理都必须保持有界。
    */
   AS5145_ProcessDeferred();
   Encoder_ProcessDeferredPersistence();
+  if (MULTIPARAM_V4_ProcessDeferredPendSV() != 0U) {
+    (void)MULTIPARAM_V4_MeasurementProcessDeferred();
+  }
   (void)AoOutput_ProcessPendingTimerRefresh();
   CPU2_ProcessDeferredUartFrames();
   CPU2_UartServicePendingRecovery();

@@ -25,6 +25,7 @@
 #include "fault_recovery.h"
 #include "power_monitor.h"
 #include "serial_command.h"
+#include "multiparam_v4_communication.h"
 #include "../../Services/Relay/relay_output.h"
 
 /**
@@ -119,6 +120,8 @@ void App_Init(void) {
     uint32_t motor_init_ret;
     uint32_t encoder_init_ret;
     uint32_t ao_init_ret;
+    uint32_t sensor_detect_ret;
+    CommandType power_on_command;
     uint32_t startup_init_error = NO_ERROR;
     uint32_t power_monitor_start_ret;
 	printf("LTD重启！\n");
@@ -131,6 +134,8 @@ void App_Init(void) {
         startup_init_error = power_monitor_start_ret;
     }
 	init_device_params(); /* 初始化设备参数 */
+	/* 持久化命令不能跨重启执行；在主机通信开放前清除，后续到达的新命令不得再覆盖。 */
+	g_deviceParams.command = CMD_NONE;
 	/* 维护模式属于易失运行态；每次上电都必须关闭并清空对外发布状态。 */
 	g_measurement.device_status.maintenance_mode_active = 0U;
 	g_measurement.device_status.relay_alarm_inhibit_effective = 0U;
@@ -191,21 +196,29 @@ void App_Init(void) {
 		FaultManager_LatchAsyncError(startup_init_error);
 	}
 	CH9141_AT_NotifySensorPowerOn();
-	DetectSensorType(); /* 检测传感器类型 */
-	g_deviceParams.command = CMD_NONE; /* 清除命令 */
+	sensor_detect_ret = DetectSensorType(); /* 检测传感器类型 */
 	g_measurement.device_status.zero_point_status=1; /* 设置零点状态为需要回零点 */
-	if (g_deviceParams.powerOnDefaultCommand != CMD_NONE) {
+	power_on_command = DefaultCmd_To_MeasureCmd(g_deviceParams.powerOnDefaultCommand);
+	if (power_on_command != CMD_NONE) {
 		/* 启动期已有硬件初始化错误时，先保留错误码并阻止默认命令继续下发。 */
 		if (startup_init_error != NO_ERROR) {
 			printf("上电默认命令被拦截：启动初始化失败 0x%08lX\r\n",
 			       (unsigned long)startup_init_error);
+		} else if (sensor_detect_ret == STATE_SWITCH) {
+			/* 探测被新命令打断时保留新命令优先级，不能再排入上电默认命令。 */
+			printf("上电默认命令被拦截：传感器识别已被新命令打断\r\n");
+		} else if ((Measure_CommandRequiresDetectedSensor(power_on_command) != 0U) &&
+		           (Sensor_IsDetectionValid() == 0U)) {
+			/* 只有依赖传感器数据的默认命令才要求本次识别有效。 */
+			printf("上电默认命令被拦截：传感器识别失败 0x%08lX\r\n",
+			       (unsigned long)sensor_detect_ret);
 		} else if ((!MotorCtrl_IsPositionSourceMotor()) && (!Encoder_IsReady())) {
 			/* 编码轮记步模式下，上电默认命令不能早于编码器首帧有效位置。 */
 			g_measurement.device_status.error_code = ENCODER_FIRST_SAMPLE_TIMEOUT;
 			printf("上电默认命令被拦截：编码器首帧尚未就绪\r\n");
 		} else {
-			DeviceCommand_Queue(DefaultCmd_To_MeasureCmd(g_deviceParams.powerOnDefaultCommand));
-			printf("上电默认命令：%d\r\n", g_deviceParams.command);
+			DeviceCommand_Queue(power_on_command);
+			printf("上电默认命令：%d\r\n", (int)power_on_command);
 		}
 	}
 	/* 测试函数 */
@@ -233,7 +246,7 @@ void App_MainLoop(void) {
     uint32_t power_fault_code;
 
 	/* 测试指令 */
-	/* DSM_V2_Test_AllParams(); / / 二代传感器测试函数 */
+	/* MULTIPARAM_V3_Test_AllParams(); / / 多参数传感器 V3.0 测试函数 */
 	/* Test_FRAM_ReadWrite(); */
 	/* printf("{encoder}%d\r\n{torque}%d\r\n", (int) g_encoder_count, g_weight); */
 	/* printf("位置%d", g_measurement.debug_data.sensor_position); */
@@ -247,6 +260,8 @@ void App_MainLoop(void) {
         FaultManager_LatchAsyncError(power_fault_code);
     }
 	/* 后台轻量检查：这里只做一次快速轮询，不在主循环里展开复杂处理。 */
+	/* 主动帧由PendSV解包并更新运行数据；主循环只处理UART恢复和超时诊断。 */
+	MULTIPARAM_V4_Service();
 	/* 先输出PendSV已完成的紧急保存快照，确保所有printf仍在线程态。 */
 	SerialCommand_ProcessDeferredReports();
 	(void)MotorCtrl_PollRuntimePosition();

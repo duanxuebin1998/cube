@@ -230,6 +230,43 @@ static void CMD_RunToPosition(void);
  */
 void CMD_ReadPartParams(void);
 
+/*
+ * 函数用途：判断正式命令是否必须依赖本次运行期确认的传感器身份。
+ * 调用场景：ProcessMeasureCmd 在解除故障锁存、使能电机和进入具体业务流程前调用。
+ * 关键约束：回零、零点标定、维护、配对、纯运动、扭力标定和恢复出厂可在传感器离线时执行；新增命令默认按需要传感器处理。
+ */
+uint8_t Measure_CommandRequiresDetectedSensor(CommandType command)
+{
+    switch (command) {
+    case CMD_NONE:
+    case CMD_BACK_ZERO:
+    case CMD_CALIBRATE_ZERO:
+    case CMD_CANCEL_MEASUREMENT:
+    case CMD_RUN_TO_POSITION:
+    case CMD_MOVE_UP:
+    case CMD_MOVE_DOWN:
+    case CMD_FORCE_MOVE_UP:
+    case CMD_FORCE_MOVE_DOWN:
+    case CMD_SET_EMPTY_WEIGHT:
+    case CMD_SET_FULL_WEIGHT:
+    case CMD_RESTORE_FACTORY:
+    case CMD_DEBUG_MODE:
+    case CMD_MAINTENANCE_MODE:
+    case CMD_MAINTENANCE_EXIT:
+    case CMD_CLEAR_ALL_RELAY_LATCHED_ALARMS:
+    case CMD_PAIR_NEAREST_WIRELESS_SLIPRING:
+    case CMD_RESERVED_CMD2:
+    case CMD_RESERVED_CMD3:
+    case CMD_RESERVED_CMD5:
+    case CMD_RESERVED_CMD6:
+    case CMD_RESERVED_CMD7:
+    case CMD_UNKNOWN:
+        return 0U;
+    default:
+        return 1U;
+    }
+}
+
 /**
  * @brief 按命令类别执行即时控制，或完成测量启动门禁后分派业务测量流程。
  *
@@ -270,6 +307,21 @@ void ProcessMeasureCmd(CommandType command)
     if (command == CMD_PAIR_NEAREST_WIRELESS_SLIPRING) {
         printf("无线滑环匹配\t触发=正式命令\r\n");
         (void)WirelessPairing_RunByRssi();
+        return;
+    }
+
+    if ((Measure_CommandRequiresDetectedSensor(command) != 0U) &&
+        (Sensor_IsDetectionValid() == 0U)) {
+        uint32_t sensor_detect_ret = Sensor_GetDetectionResult();
+
+        if ((sensor_detect_ret == NO_ERROR) || (sensor_detect_ret == STATE_SWITCH)) {
+            sensor_detect_ret = SENSOR_DEVICE_COMM_TIMEOUT;
+        }
+        /* 识别无效时不得让 FRAM 中的上次 sensorType 进入新的测量流程。 */
+        printf("测量命令被拒绝：本次传感器识别无效，错误码=0x%08lX\r\n",
+               (unsigned long)sensor_detect_ret);
+        SiProfile_HandleFailure();
+        SET_ERROR(sensor_detect_ret);
         return;
     }
 

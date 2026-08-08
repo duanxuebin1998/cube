@@ -11,7 +11,9 @@
 
 #include <stdint.h>
 #include"dsm_sensor_communication.h"
-#include"ltd_sensor_communication.h"
+#include"multiparam_v3_communication.h"
+#include "multiparam_v4_communication.h"
+#include "multiparam_v4_measurement.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,11 +36,21 @@
 #define RX_BUF_LEN 128 /* 传感器串口接收缓冲区长度。 */
 
 /**
- * @brief 自动识别传感器类型（DSM 一代 / DSM_V2 / SIL）
+ * @brief 自动识别传感器类型（多参数V4主动/交互、安全协议、多参数V3.0、DSM一代）
  *
  * @return uint32_t 错误码或 NO_ERROR
  */
 uint32_t DetectSensorType(void);
+/**
+ * @brief 判断本次上电或最近一次重新探测是否已经确认传感器身份。
+ * @return 1 表示当前运行态身份有效，0 表示探测尚未完成、失败或被命令切换打断。
+ */
+uint8_t Sensor_IsDetectionValid(void);
+/**
+ * @brief 获取最近一次传感器自动识别结果。
+ * @return NO_ERROR 表示身份有效；其他值为最近一次探测的通信、协议或命令切换结果。
+ */
+uint32_t Sensor_GetDetectionResult(void);
 /**
  * @brief 切换传感器到密度测量模式并等待模式生效。
  * @return 返回整机错误码；NO_ERROR 表示传感器已进入密度模式并完成稳定等待，其他值由模式切换或链路诊断返回。
@@ -49,6 +61,34 @@ uint32_t EnableDensityMode(void);
  * @return 返回整机错误码；NO_ERROR 表示当前传感器已进入液位模式并完成稳定等待，其他值透传模式切换失败。
  */
 uint32_t EnableLevelMode(void);
+/**
+ * @brief 判断当前传感器是否提供水位电容通道。
+ * @return 1 表示支持，0 表示不支持。
+ */
+int Sensor_SupportsWaterCapChannel(void);
+/**
+ * @brief 判断当前传感器是否提供姿态角通道。
+ * @return 1 表示支持，0 表示不支持。
+ */
+int Sensor_SupportsGyroChannel(void);
+/**
+ * @brief 按当前传感器协议读取一次液位模式频率，不执行模式恢复。
+ * @param frequency_out 用于返回整数Hz频率。
+ * @return 返回整机错误码。
+ */
+uint32_t Sensor_ReadLevelFrequency(uint32_t *frequency_out);
+/**
+ * @brief 把多参数V4测水功能调整到明确目标状态。
+ * @param enabled 1表示使能，0表示关闭。
+ * @return 返回整机错误码；非V4传感器返回能力不支持。
+ */
+uint32_t Sensor_SetWaterEnabled(uint8_t enabled);
+/**
+ * @brief 把多参数V4磁零点功能调整到明确目标状态。
+ * @param enabled 1表示使能，0表示关闭。
+ * @return 返回整机错误码；非V4传感器返回能力不支持。
+ */
+uint32_t Sensor_SetMagneticZeroEnabled(uint8_t enabled);
 /**
  * @brief 按协议层重试策略读取整数 Hz 液位频率；连续三次为 0 或超过 6500 Hz 时执行受电机状态约束的模式恢复，多轮恢复仍无效则返回 SONIC_FREQ_ABNORMAL。
  *

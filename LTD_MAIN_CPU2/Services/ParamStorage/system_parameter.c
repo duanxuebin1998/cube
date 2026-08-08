@@ -2546,6 +2546,9 @@ static const char *device_param_value_desc(const ParamPrintItem *item, uint32_t 
         if (value == (uint32_t)SAFE_SENSOR) {
             return "安全协议传感器";
         }
+        if (value == (uint32_t)MULTIPARAM_V4_SENSOR) {
+            return "多参数V4传感器";
+        }
         return "非法配置";
     case (uint16_t)offsetof(DeviceParameters, command):
         switch (value) {
@@ -3508,6 +3511,10 @@ void PrintMeasurementResult(const MeasurementResult *m)
            (m->debug_data.motor_state == 0) ? "停止" :
            (m->debug_data.motor_state == 1) ? "上行" :
            (m->debug_data.motor_state == 2) ? "下行" : "未知");
+    printf("  磁零点电压: %.6f V\r\n", (double)m->debug_data.magnetic_zero_voltage);
+    printf("  动力黏度: %.6f cP\r\n", (double)m->debug_data.dynamic_viscosity_cp);
+    printf("  运动黏度: %.6f cSt\r\n", (double)m->debug_data.kinematic_viscosity_cst);
+    printf("  传感器供电电压: %.6f V\r\n", (double)m->debug_data.supply_voltage_v);
 
     printf("--------------------------------------------------------------\r\n");
 

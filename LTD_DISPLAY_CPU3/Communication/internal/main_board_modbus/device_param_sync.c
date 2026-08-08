@@ -620,6 +620,14 @@ static bool DeviceParams_BulkSyncPreflight(void)
     bool has_difference = false;
     bool has_ordinary_difference = false;
 
+    if (!DeviceParam_IsSensorTypeSupported(g_deviceParams.sensorType)) {
+        /* 未知传感器类型不能随批量参数同步写回CPU2，避免把非法共享语义固化。 */
+        CPU3_LOG_WARNING("CPU2参数",
+                         "拒绝同步未知传感器类型 值=%lu",
+                         (unsigned long)g_deviceParams.sensorType);
+        return false;
+    }
+
     for (uint32_t i = 0U; i < (uint32_t)param_metaAmount; ++i) {
         volatile struct ParameterMetadata *h = &param_meta[i];
         int32_t target_value;

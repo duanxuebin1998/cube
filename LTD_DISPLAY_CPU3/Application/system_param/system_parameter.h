@@ -30,7 +30,7 @@
 /* 历史有线温度无效哨兵值 0；保留用于旧接口兼容，不能与无线温度无效值 UNVALID_TEMPERATURE_WIRELESS 混用。 */
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
-#define DEVICE_PROTOCOL_VERSION 31u /* CPU2/CPU3共享协议版本；协议31复用未使用的扭力参数槽传递扭力模块温度。 */
+#define DEVICE_PROTOCOL_VERSION 32u /* CPU2/CPU3共享协议版本；协议32新增MULTIPARAM_V4_SENSOR=15共享语义，协议31扭力温度槽继续沿用。 */
 /* 故障自动恢复的默认重试次数 3；仅在参数缺省、越界或旧版本迁移时作为归一化值。 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 /* 故障自动恢复重试次数的配置硬上限 10；CPU3 菜单和参数校验不得允许写入超过该值的重试次数。 */
@@ -70,6 +70,19 @@
 #define DENSITY_PARAM_MIGRATE_FACTOR 10U /* 旧 x10 密度参数迁移到 x100 的倍率。 */
 #define DENSITY_CORRECTION_OLD_BASE_RAW 10000U /* 旧密度修正零点，单位 0.1kg/m3。 */
 #define DENSITY_CORRECTION_BASE_RAW 100000U /* 密度修正零点，单位 0.01kg/m3。 */
+
+typedef enum {
+    DSM_SENSOR = 12, /* 一体机传感器 */
+    LTD_SENSOR = 13, /* 多参数传感器通信协议V3.0设备 */
+    SAFE_SENSOR = 14, /* 安全协议传感器 */
+    MULTIPARAM_V4_SENSOR = 15 /* 多参数V4传感器，不绑定具体产品型号 */
+} SENSOR_TYPE;
+
+/*
+ * 函数用途：判断CPU2共享的传感器类型是否属于当前CPU3协议版本支持的枚举。
+ * 调用场景：参数快照接收、批量同步预检和诊断显示。
+ */
+bool DeviceParam_IsSensorTypeSupported(uint32_t value);
 
 typedef enum {
     /* 剖面测量结果来源；用于跨 CPU 判断点阵布局、完成条件和对外协议投影。 */
@@ -705,6 +718,12 @@ typedef struct {
     /* 电机状态相关 */
     uint32_t motor_speed;          /* /< motor speed (0.01m/min) */
     uint32_t  motor_state;          /* /< 电机状态: 0 停止, 1 上行, 2 下行 */
+
+    /* 多参数传感器调试测量结果 */
+    float magnetic_zero_voltage;   /* /< 磁零点电压，单位 V */
+    float dynamic_viscosity_cp;    /* /< 动力黏度，单位 cP */
+    float kinematic_viscosity_cst; /* /< 运动黏度，单位 cSt */
+    float supply_voltage_v;        /* /< 传感器供电电压，单位 V */
 } DebugData;
 
 

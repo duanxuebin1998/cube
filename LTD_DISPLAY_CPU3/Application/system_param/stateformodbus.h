@@ -490,8 +490,16 @@ typedef enum
 #define REG_DEBUG_MOTOR_SPEED         (REG_DEBUG_BASE + 0x1CU)
 /* 调试快照中“电机控制状态”字段的起始地址；该数据用于诊断观察，不替代业务有效性和故障判定。 */
 #define REG_DEBUG_MOTOR_STATE         (REG_DEBUG_BASE + 0x1EU)
+/* 调试快照中“磁零点电压”字段的起始地址；按 IEEE 754 Float32 高字在前传输。 */
+#define REG_DEBUG_MAGNETIC_ZERO_VOLTAGE (REG_DEBUG_BASE + 0x20U)
+/* 调试快照中“动力黏度”字段的起始地址；按 IEEE 754 Float32 高字在前传输。 */
+#define REG_DEBUG_DYNAMIC_VISCOSITY_CP (REG_DEBUG_BASE + 0x22U)
+/* 调试快照中“运动黏度”字段的起始地址；按 IEEE 754 Float32 高字在前传输。 */
+#define REG_DEBUG_KINEMATIC_VISCOSITY_CST (REG_DEBUG_BASE + 0x24U)
+/* 调试快照中“传感器供电电压”字段的起始地址；按 IEEE 754 Float32 高字在前传输。 */
+#define REG_DEBUG_SUPPLY_VOLTAGE_V    (REG_DEBUG_BASE + 0x26U)
 /* 调试快照块的排他结束地址；用于计算连续读取长度和边界检查。 */
-#define REG_DEBUG_BLOCK_END           (REG_DEBUG_BASE + 0x20U)
+#define REG_DEBUG_BLOCK_END           (REG_DEBUG_BASE + 0x28U)
 
 /* 液位、水位与罐高运行数据：0x1000 */
 /* 过程量块中“油位测量结果”字段的起始地址；数值编码、单位和无效值规则由对应测量结果类型定义。 */

@@ -5,7 +5,7 @@
  *      Author: Duan Xuebin
  */
 
-#include <ltd_sensor_communication.h>
+#include <multiparam_v3_communication.h>
 #include "test.h"
 #include "serial_command_parser.h"
 #include "fixed_frequency_level_search.h"
@@ -2539,14 +2539,14 @@ static void __attribute__((unused)) Sensor_CommCheckAndLog(const char *tag)
     }
 
     if (g_deviceParams.sensorType == LTD_SENSOR) {
-        printf("[传感器] %s 类型=LTD/V2(%lu)，单次通信=读取密度\r\n",
+        printf("[传感器] %s 类型=多参数协议V3.0/LTD(%lu)，单次通信=读取密度\r\n",
                tag,
                (unsigned long)g_deviceParams.sensorType);
 
-        ret = (uint32_t)DSM_V2_Read_Density(&density);
-        Test_SensorCommPrintResult(tag, "LTD/V2读取密度", ret, &comm_fail_cnt);
+        ret = (uint32_t)MULTIPARAM_V3_Read_Density(&density);
+        Test_SensorCommPrintResult(tag, "多参数协议V3.0/LTD读取密度", ret, &comm_fail_cnt);
         if (ret == NO_ERROR) {
-            printf("[传感器][正常] %s LTD/V2 密度=%.3f\r\n", tag, density);
+            printf("[传感器][正常] %s 多参数协议V3.0/LTD 密度=%.3f\r\n", tag, density);
         }
         return;
     }
@@ -2980,18 +2980,18 @@ void motor_text_encoder(float run_distance_mm,
         Test_MotorTextClearIgnoredError();
     }
 }
-#include <ltd_sensor_communication.h>
+#include <multiparam_v3_communication.h>
 #include <stdio.h>
 
 /**
- * @brief  测试V2协议通讯与关键参数读取
+ * @brief  测试多参数传感器通信协议 V3.0通讯与关键参数读取
  * @note   可在初始化完成后调用，例如 main() 或 sensor init 后
  */
-void DSM_V2_Test_AllParams(void) {
-	printf("\r\n===== DSM V2 通讯测试开始 =====\r\n");
+void MULTIPARAM_V3_Test_AllParams(void) {
+	printf("\r\n===== 多参数传感器通信协议 V3.0 通讯测试开始 =====\r\n");
 
 /* / / 1. 切换到液位模式 */
-/* int ret = DSM_V2_SwitchToLevelMode(); */
+/* int ret = MULTIPARAM_V3_SwitchToLevelMode(); */
 /* if (ret == NO_ERROR) */
 /* printf("切换液位模式成功\r\n"); */
 /* else { */
@@ -3004,39 +3004,39 @@ void DSM_V2_Test_AllParams(void) {
 	uint32_t freq = 0, sensor_id = 0;
 
 	/* 3. 依次读取各参数 */
-/* if (DSM_V2_Read_SoftwareVersion(&ver) == NO_ERROR) */
+/* if (MULTIPARAM_V3_Read_SoftwareVersion(&ver) == NO_ERROR) */
 /* printf("软件版本: %.3f\r\n", ver); */
 /* else printf("读取软件版本失败\r\n"); */
 
-	if (DSM_V2_Read_Temperature(&temp) == NO_ERROR) {
+	if (MULTIPARAM_V3_Read_Temperature(&temp) == NO_ERROR) {
 		printf("温度值: %.3f ℃\r\n", temp);
 	} else
 		printf("读取温度失败\r\n");
 
-	if (DSM_V2_Read_Density(&rho) == NO_ERROR) {
+	if (MULTIPARAM_V3_Read_Density(&rho) == NO_ERROR) {
 		printf("密度值: %.3f\r\n", rho);
 	} else
 		printf("读取密度失败\r\n");
 
-	if (DSM_V2_Read_DynamicViscosity(&mu) == NO_ERROR)
+	if (MULTIPARAM_V3_Read_DynamicViscosity(&mu) == NO_ERROR)
 		printf("动力粘度: %.3f\r\n", mu);
 	else
 		printf("读取动力粘度失败\r\n");
 
-	if (DSM_V2_Read_KinematicViscosity(&nu) == NO_ERROR)
+	if (MULTIPARAM_V3_Read_KinematicViscosity(&nu) == NO_ERROR)
 		printf("运动粘度: %.3f\r\n", nu);
 	else
 		printf("读取运动粘度失败\r\n");
 
-    if (DSM_V2_Read_LevelFrequency(&freq) == NO_ERROR)
+    if (MULTIPARAM_V3_Read_LevelFrequency(&freq) == NO_ERROR)
         printf("液位频率: %lu Hz\r\n", (unsigned long)freq);
     else printf("读取液位频率失败\r\n");
 
-    if (DSM_V2_Read_SensorID(&sensor_id) == NO_ERROR)
+    if (MULTIPARAM_V3_Read_SensorID(&sensor_id) == NO_ERROR)
         printf("传感器号: %lu\r\n", (unsigned long)sensor_id);
     else printf("读取传感器号失败\r\n");
 
-	printf("===== DSM V2 通讯测试结束 =====\r\n\r\n");
+	printf("===== 多参数传感器通信协议 V3.0 通讯测试结束 =====\r\n\r\n");
 }
 /**
  * @brief  传感器与蓝牙链路综合通信测试
@@ -3089,9 +3089,9 @@ void SensorWireless_CommTest(void)
             printf("安全协议密度数据: 频率=%.3f Hz 密度=%.3f 温度=%.3f\r\n", frequency, density, temp);
         }
     } else if (g_deviceParams.sensorType == LTD_SENSOR) {
-        ret = (uint32_t)DSM_V2_Read_Density(&density);
-        if (Test_CommRecordResult("LTD/V2单次读取密度", ret, &ok_count, &fail_count)) {
-            printf("LTD/V2密度: %.3f\r\n", density);
+        ret = (uint32_t)MULTIPARAM_V3_Read_Density(&density);
+        if (Test_CommRecordResult("多参数协议V3.0/LTD单次读取密度", ret, &ok_count, &fail_count)) {
+            printf("多参数协议V3.0/LTD密度: %.3f\r\n", density);
         }
     } else {
         fail_count++;

@@ -18,6 +18,40 @@ volatile MeasurementResult g_measurement = { 0 };
 /** CPU2 下发并经 CPU3 同步确认的设备参数快照，供菜单、显示和协议映射共同使用。 */
 volatile DeviceParameters g_deviceParams = { 0 };
 
+/*
+ * 函数用途：校验CPU2共享的传感器类型枚举。
+ * 调用场景：CPU3接收参数快照或准备把参数同步回CPU2之前。
+ * 关键约束：类型15明确表示通用多参数V4传感器，未知值不能按既有类型解释。
+ */
+bool DeviceParam_IsSensorTypeSupported(uint32_t value)
+{
+    return (value == (uint32_t)DSM_SENSOR) ||
+           (value == (uint32_t)LTD_SENSOR) ||
+           (value == (uint32_t)SAFE_SENSOR) ||
+           (value == (uint32_t)MULTIPARAM_V4_SENSOR);
+}
+
+/*
+ * 函数用途：把CPU2共享的传感器类型值转换为现场可读名称。
+ * 调用场景：CPU3设备参数诊断打印。
+ * 关键约束：未知值只显示为非法配置，不擅自按LTD或多参数V4解释。
+ */
+static const char * sensor_type_str(uint32_t value)
+{
+    switch ((SENSOR_TYPE)value) {
+    case DSM_SENSOR:
+        return "一体机传感器";
+    case LTD_SENSOR:
+        return "多参数V3传感器";
+    case SAFE_SENSOR:
+        return "安全协议传感器";
+    case MULTIPARAM_V4_SENSOR:
+        return "多参数V4传感器";
+    default:
+        return "非法配置";
+    }
+}
+
 /**
  * @brief 将继电器报警输出工作模式转换为中文名称。
  *
@@ -526,7 +560,10 @@ void print_device_params(void)
 
     /* 基础参数 */
     printf("\r\n-- 基础参数 --\r\n");
-    printf("  %-32s : %lu\r\n", "传感器类型", (unsigned long)params.sensorType);
+    printf("  %-32s : %s(%lu)\r\n",
+           "传感器类型",
+           sensor_type_str(params.sensorType),
+           (unsigned long)params.sensorType);
     printf("  %-32s : %lu\r\n", "传感器编号", (unsigned long)params.sensorID);
     printf("  %-32s : 0x%08lX\r\n", "传感器软件版本", (unsigned long)params.sensorSoftwareVersion);
     printf("  %-32s : 0x%08lX\r\n", "CPU2程序版本", (unsigned long)params.softwareVersion);
@@ -770,6 +807,10 @@ void PrintMeasurementResult(const MeasurementResult *m)
            (m->debug_data.motor_state == 0) ? "停止" :
            (m->debug_data.motor_state == 1) ? "上行" :
            (m->debug_data.motor_state == 2) ? "下行" : "未知");
+    printf("  磁零点电压: %.6f V\r\n", (double)m->debug_data.magnetic_zero_voltage);
+    printf("  动力黏度: %.6f cP\r\n", (double)m->debug_data.dynamic_viscosity_cp);
+    printf("  运动黏度: %.6f cSt\r\n", (double)m->debug_data.kinematic_viscosity_cst);
+    printf("  传感器供电电压: %.6f V\r\n", (double)m->debug_data.supply_voltage_v);
 
     printf("--------------------------------------------------------------\r\n");
 

@@ -608,6 +608,20 @@ void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 	 * 电机状态由主循环MotorCtrl_PollRuntimePosition()统一刷新，这里只上报缓存值。 */
 	write_u32_to_regs(regs, REG_DEBUG_MOTOR_STATE, g_measurement.debug_data.motor_state);
 
+	/* 多参数传感器调试测量结果 */
+	write_float_to_regs(regs,
+	                    REG_DEBUG_MAGNETIC_ZERO_VOLTAGE,
+	                    g_measurement.debug_data.magnetic_zero_voltage);
+	write_float_to_regs(regs,
+	                    REG_DEBUG_DYNAMIC_VISCOSITY_CP,
+	                    g_measurement.debug_data.dynamic_viscosity_cp);
+	write_float_to_regs(regs,
+	                    REG_DEBUG_KINEMATIC_VISCOSITY_CST,
+	                    g_measurement.debug_data.kinematic_viscosity_cst);
+	write_float_to_regs(regs,
+	                    REG_DEBUG_SUPPLY_VOLTAGE_V,
+	                    g_measurement.debug_data.supply_voltage_v);
+
 	/* ==== OilMeasurement ==== */
 	write_u32_to_regs(regs, REG_OIL_MEASUREMENT_OIL_LEVEL, g_measurement.oil_measurement.oil_level);
 	write_u32_to_regs(regs, REG_OIL_MEASUREMENT_AIR_FREQUENCY, g_measurement.oil_measurement.air_frequency);

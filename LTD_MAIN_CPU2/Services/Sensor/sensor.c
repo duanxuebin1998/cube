@@ -21,47 +21,85 @@
 
 #define SENSOR_LEVEL_FREQ_RECOVERY_LIFT_MM 1.0f /* 传感器数据处理参数：传感器 液位 频率 恢复 抬升 MM。 */
 #define SENSOR_DENSITY_MODE_SETTLE_MS 3000U /* 传感器数据处理参数：传感器 密度 模式 稳定 毫秒。 */
+#define SENSOR_V4_ACTIVE_FAST_PROBE_MS 750U /* 建链前快速窗口覆盖一个500ms标称周期，并把完整等待留给蓝牙恢复后的第二窗口。 */
 #define READ_PART_PARAMS_REFRESH_INTERVAL_MS 1000U /* 部件参数读取刷新间隔，单位 ms。 */
 #define READ_PART_PARAMS_RSSI_REFRESH_INTERVAL_MS 5000U /* 部件参数 RSSI 刷新间隔，单位 ms。 */
 
 static uint32_t Sensor_UpdateWirelessRssiForPartParams(uint8_t force_update);
 static void Sensor_PrintBluetoothLinkSnapshot(const WirelessConnectionStatus *status);
+static uint32_t s_sensor_detection_result = SENSOR_DEVICE_COMM_TIMEOUT;
+
+
+/*
+ * 函数用途：提交本次已确认的传感器身份，并按实际变化决定是否持久化。
+ * 调用场景：DetectSensorType 的任一候选协议识别成功后调用。
+ * 关键约束：识别失败时不得覆盖 FRAM 中的上次有效身份；相同身份不重复触发参数保存和板间参数更新。
+ */
+static void Sensor_CommitDetectedIdentity(uint32_t sensor_type, uint32_t sensor_id)
+{
+    uint8_t identity_changed =
+            ((g_deviceParams.sensorType != sensor_type) ||
+             (g_deviceParams.sensorID != sensor_id)) ? 1U : 0U;
+
+    g_deviceParams.sensorType = sensor_type;
+    g_deviceParams.sensorID = sensor_id;
+    s_sensor_detection_result = NO_ERROR;
+
+    if (identity_changed != 0U) {
+        save_device_params();
+    }
+}
+
+
+/**
+ * @brief 判断本次上电或最近一次重新探测是否已经确认传感器身份。
+ * @return 1 表示当前运行态身份有效，0 表示探测尚未完成、失败或被命令切换打断。
+ */
+uint8_t Sensor_IsDetectionValid(void)
+{
+    return (s_sensor_detection_result == NO_ERROR) ? 1U : 0U;
+}
+
+
+/**
+ * @brief 获取最近一次传感器自动识别结果。
+ * @return NO_ERROR 表示身份有效；其他值为最近一次探测的通信、协议或命令切换结果。
+ */
+uint32_t Sensor_GetDetectionResult(void)
+{
+    return s_sensor_detection_result;
+}
 
 
 
 /**
- * @brief 在 LTD 和 DSM 探测结果中选择最终识别错误。
+ * @brief 在各候选协议探测结果中选择最终识别错误。
  *
- * 优先保留协议格式、校验等具体错误；只有两路都是无响应时才归并为传感器通信超时。
- *
- * @param safe_ret 安全传感器探测返回的整机错误码。
- * @param ltd_ret LTD/V2 探测返回的整机错误码。
- * @param dsm_ret DSM 一代探测返回的整机错误码。
- * @return 返回传感器探测链路最终错误码；优先保留安全协议、LTD 或 DSM 的具体错误，均无明确原因时返回 SENSOR_DEVICE_COMM_TIMEOUT。
+ * @param safe_ret 安全传感器探测结果。
+ * @param v4_ret 多参数V4交互探测结果。
+ * @param v3_ret 多参数V3.0探测结果。
+ * @param dsm_ret DSM一代探测结果。
+ * @return 优先保留具体协议错误；全部无响应时返回传感器通信超时。
  */
 static uint32_t Sensor_SelectProbeError(uint32_t safe_ret,
-                                        uint32_t ltd_ret,
+                                        uint32_t v4_ret,
+                                        uint32_t v3_ret,
                                         uint32_t dsm_ret)
 {
-    if ((safe_ret != NO_ERROR) && (safe_ret != SENSOR_DEVICE_COMM_TIMEOUT)) {
-        return safe_ret;
+    const uint32_t results[] = {safe_ret, v4_ret, v3_ret, dsm_ret};
+
+    for (uint32_t index = 0U; index < (sizeof(results) / sizeof(results[0])); index++) {
+        if ((results[index] != NO_ERROR) &&
+            (results[index] != SENSOR_DEVICE_COMM_TIMEOUT)) {
+            return results[index];
+        }
     }
-    /* 自动识别按“安全协议真实错误、LTD 真实错误、DSM 真实错误、任一路超时”的优先级选择最终错误；具体协议错误优先于单纯未响应。 */
-    if ((ltd_ret != NO_ERROR) && (ltd_ret != SENSOR_DEVICE_COMM_TIMEOUT)) {
-        return ltd_ret;
+    for (uint32_t index = 0U; index < (sizeof(results) / sizeof(results[0])); index++) {
+        if (results[index] == SENSOR_DEVICE_COMM_TIMEOUT) {
+            return SENSOR_DEVICE_COMM_TIMEOUT;
+        }
     }
-    if ((dsm_ret != NO_ERROR) && (dsm_ret != SENSOR_DEVICE_COMM_TIMEOUT)) {
-        return dsm_ret;
-    }
-    if ((safe_ret == SENSOR_DEVICE_COMM_TIMEOUT) ||
-        (ltd_ret == SENSOR_DEVICE_COMM_TIMEOUT) ||
-        (dsm_ret == SENSOR_DEVICE_COMM_TIMEOUT)) {
-        return SENSOR_DEVICE_COMM_TIMEOUT;
-    }
-    if (ltd_ret != NO_ERROR) {
-        return ltd_ret;
-    }
-    return dsm_ret;
+    return SENSOR_CAPABILITY_UNSUPPORTED;
 }
 
 
@@ -219,17 +257,17 @@ static uint32_t Sensor_ParseDsmTextId(const char *id_text, uint32_t *sensor_id_o
 }
 
 /**
- * @brief 用静默传感器编号读数探测 LTD/V2 传感器。
+ * @brief 用静默传感器编号读数探测 多参数传感器通信协议 V3.0（当前LTD使用） 传感器。
  *
  * 识别阶段的候选协议未命中不是最终故障，因此这里不打印错误重试日志。
  *
  * @param sensor_id_out 用于返回探测并完成格式校验的传感器编号。
- * @return 返回 LTD/V2 静默传感器编号读取结果；NO_ERROR 表示探测成功，其他值表示通信或响应校验失败。
+ * @return 返回 多参数传感器通信协议 V3.0（当前LTD使用） 静默传感器编号读取结果；NO_ERROR 表示探测成功，其他值表示通信或响应校验失败。
  */
 static uint32_t Sensor_ProbeLtdSensor(uint32_t *sensor_id_out)
 {
     uint32_t sensor_id = 0U;
-    uint32_t ret = DSM_V2_Probe_SensorID(&sensor_id);
+    uint32_t ret = MULTIPARAM_V3_Probe_SensorID(&sensor_id);
 
     /* 只有 R22 探测成功且调用方提供输出地址时才发布设备编号，失败时保留调用方原值。 */
     if ((ret == NO_ERROR) && (sensor_id_out != NULL)) {
@@ -273,6 +311,131 @@ static uint32_t Sensor_ProbeDsmSensor(uint32_t *sensor_id_out)
     return NO_ERROR;
 }
 
+/*
+ * 函数用途：在有界窗口内被动识别多参数V4主动上报帧。
+ * 调用场景：蓝牙链路建立后、任何同步协议探测之前。
+ * 关键约束：识别成功后保留V4常驻接收；未命中或命令切换时释放UART6。
+ */
+static uint32_t Sensor_ProbeV4Active(uint8_t *address_out, uint32_t timeout_ms)
+{
+    multiparam_v4_snapshot_t snapshot;
+    uint32_t start_tick;
+    uint32_t result;
+
+    MULTIPARAM_V4_Init(MULTIPARAM_V4_ANY_ADDRESS);
+    MULTIPARAM_V4_MeasurementInit();
+    result = MULTIPARAM_V4_StartActiveReceive();
+    if (result != NO_ERROR) {
+        MULTIPARAM_V4_Deinit();
+        return result;
+    }
+
+    start_tick = HAL_GetTick();
+    while ((HAL_GetTick() - start_tick) < timeout_ms) {
+        if (HasEffectiveCommandSwitchRequest()) {
+            MULTIPARAM_V4_Deinit();
+            return STATE_SWITCH;
+        }
+        MULTIPARAM_V4_Service();
+        result = MULTIPARAM_V4_CopyLatestSnapshot(&snapshot);
+        if ((result == NO_ERROR) &&
+            (MULTIPARAM_V4_IsSnapshotFresh(timeout_ms) != 0U)) {
+            if (address_out != NULL) {
+                *address_out = snapshot.address;
+            }
+            return NO_ERROR;
+        }
+        HAL_Delay(1U);
+    }
+
+    MULTIPARAM_V4_Deinit();
+    return SENSOR_DEVICE_COMM_TIMEOUT;
+}
+
+/*
+ * 函数用途：通过地址0读取R01并识别多参数V4交互通信。
+ * 调用场景：主动帧监听未命中且安全协议未命中后。
+ * 关键约束：R01只识别协议版本；V4物理编号仍按未提供处理。
+ */
+static uint32_t Sensor_ProbeV4Interactive(float *protocol_version_out)
+{
+    float protocol_version = 0.0f;
+    uint32_t result;
+
+    MULTIPARAM_V4_Init(0U);
+    MULTIPARAM_V4_MeasurementInit();
+    result = MULTIPARAM_V4_ProbeProtocolVersion(&protocol_version);
+    if ((protocol_version_out != NULL) && isfinite(protocol_version)) {
+        *protocol_version_out = protocol_version;
+    }
+    if (result != NO_ERROR) {
+        MULTIPARAM_V4_Deinit();
+    }
+    return result;
+}
+
+/*
+ * 函数用途：在多参数V4主动通信下集中取得交互窗口并执行一个模式命令。
+ * 调用场景：业务明确切换密度或液位模式时。
+ * 关键约束：无论模式命令成功与否都尝试恢复原主动通信，不在普通读取中写参数65。
+ */
+static uint32_t Sensor_RunV4ModeCommand(uint32_t (*command)(void))
+{
+    multiparam_v4_communication_mode_t original_mode;
+    uint32_t command_result;
+    uint32_t restore_result;
+
+    if (command == NULL) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
+    original_mode = MULTIPARAM_V4_GetCommunicationMode();
+    if (original_mode == MULTIPARAM_V4_COMMUNICATION_INTERACTIVE) {
+        return command();
+    }
+    if (original_mode != MULTIPARAM_V4_COMMUNICATION_ACTIVE) {
+        return SENSOR_STREAM_STATE_ERROR;
+    }
+
+    command_result = MULTIPARAM_V4_EnterInteractive();
+    if (command_result != NO_ERROR) {
+        return command_result;
+    }
+    command_result = command();
+    restore_result = MULTIPARAM_V4_EnterActive();
+    return (command_result != NO_ERROR) ? command_result : restore_result;
+}
+
+/*
+ * 函数用途：在多参数V4主动通信下集中取得交互窗口并执行一个目标状态命令。
+ * 调用场景：业务明确使能或关闭测水、磁零点功能时。
+ * 关键约束：L/M翻转的应答丢失恢复由协议层先读状态完成，业务层不得盲目重发。
+ */
+static uint32_t Sensor_RunV4FeatureCommand(uint32_t (*command)(uint8_t), uint8_t enabled)
+{
+    multiparam_v4_communication_mode_t original_mode;
+    uint32_t command_result;
+    uint32_t restore_result;
+
+    if (command == NULL) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
+    original_mode = MULTIPARAM_V4_GetCommunicationMode();
+    if (original_mode == MULTIPARAM_V4_COMMUNICATION_INTERACTIVE) {
+        return command(enabled);
+    }
+    if (original_mode != MULTIPARAM_V4_COMMUNICATION_ACTIVE) {
+        return SENSOR_STREAM_STATE_ERROR;
+    }
+
+    command_result = MULTIPARAM_V4_EnterInteractive();
+    if (command_result != NO_ERROR) {
+        return command_result;
+    }
+    command_result = command(enabled);
+    restore_result = MULTIPARAM_V4_EnterActive();
+    return (command_result != NO_ERROR) ? command_result : restore_result;
+}
+
 /**
  * @brief 判断当前传感器是否提供水位电容通道。
  *
@@ -281,9 +444,14 @@ static uint32_t Sensor_ProbeDsmSensor(uint32_t *sensor_id_out)
  *
  * @return true 表示当前传感器类型声明支持水位电容通道；否则返回 false。
  */
-static int Sensor_SupportsWaterCapChannel(void)
+int Sensor_SupportsWaterCapChannel(void)
 {
+    /* 探测无效时 FRAM 中的历史类型不能授权回零附加通信。 */
+    if (Sensor_IsDetectionValid() == 0U) {
+        return 0;
+    }
     return (int)(((g_deviceParams.sensorType == DSM_SENSOR) ||
+                  (g_deviceParams.sensorType == MULTIPARAM_V4_SENSOR) ||
                   ((g_deviceParams.sensorType == SAFE_SENSOR) &&
                    (SensorSafeAdapter_IsActive() != 0U) &&
                    (SensorSafeAdapter_SupportsWaterCap() != 0U))) ? 1 : 0);
@@ -297,93 +465,168 @@ static int Sensor_SupportsWaterCapChannel(void)
  *
  * @return true 表示当前传感器类型声明支持陀螺仪通道；否则返回 false。
  */
-static int Sensor_SupportsGyroChannel(void)
+int Sensor_SupportsGyroChannel(void)
 {
+    /* 探测无效时 FRAM 中的历史类型不能授权回零附加通信。 */
+    if (Sensor_IsDetectionValid() == 0U) {
+        return 0;
+    }
     return (int)(((g_deviceParams.sensorType == DSM_SENSOR) ||
+                  (g_deviceParams.sensorType == MULTIPARAM_V4_SENSOR) ||
                   ((g_deviceParams.sensorType == SAFE_SENSOR) &&
                    (SensorSafeAdapter_IsActive() != 0U) &&
                    (SensorSafeAdapter_SupportsGyro() != 0U))) ? 1 : 0);
 }
 
 /**
- * @brief 自动识别传感器类型（DSM 一代 / DSM_V2 / SIL）
+ * @brief 自动识别传感器类型（多参数V4主动/交互、安全协议、多参数V3.0、DSM一代）
  *
  * @return uint32_t 错误码或 NO_ERROR
  */
 
 uint32_t DetectSensorType(void) {
-	uint32_t ret = NO_ERROR;
-	uint32_t ltd_ret;
-	uint32_t dsm_ret;
-	uint32_t safe_ret;
-	uint32_t sensor_id = 0U;
-	WirelessConnectionStatus bluetooth_status;
+    uint32_t ret;
+    uint32_t active_v4_before_link_ret;
+    uint32_t active_v4_after_link_ret;
+    uint32_t safe_ret;
+    uint32_t interactive_v4_ret;
+    uint32_t v3_ret;
+    uint32_t dsm_ret;
+    uint32_t sensor_id = 0U;
+    uint8_t sensor_address = 0U;
+    float protocol_version = 0.0f;
+    WirelessConnectionStatus bluetooth_status;
 
-	printf("========== 传感器识别开始 ==========\r\n");
-	printf("[1/4] 检查蓝牙链路\r\n");
+    /* 本次探测完成前，FRAM 中的上次类型只能作为历史信息，不能授权新的测量流程。 */
+    s_sensor_detection_result = SENSOR_DEVICE_COMM_TIMEOUT;
 
-	ret = Sensor_ProbeWirelessLink(&bluetooth_status);
-	if (ret != NO_ERROR) {
-		Sensor_SetCommDetectError(ret);
-		return ret;
-	}
-	Sensor_PrintBluetoothLinkSnapshot(&bluetooth_status);
+    printf("========== 传感器识别开始 ==========\r\n");
+    printf("[1/7] 蓝牙检查前监听多参数V4主动帧\r\n");
+    active_v4_before_link_ret = Sensor_ProbeV4Active(&sensor_address,
+                                                     SENSOR_V4_ACTIVE_FAST_PROBE_MS);
+    if (active_v4_before_link_ret == NO_ERROR) {
+        Sensor_CommitDetectedIdentity(MULTIPARAM_V4_SENSOR, 0U);
+        printf("识别成功：多参数V4传感器 | 通信=主动上报 | 地址=%u | 编号未提供\r\n",
+               (unsigned int)sensor_address);
+        printf("====================================\r\n");
+        return NO_ERROR;
+    }
+    if (active_v4_before_link_ret == STATE_SWITCH) {
+        s_sensor_detection_result = STATE_SWITCH;
+        return STATE_SWITCH;
+    }
 
-	printf("[2/4] 尝试安全协议\r\n");
-	safe_ret = SensorSafeAdapter_Probe(&sensor_id);
-	if (safe_ret == NO_ERROR) {
-		g_deviceParams.sensorType = SAFE_SENSOR;
-		g_deviceParams.sensorID = sensor_id;
-		save_device_params();
-		printf("识别成功：安全协议传感器 | 编号=%lu\r\n", (unsigned long)sensor_id);
-		printf("====================================\r\n");
-		return NO_ERROR;
-	}
-	printf("探测结果：未匹配安全协议 | 原因：%s | 继续尝试LTD/V2协议\r\n",
-	       ErrorLog_GetReasonByCode(safe_ret));
-	SensorSafeAdapter_Deactivate();
+    printf("[2/7] 检查蓝牙链路\r\n");
+    ret = Sensor_ProbeWirelessLink(&bluetooth_status);
+    if (ret != NO_ERROR) {
+        s_sensor_detection_result = ret;
+        Sensor_SetCommDetectError(ret);
+        return ret;
+    }
+    Sensor_PrintBluetoothLinkSnapshot(&bluetooth_status);
 
-	printf("[3/4] 尝试LTD协议\r\n");
-	ltd_ret = Sensor_ProbeLtdSensor(&sensor_id);
-	if (ltd_ret == NO_ERROR) {
-		g_deviceParams.sensorType = LTD_SENSOR;
-		g_deviceParams.sensorID = sensor_id;
-		/* 传感器类型属于系统参数，这里是运行期自动识别场景，
-		 * 如果不立即保存，CPU3 后续就看不到这次变更，
-		 * 下次重启也会丢掉新的 sensorType。 */
-		save_device_params();
-		printf("识别成功：LTD传感器 | 编号=%lu\r\n", (unsigned long)sensor_id);
-		printf("====================================\r\n");
-		return NO_ERROR;
-	}
+    /* AT 查询结束并恢复透明传输后重新监听，覆盖上电初期尚未建链造成的主动帧空窗。 */
+    printf("[3/7] 蓝牙恢复透传后再次监听多参数V4主动帧\r\n");
+    active_v4_after_link_ret = Sensor_ProbeV4Active(&sensor_address,
+                                                    MULTIPARAM_V4_ACTIVE_TIMEOUT_MS);
+    if (active_v4_after_link_ret == NO_ERROR) {
+        Sensor_CommitDetectedIdentity(MULTIPARAM_V4_SENSOR, 0U);
+        printf("识别成功：多参数V4传感器 | 通信=主动上报 | 地址=%u | 编号未提供\r\n",
+               (unsigned int)sensor_address);
+        printf("====================================\r\n");
+        return NO_ERROR;
+    }
+    if (active_v4_after_link_ret == STATE_SWITCH) {
+        s_sensor_detection_result = STATE_SWITCH;
+        return STATE_SWITCH;
+    }
 
-	printf("探测结果：未匹配LTD/V2协议 | 原因：%s | 继续尝试DSM一代协议\r\n",
-	       ErrorLog_GetReasonByCode(ltd_ret));
-	printf("[4/4] 尝试DSM一代协议\r\n");
-	dsm_ret = Sensor_ProbeDsmSensor(&sensor_id);
-	if (dsm_ret == NO_ERROR) {
-		g_deviceParams.sensorType = DSM_SENSOR;
-		g_deviceParams.sensorID = sensor_id;
-		/* 同上：DSM 识别成功后也要立即落盘，
-		 * 这样才能触发 parameter_update_flag，让 CPU3 补读最新的系统参数。 */
-		save_device_params();
-		printf("识别成功：DSM传感器 | 编号=%lu | 密度模式握手成功\r\n", (unsigned long)sensor_id);
-		printf("====================================\r\n");
-		return NO_ERROR;
-	}
+    printf("[4/7] 尝试安全协议\r\n");
+    safe_ret = SensorSafeAdapter_Probe(&sensor_id);
+    if (safe_ret == NO_ERROR) {
+        Sensor_CommitDetectedIdentity(SAFE_SENSOR, sensor_id);
+        printf("识别成功：安全协议传感器 | 编号=%lu\r\n", (unsigned long)sensor_id);
+        printf("====================================\r\n");
+        return NO_ERROR;
+    }
+    SensorSafeAdapter_Deactivate();
+    if (safe_ret == STATE_SWITCH) {
+        s_sensor_detection_result = STATE_SWITCH;
+        return STATE_SWITCH;
+    }
 
-	printf("探测结果：未匹配DSM一代协议 | 原因：%s\r\n",
-	       ErrorLog_GetReasonByCode(dsm_ret));
-	ret = Sensor_SelectProbeError(safe_ret, ltd_ret, dsm_ret);
-	printf("识别失败：未匹配支持的传感器 | LTD原因：%s | DSM原因：%s\r\n",
-	       ErrorLog_GetReasonByCode(ltd_ret),
-	       ErrorLog_GetReasonByCode(dsm_ret));
-	ErrorLog_Warn(ERROR_LOG_MODULE_SENSOR,
-	              "传感器识别",
-	              ErrorLog_GetReasonByCode(ret),
-	              ERROR_LOG_ACTION_CONTINUE);
-	Sensor_SetCommDetectError(ret);
-	return ret;
+    printf("[5/7] 读取R01探测多参数V4交互协议\r\n");
+    interactive_v4_ret = Sensor_ProbeV4Interactive(&protocol_version);
+    if (interactive_v4_ret == NO_ERROR) {
+        Sensor_CommitDetectedIdentity(MULTIPARAM_V4_SENSOR, 0U);
+        printf("识别成功：多参数V4传感器 | 通信=交互 | 地址=0 | 编号未提供\r\n");
+        printf("====================================\r\n");
+        return NO_ERROR;
+    }
+    if (interactive_v4_ret == STATE_SWITCH) {
+        s_sensor_detection_result = STATE_SWITCH;
+        return STATE_SWITCH;
+    }
+
+    printf("[6/7] 尝试多参数协议V3.0（当前LTD）\r\n");
+    if ((interactive_v4_ret == SENSOR_PROTOCOL_VERSION_INCOMPATIBLE) &&
+        isfinite(protocol_version) &&
+        (fabsf(protocol_version - 3.0f) > 0.01f)) {
+        /* R01 已返回明确的非3.0版本时不再发送R22，避免把未知版本误识别为当前LTD协议。 */
+        printf("R01协议版本=%.2f，不属于多参数V3.0，跳过R22探测\r\n",
+               protocol_version);
+        v3_ret = SENSOR_PROTOCOL_VERSION_INCOMPATIBLE;
+    } else {
+        if ((interactive_v4_ret == SENSOR_PROTOCOL_VERSION_INCOMPATIBLE) &&
+            isfinite(protocol_version)) {
+            printf("R01协议版本=%.2f，继续读取R22确认当前LTD传感器\r\n",
+                   protocol_version);
+        } else {
+            printf("R01未取得有效版本，保留R22兼容探测\r\n");
+        }
+        v3_ret = Sensor_ProbeLtdSensor(&sensor_id);
+    }
+    if (v3_ret == NO_ERROR) {
+        Sensor_CommitDetectedIdentity(LTD_SENSOR, sensor_id);
+        printf("识别成功：LTD传感器 | 协议=多参数V3.0 | 编号=%lu\r\n",
+               (unsigned long)sensor_id);
+        printf("====================================\r\n");
+        return NO_ERROR;
+    }
+    if (v3_ret == STATE_SWITCH) {
+        s_sensor_detection_result = STATE_SWITCH;
+        return STATE_SWITCH;
+    }
+
+    printf("[7/7] 尝试DSM一代协议\r\n");
+    dsm_ret = Sensor_ProbeDsmSensor(&sensor_id);
+    if (dsm_ret == NO_ERROR) {
+        Sensor_CommitDetectedIdentity(DSM_SENSOR, sensor_id);
+        printf("识别成功：DSM传感器 | 编号=%lu | 密度模式握手成功\r\n",
+               (unsigned long)sensor_id);
+        printf("====================================\r\n");
+        return NO_ERROR;
+    }
+    if (dsm_ret == STATE_SWITCH) {
+        s_sensor_detection_result = STATE_SWITCH;
+        return STATE_SWITCH;
+    }
+
+    ret = Sensor_SelectProbeError(safe_ret, interactive_v4_ret, v3_ret, dsm_ret);
+    printf("识别失败：未匹配支持的传感器 | V4主动前=%s | V4主动后=%s | 安全协议=%s | V4交互=%s | V3=%s | DSM=%s\r\n",
+           ErrorLog_GetReasonByCode(active_v4_before_link_ret),
+           ErrorLog_GetReasonByCode(active_v4_after_link_ret),
+           ErrorLog_GetReasonByCode(safe_ret),
+           ErrorLog_GetReasonByCode(interactive_v4_ret),
+           ErrorLog_GetReasonByCode(v3_ret),
+           ErrorLog_GetReasonByCode(dsm_ret));
+    ErrorLog_Warn(ERROR_LOG_MODULE_SENSOR,
+                  "传感器识别",
+                  ErrorLog_GetReasonByCode(ret),
+                  ERROR_LOG_ACTION_CONTINUE);
+    s_sensor_detection_result = ret;
+    Sensor_SetCommDetectError(ret);
+    return ret;
 }
 
 /**
@@ -391,15 +634,20 @@ uint32_t DetectSensorType(void) {
  * @return 返回整机错误码；NO_ERROR 表示传感器已进入密度模式并完成稳定等待，其他值由模式切换或链路诊断返回。
  */
 uint32_t EnableDensityMode(void) {
-	uint32_t ret;
-	if (g_deviceParams.sensorType == DSM_SENSOR) {
-		ret = DSM_EnableDensityMode();
-	} else if (g_deviceParams.sensorType == SAFE_SENSOR) {
-		ret = SensorSafeAdapter_EnableDensityMode();
-	} else {
-		ret = DSM_V2_SwitchToDensityMode();
-	}
-	return Sensor_DiagnoseCommTimeout(ret, "切换密度模式");
+    uint32_t ret;
+
+    if (g_deviceParams.sensorType == DSM_SENSOR) {
+        ret = DSM_EnableDensityMode();
+    } else if (g_deviceParams.sensorType == SAFE_SENSOR) {
+        ret = SensorSafeAdapter_EnableDensityMode();
+    } else if (g_deviceParams.sensorType == LTD_SENSOR) {
+        ret = MULTIPARAM_V3_SwitchToDensityMode();
+    } else if (g_deviceParams.sensorType == MULTIPARAM_V4_SENSOR) {
+        ret = Sensor_RunV4ModeCommand(MULTIPARAM_V4_SelectDensityMode);
+    } else {
+        ret = SENSOR_CAPABILITY_UNSUPPORTED;
+    }
+    return Sensor_DiagnoseCommTimeout(ret, "切换密度模式");
 }
 
 /**
@@ -422,26 +670,73 @@ static uint32_t Sensor_PrepareLtdDensityModeForPartParams(void)
  * @return 返回整机错误码；NO_ERROR 表示当前传感器已进入液位模式并完成稳定等待，其他值透传模式切换失败。
  */
 uint32_t EnableLevelMode(void) {
-	uint32_t ret;
+    uint32_t ret;
 
-	ret = MotorCtrl_SlowStop();
-	if (ret != NO_ERROR) {
-		return ret;
-	}
+    ret = MotorCtrl_SlowStop();
+    if (ret != NO_ERROR) {
+        return ret;
+    }
 
-	if (g_deviceParams.sensorType == DSM_SENSOR) {
-		ret = DSM_EnableLevelMode();
-	} else if (g_deviceParams.sensorType == SAFE_SENSOR) {
-		ret = SensorSafeAdapter_EnableLevelMode();
-	} else {
-		ret = DSM_V2_SwitchToLevelMode();
-	}
-	ret = Sensor_DiagnoseCommTimeout(ret, "切换液位模式");
-	if (ret == NO_ERROR) {
-		printf("切换液位模式成功，等待%lu ms稳定\r\n", (unsigned long)SENSOR_LEVEL_MODE_SETTLE_MS);
-		ret = AbortableDelay_CommandSwitch(SENSOR_LEVEL_MODE_SETTLE_MS, 100U);
-	}
-	return ret;
+    if (g_deviceParams.sensorType == DSM_SENSOR) {
+        ret = DSM_EnableLevelMode();
+    } else if (g_deviceParams.sensorType == SAFE_SENSOR) {
+        ret = SensorSafeAdapter_EnableLevelMode();
+    } else if (g_deviceParams.sensorType == LTD_SENSOR) {
+        ret = MULTIPARAM_V3_SwitchToLevelMode();
+    } else if (g_deviceParams.sensorType == MULTIPARAM_V4_SENSOR) {
+        ret = Sensor_RunV4ModeCommand(MULTIPARAM_V4_SelectLevelMode);
+    } else {
+        ret = SENSOR_CAPABILITY_UNSUPPORTED;
+    }
+    ret = Sensor_DiagnoseCommTimeout(ret, "切换液位模式");
+    if (ret == NO_ERROR) {
+        printf("切换液位模式成功，等待%lu ms稳定\r\n", (unsigned long)SENSOR_LEVEL_MODE_SETTLE_MS);
+        ret = AbortableDelay_CommandSwitch(SENSOR_LEVEL_MODE_SETTLE_MS, 100U);
+    }
+    return ret;
+}
+
+/*
+ * 函数用途：按当前传感器类型读取一次液位模式频率，不执行运动或模式恢复。
+ * 调用场景：液位静态读取、运动中状态判断和主动快照消费。
+ * 关键约束：多参数V4主动方式只读快照，交互方式只读R04，未知类型明确拒绝。
+ */
+uint32_t Sensor_ReadLevelFrequency(uint32_t *frequency_out)
+{
+    int32_t frequency_value;
+    uint32_t result;
+
+    if (frequency_out == NULL) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
+    if (g_deviceParams.sensorType == DSM_SENSOR) {
+        return Read_Level_Frequency(frequency_out);
+    }
+    if (g_deviceParams.sensorType == SAFE_SENSOR) {
+        return SensorSafeAdapter_ReadLevelFrequency(frequency_out);
+    }
+    if (g_deviceParams.sensorType == LTD_SENSOR) {
+        return MULTIPARAM_V3_Read_LevelFrequency(frequency_out);
+    }
+    if (g_deviceParams.sensorType != MULTIPARAM_V4_SENSOR) {
+        return SENSOR_CAPABILITY_UNSUPPORTED;
+    }
+
+    if (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_ACTIVE) {
+        return MULTIPARAM_V4_MeasurementReadLevelFrequency(frequency_out);
+    }
+    if (MULTIPARAM_V4_GetCommunicationMode() != MULTIPARAM_V4_COMMUNICATION_INTERACTIVE) {
+        return SENSOR_STREAM_STATE_ERROR;
+    }
+    result = MULTIPARAM_V4_ReadIntParam(4U, &frequency_value);
+    if (result != NO_ERROR) {
+        return result;
+    }
+    if ((frequency_value < 0) || (frequency_value > 6600)) {
+        return SONIC_FREQ_ABNORMAL;
+    }
+    *frequency_out = (uint32_t)frequency_value;
+    return NO_ERROR;
 }
 
 /* 读取一次并以整数 Hz 返回。 */
@@ -538,13 +833,7 @@ uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out) {
 
 	while (1) {
 		for (int attempt = 0; attempt < MAX_INVALID_FREQ_RETRY; attempt++) {
-			if (g_deviceParams.sensorType == DSM_SENSOR) {
-				ret = Read_Level_Frequency(&hz);
-			} else if (g_deviceParams.sensorType == SAFE_SENSOR) {
-				ret = SensorSafeAdapter_ReadLevelFrequency(&hz);
-			} else {
-				ret = DSM_V2_Read_LevelFrequency(&hz);
-			}
+			ret = Sensor_ReadLevelFrequency(&hz);
 
 			if (ret != NO_ERROR) {
 				return Sensor_DiagnoseCommTimeout(ret, "读取液位频率");  /* 读取失败直接返回错误码 */
@@ -689,59 +978,71 @@ static void Apply_Fixed_DensityTemp_Correction(float *density, float *temp)
  * @return NO_ERROR 表示频率、密度和温度均已按当前传感器类型读取并更新输出；输出指针为空返回 SYSTEM_CALL_CONDITION_ERROR，其他值为模式准备、通信诊断或单项读取保留的具体错误。
  */
 uint32_t Read_Density(float *frequency, float *density, float *temp) {
-	if (frequency == NULL || temp == NULL || density == NULL) {
-		return SYSTEM_CALL_CONDITION_ERROR;
-	}
-	float hz_45, hz_225;
-	uint32_t ret = NO_ERROR;
-	if (g_deviceParams.sensorType == DSM_SENSOR) {
-		ret = DSM_Read_Frequency_Density_Temp(frequency, density, temp);
-	} else if (g_deviceParams.sensorType == SAFE_SENSOR) {
-		ret = SensorSafeAdapter_ReadDensity(frequency, density, temp);
-	} else {
-		ret = DSM_V2_Read_Temperature(temp);
-		if (ret == NO_ERROR) {
-			printf("温度值: %.3f ℃\r\n", *temp);
-		} else {
-			return Sensor_DiagnoseCommTimeout(ret, "读取LTD温度");
-		}
+    float hz_45 = 0.0f;
+    float hz_225 = 0.0f;
+    int32_t v4_frequency = 0;
+    uint32_t ret = NO_ERROR;
 
-		ret = DSM_V2_Read_Density(density);
-		if (ret == NO_ERROR) {
-			printf("密度值: %.3f\r\n", *density);
-		} else {
-			return Sensor_DiagnoseCommTimeout(ret, "读取LTD密度");
-		}
-		ret = DSM_V2_Read_DensityFrequency(frequency,&hz_45,&hz_225);
-		if (ret == NO_ERROR) {
-			printf("频率值: %.1f Hz\r\n45度扫频周期平方均值:  %.2f Hz\r\n22.5度扫频周期平方均值: %.2f Hz\r\n", *frequency,hz_45,hz_225);
-		} else {
-			return Sensor_DiagnoseCommTimeout(ret, "读取LTD频率");
-		}
-	}
-	ret = Sensor_DiagnoseCommTimeout(ret, "读取密度");
-	if (ret == NO_ERROR) {
+    if ((frequency == NULL) || (temp == NULL) || (density == NULL)) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
+    if (g_deviceParams.sensorType == DSM_SENSOR) {
+        ret = DSM_Read_Frequency_Density_Temp(frequency, density, temp);
+    } else if (g_deviceParams.sensorType == SAFE_SENSOR) {
+        ret = SensorSafeAdapter_ReadDensity(frequency, density, temp);
+    } else if (g_deviceParams.sensorType == LTD_SENSOR) {
+        ret = MULTIPARAM_V3_Read_Temperature(temp);
+        if (ret != NO_ERROR) {
+            return Sensor_DiagnoseCommTimeout(ret, "读取LTD温度");
+        }
+        ret = MULTIPARAM_V3_Read_Density(density);
+        if (ret != NO_ERROR) {
+            return Sensor_DiagnoseCommTimeout(ret, "读取LTD密度");
+        }
+        ret = MULTIPARAM_V3_Read_DensityFrequency(frequency, &hz_45, &hz_225);
+        if (ret != NO_ERROR) {
+            return Sensor_DiagnoseCommTimeout(ret, "读取LTD频率");
+        }
+    } else if (g_deviceParams.sensorType == MULTIPARAM_V4_SENSOR) {
+        if (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_ACTIVE) {
+            ret = MULTIPARAM_V4_MeasurementReadDensity(frequency, density, temp);
+        } else if (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_INTERACTIVE) {
+            ret = MULTIPARAM_V4_ReadIntParam(4U, &v4_frequency);
+            if (ret == NO_ERROR) {
+                ret = MULTIPARAM_V4_ReadFloatParam(7U, density);
+            }
+            if (ret == NO_ERROR) {
+                ret = MULTIPARAM_V4_ReadFloatParam(6U, temp);
+            }
+            if (ret == NO_ERROR) {
+                *frequency = (float)v4_frequency;
+            }
+        } else {
+            ret = SENSOR_STREAM_STATE_ERROR;
+        }
+        if ((ret == NO_ERROR) &&
+            ((v4_frequency < 0) || (*frequency < 0.0f) || (*frequency > 6600.0f) ||
+             (*density < 0.0f) || (*density > 3000.0f) ||
+             (*temp < -200.0f) || (*temp > 300.0f))) {
+            ret = SENSOR_RESP_FORMAT_ERROR;
+        }
+    } else {
+        ret = SENSOR_CAPABILITY_UNSUPPORTED;
+    }
 
-	    /* ===== 固定系数修正 ===== */
-	    float density_before = *density;
-	    float temp_before    = *temp;
+    ret = Sensor_DiagnoseCommTimeout(ret, "读取密度");
+    if (ret == NO_ERROR) {
+        float density_before = *density;
+        float temp_before = *temp;
 
-	    Apply_Fixed_DensityTemp_Correction(density, temp); /* 修正密度和温度 */
-
-	    printf("原始密度: %.3f  修正后密度: %.3f\r\n",
-	           density_before, *density);
-	    printf("原始温度: %.3f ℃  修正后温度: %.3f ℃\r\n",
-	           temp_before, *temp);
-	    printf("频率: %.3f Hz\r\n", *frequency);
-
-	    uint32_t temp_raw = TEMP_TO_RAW(*temp);
-
-		/* Read_Density只发布调试字段；固定点六字段由稳定窗口完成后统一提交。 */
-	    g_measurement.debug_data.temperature = temp_raw;
-	    g_measurement.debug_data.frequency = *frequency;
-	}
-
-	return ret;
+        Apply_Fixed_DensityTemp_Correction(density, temp);
+        printf("原始密度: %.3f  修正后密度: %.3f\r\n", density_before, *density);
+        printf("原始温度: %.3f ℃  修正后温度: %.3f ℃\r\n", temp_before, *temp);
+        printf("频率: %.3f Hz\r\n", *frequency);
+        g_measurement.debug_data.temperature = TEMP_TO_RAW(*temp);
+        g_measurement.debug_data.frequency = *frequency;
+    }
+    return ret;
 }
 
 
@@ -753,14 +1054,27 @@ uint32_t Read_Density(float *frequency, float *density, float *temp) {
  */
 uint32_t Sensor_ReadWaterCapacitance(float *cap_out)
 {
+    uint32_t ret;
+
+    if (cap_out == NULL) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
     if (!Sensor_SupportsWaterCapChannel()) {
         printf("当前传感器类型不支持读取水位电容\r\n");
         return PARAM_FEATURE_UNSUPPORTED;
     }
 
-    uint32_t ret = (g_deviceParams.sensorType == SAFE_SENSOR)
-                       ? SensorSafeAdapter_ReadWaterCapacitance(cap_out)
-                       : Read_Water_Capacitance(cap_out);
+    if (g_deviceParams.sensorType == SAFE_SENSOR) {
+        ret = SensorSafeAdapter_ReadWaterCapacitance(cap_out);
+    } else if (g_deviceParams.sensorType == DSM_SENSOR) {
+        ret = Read_Water_Capacitance(cap_out);
+    } else if (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_ACTIVE) {
+        ret = MULTIPARAM_V4_MeasurementReadWaterCapacitance(cap_out);
+    } else if (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_INTERACTIVE) {
+        ret = MULTIPARAM_V4_ReadFloatParam(5U, cap_out);
+    } else {
+        ret = SENSOR_STREAM_STATE_ERROR;
+    }
     return Sensor_DiagnoseCommTimeout(ret, "读取水位电容");
 }
 
@@ -774,15 +1088,57 @@ uint32_t Sensor_ReadWaterCapacitance(float *cap_out)
  */
 uint32_t Sensor_ReadGyroAngle(float *angle_x_deg, float *angle_y_deg)
 {
+    uint32_t ret;
+
+    if ((angle_x_deg == NULL) || (angle_y_deg == NULL)) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
     if (!Sensor_SupportsGyroChannel()) {
         printf("当前传感器类型不支持读取姿态角\r\n");
         return PARAM_FEATURE_UNSUPPORTED;
     }
 
-    uint32_t ret = (g_deviceParams.sensorType == SAFE_SENSOR)
-                       ? SensorSafeAdapter_ReadGyroAngle(angle_x_deg, angle_y_deg)
-                       : Read_Gyro_Angle(angle_x_deg, angle_y_deg);
+    if (g_deviceParams.sensorType == SAFE_SENSOR) {
+        ret = SensorSafeAdapter_ReadGyroAngle(angle_x_deg, angle_y_deg);
+    } else if (g_deviceParams.sensorType == DSM_SENSOR) {
+        ret = Read_Gyro_Angle(angle_x_deg, angle_y_deg);
+    } else if (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_ACTIVE) {
+        ret = MULTIPARAM_V4_MeasurementReadGyro(angle_x_deg, angle_y_deg);
+    } else if (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_INTERACTIVE) {
+        ret = MULTIPARAM_V4_ReadFloatParam(11U, angle_x_deg);
+        if (ret == NO_ERROR) {
+            ret = MULTIPARAM_V4_ReadFloatParam(12U, angle_y_deg);
+        }
+    } else {
+        ret = SENSOR_STREAM_STATE_ERROR;
+    }
     return Sensor_DiagnoseCommTimeout(ret, "读取陀螺仪");
+}
+
+/*
+ * 函数用途：按目标状态控制多参数V4测水功能。
+ * 调用场景：测水流程需要显式启停功能时。
+ */
+uint32_t Sensor_SetWaterEnabled(uint8_t enabled)
+{
+    if (g_deviceParams.sensorType != MULTIPARAM_V4_SENSOR) {
+        return SENSOR_CAPABILITY_UNSUPPORTED;
+    }
+    return Sensor_RunV4FeatureCommand(MULTIPARAM_V4_EnsureWaterEnabled,
+                                      (enabled != 0U) ? 1U : 0U);
+}
+
+/*
+ * 函数用途：按目标状态控制多参数V4磁零点功能。
+ * 调用场景：零点流程需要显式启停磁零点功能时。
+ */
+uint32_t Sensor_SetMagneticZeroEnabled(uint8_t enabled)
+{
+    if (g_deviceParams.sensorType != MULTIPARAM_V4_SENSOR) {
+        return SENSOR_CAPABILITY_UNSUPPORTED;
+    }
+    return Sensor_RunV4FeatureCommand(MULTIPARAM_V4_EnsureMagneticZeroEnabled,
+                                      (enabled != 0U) ? 1U : 0U);
 }
 
 /**
@@ -903,6 +1259,11 @@ static uint32_t Sensor_UpdateWirelessRssiForPartParams(uint8_t force_update)
     static uint32_t last_update_tick = 0U;
     uint32_t now_tick = HAL_GetTick();
 
+    if ((g_deviceParams.sensorType == MULTIPARAM_V4_SENSOR) &&
+        (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_ACTIVE)) {
+        /* 主动上报期间不进入CH9141 AT模式，避免与64字节常驻接收争用UART6。 */
+        return NO_ERROR;
+    }
     if ((force_update == 0U) &&
         ((now_tick - last_update_tick) < READ_PART_PARAMS_RSSI_REFRESH_INTERVAL_MS)) {
         return NO_ERROR;

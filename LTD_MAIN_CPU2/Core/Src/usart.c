@@ -23,6 +23,7 @@
 /* USER CODE BEGIN 0 */
 #include "stdio.h"
 #include "hostcommu.h"
+#include "multiparam_v4_communication.h"
 #ifdef __GNUC__
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
 PUTCHAR_PROTOTYPE {
@@ -194,6 +195,8 @@ void CPU2_UartRecoveryPollFromTim4Isr(void)
 	if (service_due != 0U) {
 		SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
 	}
+	/* USART6由V4协议层管理，只复用TIM4节拍推进其非阻塞恢复状态机。 */
+	MULTIPARAM_V4_PollRecoveryFromTimerISR();
 }
 
 /*
@@ -280,6 +283,18 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 	}
 }
 
+/*
+ * 函数用途：把USART6主动接收事件交给多参数V4模块记录。
+ * 调用场景：Receive-to-IDLE DMA收到空闲、半满或收满事件时由HAL调用。
+ * 关键约束：中断中只复制字节和切换缓冲，不执行CRC、浮点解析或打印。
+ */
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
+{
+	if ((huart != NULL) && (huart->Instance == USART6)) {
+		MULTIPARAM_V4_OnUartRxEventISR(size);
+	}
+}
+
 /* UART硬件错误执行一次有界恢复，失败时保持IDLEIE关闭。 */
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
@@ -288,6 +303,17 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 		(huart->Instance == UART4) ||
 		(huart->Instance == UART5)) {
 		(void)CPU2_UartRestartRxDMA(huart);
+	}
+	if (huart->Instance == USART6) {
+		MULTIPARAM_V4_OnUartErrorISR(huart->ErrorCode);
+	}
+}
+
+/* USART6异步终止完成后由协议层在PendSV中恢复，不依赖阻塞主循环。 */
+void HAL_UART_AbortReceiveCpltCallback(UART_HandleTypeDef *huart)
+{
+	if ((huart != NULL) && (huart->Instance == USART6)) {
+		MULTIPARAM_V4_OnUartAbortReceiveCompleteISR();
 	}
 }
 

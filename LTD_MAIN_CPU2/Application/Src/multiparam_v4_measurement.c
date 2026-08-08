@@ -1,0 +1,263 @@
+/*
+ * multiparam_v4_measurement.c
+ * 多参数V4主动上报快照的运行态发布和业务读取接口。
+ */
+
+#include "multiparam_v4_measurement.h"
+
+#include "main.h"
+#include "multiparam_v4_communication.h"
+#include "system_parameter.h"
+
+#include <math.h>
+
+#define MULTIPARAM_V4_FREQUENCY_MAX_HZ       6600
+#define MULTIPARAM_V4_TEMPERATURE_MIN_C       (-200.0f)
+#define MULTIPARAM_V4_TEMPERATURE_MAX_C       300.0f
+#define MULTIPARAM_V4_DENSITY_MIN_KG_M3       0.0f
+#define MULTIPARAM_V4_DENSITY_MAX_KG_M3       3000.0f
+#define MULTIPARAM_V4_CAPACITANCE_MAX_PF      100000.0f
+#define MULTIPARAM_V4_ANGLE_ABS_MAX_DEG       360.0f
+#define MULTIPARAM_V4_STATUS_TEMPERATURE_NEW  (1UL << 8U)
+#define MULTIPARAM_V4_STATUS_DENSITY_NEW      (1UL << 9U)
+#define MULTIPARAM_V4_STATUS_GYRO_ABNORMAL    (1UL << 16U)
+#define MULTIPARAM_V4_STATUS_WATER_ABNORMAL   (1UL << 17U)
+
+static uint32_t s_last_published_generation = 0U;
+
+void MULTIPARAM_V4_MeasurementInit(void)
+{
+    s_last_published_generation = 0U;
+    g_measurement.debug_data.magnetic_zero_voltage = 0.0f;
+    g_measurement.debug_data.dynamic_viscosity_cp = 0.0f;
+    g_measurement.debug_data.kinematic_viscosity_cst = 0.0f;
+    g_measurement.debug_data.supply_voltage_v = 0.0f;
+}
+
+/*
+ * 函数用途：判断主动快照中的公共运行量是否可安全发布。
+ * 调用场景：写入定点温度、电容和姿态字段之前。
+ * 关键约束：协议未给出完整物理范围，当前边界只用于阻止定点转换溢出和明显无效值。
+ */
+static uint8_t MULTIPARAM_V4_IsCommonSampleValid(const multiparam_v4_snapshot_t *snapshot)
+{
+    return (uint8_t)(((snapshot != NULL) &&
+                      isfinite(snapshot->temperature_c) &&
+                      (snapshot->temperature_c >= MULTIPARAM_V4_TEMPERATURE_MIN_C) &&
+                      (snapshot->temperature_c <= MULTIPARAM_V4_TEMPERATURE_MAX_C)) ? 1U : 0U);
+}
+
+/*
+ * 函数用途：把浮点水位电容安全换算为0.1pF运行态原始值。
+ * 调用场景：主动快照发布到g_measurement.debug_data。
+ */
+static uint32_t MULTIPARAM_V4_CapacitanceToRaw(float capacitance_pf)
+{
+    if ((!isfinite(capacitance_pf)) ||
+        (capacitance_pf < 0.0f) ||
+        (capacitance_pf > MULTIPARAM_V4_CAPACITANCE_MAX_PF)) {
+        return UINT32_MAX;
+    }
+    return (uint32_t)(capacitance_pf * 10.0f + 0.5f);
+}
+
+/*
+ * 函数用途：复制一份完整且未超时的主动快照。
+ * 调用场景：PendSV发布运行态以及各测量读取接口。
+ * 关键约束：只读已发布快照，不驱动流解析或UART恢复。
+ */
+static uint32_t MULTIPARAM_V4_CopyFreshSnapshot(multiparam_v4_snapshot_t *snapshot)
+{
+    uint32_t result;
+
+    if (g_deviceParams.sensorType != MULTIPARAM_V4_SENSOR) {
+        return SENSOR_CAPABILITY_UNSUPPORTED;
+    }
+    if (MULTIPARAM_V4_GetCommunicationMode() != MULTIPARAM_V4_COMMUNICATION_ACTIVE) {
+        return SENSOR_STREAM_NOT_ACTIVE;
+    }
+    result = MULTIPARAM_V4_CopyLatestSnapshot(snapshot);
+    if (result != NO_ERROR) {
+        return result;
+    }
+    if ((HAL_GetTick() - snapshot->received_tick) > MULTIPARAM_V4_ACTIVE_TIMEOUT_MS) {
+        return SENSOR_DATA_STALE;
+    }
+    return NO_ERROR;
+}
+
+/*
+ * 函数用途：把PendSV刚发布的新主动快照直接刷新到CPU2运行数据。
+ * 调用场景：统一PendSV_Handler确认本轮有新快照后。
+ * 关键约束：所有换算先在局部完成，临界区内只提交一组32位结果，不打印、不等待。
+ */
+uint32_t MULTIPARAM_V4_MeasurementProcessDeferred(void)
+{
+    multiparam_v4_snapshot_t snapshot;
+    uint32_t capacitance_raw;
+    uint32_t temperature_raw;
+    uint32_t primask;
+    uint8_t capacitance_valid;
+    uint8_t angle_valid;
+    uint32_t result = MULTIPARAM_V4_CopyFreshSnapshot(&snapshot);
+
+    if (result != NO_ERROR) {
+        return result;
+    }
+    if (snapshot.generation == s_last_published_generation) {
+        return NO_ERROR;
+    }
+    if (MULTIPARAM_V4_IsCommonSampleValid(&snapshot) == 0U) {
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+    if ((snapshot.measurement_frequency_hz < 0) ||
+        (snapshot.measurement_frequency_hz > MULTIPARAM_V4_FREQUENCY_MAX_HZ)) {
+        return SONIC_FREQ_ABNORMAL;
+    }
+    if ((snapshot.measurement_mode == MULTIPARAM_V4_MEASUREMENT_DENSITY) &&
+        ((!isfinite(snapshot.density_kg_m3)) ||
+         (snapshot.density_kg_m3 < MULTIPARAM_V4_DENSITY_MIN_KG_M3) ||
+         (snapshot.density_kg_m3 > MULTIPARAM_V4_DENSITY_MAX_KG_M3))) {
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+    if ((snapshot.measurement_mode != MULTIPARAM_V4_MEASUREMENT_DENSITY) &&
+        (snapshot.measurement_mode != MULTIPARAM_V4_MEASUREMENT_LEVEL)) {
+        return SENSOR_MODE_MISMATCH;
+    }
+
+    temperature_raw = TEMP_TO_RAW(snapshot.temperature_c);
+    capacitance_raw = MULTIPARAM_V4_CapacitanceToRaw(snapshot.water_capacitance_pf);
+    capacitance_valid = (uint8_t)(((capacitance_raw != UINT32_MAX) &&
+                                   ((snapshot.status_word & MULTIPARAM_V4_STATUS_WATER_ABNORMAL) == 0U))
+                                      ? 1U
+                                      : 0U);
+    angle_valid = (uint8_t)((isfinite(snapshot.angle_x_deg) &&
+                             isfinite(snapshot.angle_y_deg) &&
+                             (fabsf(snapshot.angle_x_deg) <= MULTIPARAM_V4_ANGLE_ABS_MAX_DEG) &&
+                             (fabsf(snapshot.angle_y_deg) <= MULTIPARAM_V4_ANGLE_ABS_MAX_DEG) &&
+                             ((snapshot.status_word & MULTIPARAM_V4_STATUS_GYRO_ABNORMAL) == 0U))
+                                ? 1U
+                                : 0U);
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    s_last_published_generation = snapshot.generation;
+    g_measurement.debug_data.frequency = (uint32_t)snapshot.measurement_frequency_hz;
+    g_measurement.debug_data.temperature = temperature_raw;
+    g_measurement.debug_data.magnetic_zero_voltage = snapshot.magnetic_zero_voltage;
+    g_measurement.debug_data.dynamic_viscosity_cp = snapshot.dynamic_viscosity_cp;
+    g_measurement.debug_data.kinematic_viscosity_cst = snapshot.kinematic_viscosity_cst;
+    g_measurement.debug_data.supply_voltage_v = snapshot.supply_voltage_v;
+    if (capacitance_valid != 0U) {
+        g_measurement.debug_data.water_capacitance_x10 = capacitance_raw;
+        g_measurement.water_measurement.current_capacitance = snapshot.water_capacitance_pf;
+    }
+    if (angle_valid != 0U) {
+        g_measurement.debug_data.angle_x = (int32_t)(snapshot.angle_x_deg * 100.0f);
+        g_measurement.debug_data.angle_y = (int32_t)(snapshot.angle_y_deg * 100.0f);
+    }
+    if (snapshot.measurement_mode == MULTIPARAM_V4_MEASUREMENT_LEVEL) {
+        g_measurement.oil_measurement.current_frequency =
+            (uint32_t)snapshot.measurement_frequency_hz;
+    }
+    if (primask == 0U) {
+        __enable_irq();
+    }
+    return NO_ERROR;
+}
+
+uint32_t MULTIPARAM_V4_MeasurementReadDensity(float *frequency_hz,
+                                               float *density_kg_m3,
+                                               float *temperature_c)
+{
+    multiparam_v4_snapshot_t snapshot;
+    uint32_t result;
+
+    if ((frequency_hz == NULL) || (density_kg_m3 == NULL) || (temperature_c == NULL)) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
+    result = MULTIPARAM_V4_CopyFreshSnapshot(&snapshot);
+    if (result != NO_ERROR) {
+        return result;
+    }
+    if (snapshot.measurement_mode != MULTIPARAM_V4_MEASUREMENT_DENSITY) {
+        return SENSOR_MODE_MISMATCH;
+    }
+    if ((snapshot.status_word &
+         (MULTIPARAM_V4_STATUS_TEMPERATURE_NEW | MULTIPARAM_V4_STATUS_DENSITY_NEW)) !=
+        (MULTIPARAM_V4_STATUS_TEMPERATURE_NEW | MULTIPARAM_V4_STATUS_DENSITY_NEW)) {
+        return SENSOR_DATA_STALE;
+    }
+    *frequency_hz = (float)snapshot.measurement_frequency_hz;
+    *density_kg_m3 = snapshot.density_kg_m3;
+    *temperature_c = snapshot.temperature_c;
+    return NO_ERROR;
+}
+
+uint32_t MULTIPARAM_V4_MeasurementReadLevelFrequency(uint32_t *frequency_hz)
+{
+    multiparam_v4_snapshot_t snapshot;
+    uint32_t result;
+
+    if (frequency_hz == NULL) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
+    result = MULTIPARAM_V4_CopyFreshSnapshot(&snapshot);
+    if (result != NO_ERROR) {
+        return result;
+    }
+    if (snapshot.measurement_mode != MULTIPARAM_V4_MEASUREMENT_LEVEL) {
+        return SENSOR_MODE_MISMATCH;
+    }
+    if ((snapshot.measurement_frequency_hz < 0) ||
+        (snapshot.measurement_frequency_hz > MULTIPARAM_V4_FREQUENCY_MAX_HZ)) {
+        return SONIC_FREQ_ABNORMAL;
+    }
+    *frequency_hz = (uint32_t)snapshot.measurement_frequency_hz;
+    return NO_ERROR;
+}
+
+uint32_t MULTIPARAM_V4_MeasurementReadWaterCapacitance(float *capacitance_pf)
+{
+    multiparam_v4_snapshot_t snapshot;
+    uint32_t result;
+
+    if (capacitance_pf == NULL) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
+    result = MULTIPARAM_V4_CopyFreshSnapshot(&snapshot);
+    if (result != NO_ERROR) {
+        return result;
+    }
+    if ((!isfinite(snapshot.water_capacitance_pf)) ||
+        (snapshot.water_capacitance_pf < 0.0f) ||
+        (snapshot.water_capacitance_pf > MULTIPARAM_V4_CAPACITANCE_MAX_PF) ||
+        ((snapshot.status_word & MULTIPARAM_V4_STATUS_WATER_ABNORMAL) != 0U)) {
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+    *capacitance_pf = snapshot.water_capacitance_pf;
+    return NO_ERROR;
+}
+
+uint32_t MULTIPARAM_V4_MeasurementReadGyro(float *angle_x_deg, float *angle_y_deg)
+{
+    multiparam_v4_snapshot_t snapshot;
+    uint32_t result;
+
+    if ((angle_x_deg == NULL) || (angle_y_deg == NULL)) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
+    result = MULTIPARAM_V4_CopyFreshSnapshot(&snapshot);
+    if (result != NO_ERROR) {
+        return result;
+    }
+    if ((!isfinite(snapshot.angle_x_deg)) || (!isfinite(snapshot.angle_y_deg)) ||
+        (fabsf(snapshot.angle_x_deg) > MULTIPARAM_V4_ANGLE_ABS_MAX_DEG) ||
+        (fabsf(snapshot.angle_y_deg) > MULTIPARAM_V4_ANGLE_ABS_MAX_DEG) ||
+        ((snapshot.status_word & MULTIPARAM_V4_STATUS_GYRO_ABNORMAL) != 0U)) {
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+    *angle_x_deg = snapshot.angle_x_deg;
+    *angle_y_deg = snapshot.angle_y_deg;
+    return NO_ERROR;
+}

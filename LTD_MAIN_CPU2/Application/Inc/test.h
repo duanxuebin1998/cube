@@ -55,10 +55,10 @@ void Test_Params_Storage(void); /* 测试参数存储 */
  */
 void Test_ParamEncoder_AB_Backup(void); /* A/B双备份回退测试（参数+编码值） */
 /**
- * @brief  测试V2协议通讯与关键参数读取
+ * @brief  测试多参数传感器通信协议 V3.0通讯与关键参数读取
  * @note   可在初始化完成后调用，例如 main() 或 sensor init 后
  */
-void DSM_V2_Test_AllParams(void) ; /* DSM V2 演示函数 */
+void MULTIPARAM_V3_Test_AllParams(void) ; /* 多参数传感器通信协议 V3.0 演示函数 */
 /**
  * @brief  传感器与蓝牙链路综合通信测试
  * @note   手动调试入口，建议在系统初始化完成后临时调用；函数会执行传感器识别，

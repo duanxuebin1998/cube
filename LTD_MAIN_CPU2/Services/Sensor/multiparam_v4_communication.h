@@ -1,0 +1,188 @@
+/*
+ * multiparam_v4_communication.h
+ * 多参数传感器通信协议 V4.0 的固定帧、主动上报和交互事务接口。
+ */
+#ifndef MULTIPARAM_V4_COMMUNICATION_H
+#define MULTIPARAM_V4_COMMUNICATION_H
+
+#include <stdint.h>
+
+#define MULTIPARAM_V4_INTERACTIVE_FRAME_SIZE       8U
+#define MULTIPARAM_V4_ACTIVE_FRAME_SIZE            64U
+#define MULTIPARAM_V4_ACTIVE_PARAMETER_COUNT       13U
+#define MULTIPARAM_V4_ACTIVE_DATA_SIZE             52U
+#define MULTIPARAM_V4_ACTIVE_TIMEOUT_MS            1500U
+#define MULTIPARAM_V4_ACTIVE_COMMAND_GUARD_MS      20U
+#define MULTIPARAM_V4_ANY_ADDRESS                  0xFFU
+#define MULTIPARAM_V4_PROTOCOL_VERSION_VALUE       4.0f
+
+typedef enum {
+    MULTIPARAM_V4_COMMUNICATION_UNKNOWN = 0,
+    MULTIPARAM_V4_COMMUNICATION_ACTIVE = 1,
+    MULTIPARAM_V4_COMMUNICATION_INTERACTIVE = 2
+} multiparam_v4_communication_mode_t;
+
+typedef enum {
+    MULTIPARAM_V4_MEASUREMENT_INVALID = 0,
+    MULTIPARAM_V4_MEASUREMENT_DENSITY = 1,
+    MULTIPARAM_V4_MEASUREMENT_LEVEL = 2
+} multiparam_v4_measurement_mode_t;
+
+typedef enum {
+    MULTIPARAM_V4_FEATURE_NONE = 0,
+    MULTIPARAM_V4_FEATURE_WATER = 1,
+    MULTIPARAM_V4_FEATURE_MAGNETIC_ZERO = 2,
+    MULTIPARAM_V4_FEATURE_INVALID = 3
+} multiparam_v4_feature_state_t;
+
+typedef struct {
+    uint8_t valid;
+    uint8_t address;
+    uint16_t sequence;
+    uint32_t received_tick;
+    uint32_t generation;
+    uint32_t raw_parameter[MULTIPARAM_V4_ACTIVE_PARAMETER_COUNT];
+    float software_version;
+    float protocol_version;
+    uint32_t status_word;
+    float magnetic_zero_voltage;
+    int32_t measurement_frequency_hz;
+    float water_capacitance_pf;
+    float temperature_c;
+    float density_kg_m3;
+    float dynamic_viscosity_cp;
+    float kinematic_viscosity_cst;
+    float supply_voltage_v;
+    float angle_x_deg;
+    float angle_y_deg;
+    multiparam_v4_measurement_mode_t measurement_mode;
+    multiparam_v4_feature_state_t feature_state;
+} multiparam_v4_snapshot_t;
+
+typedef struct {
+    uint32_t received_bytes;
+    uint32_t receive_events;
+    uint32_t frames_seen;
+    uint32_t valid_frames;
+    uint32_t crc_errors;
+    uint32_t fixed_field_errors;
+    uint32_t address_errors;
+    uint32_t value_errors;
+    uint32_t short_receive_events;
+    uint32_t resync_events;
+    uint32_t duplicate_frames;
+    uint32_t out_of_order_frames;
+    uint32_t lost_frames;
+    uint32_t sequence_resets;
+    uint32_t stream_overflows;
+    uint32_t uart_errors;
+    uint32_t receive_restart_errors;
+    uint32_t timeout_events;
+    uint32_t interactive_transactions;
+    uint32_t interactive_errors;
+} multiparam_v4_diagnostics_t;
+
+/*
+ * 函数用途：初始化 V4.0 协议运行态和地址过滤条件。
+ * 调用场景：自动识别开始前或确认 V4.0 设备后重新建立接收基线。
+ * 关键约束：本函数不启动 UART6 DMA；主动接收需另行调用 StartActiveReceive。
+ */
+void MULTIPARAM_V4_Init(uint8_t expected_address);
+
+/*
+ * 函数用途：停止 V4.0 主动接收并清除当前通信方式。
+ * 调用场景：传感器类型切换、UART6 所有权交接或重新识别前。
+ * 关键约束：不修改已发布快照，便于故障诊断读取最后一帧。
+ */
+void MULTIPARAM_V4_Deinit(void);
+
+/*
+ * 函数用途：启动 UART6 的 V4.0 主动上报常驻接收。
+ * 调用场景：识别到主动模式或写参数65为0并收到应答后。
+ * 关键约束：调用前必须保证 UART6 没有被其它协议占用。
+ */
+uint32_t MULTIPARAM_V4_StartActiveReceive(void);
+
+/*
+ * 函数用途：停止 V4.0 主动上报 DMA 接收。
+ * 调用场景：取得交互事务窗口或交还 UART6 所有权前。
+ */
+void MULTIPARAM_V4_StopActiveReceive(void);
+
+/*
+ * 函数用途：在线程态处理UART6强制恢复和主动流超时诊断。
+ * 调用场景：CPU2主循环及进入交互/主动模式的等待过程。
+ * 关键约束：不再负责主动帧解包；主循环阻塞不影响正常主动帧发布。
+ */
+void MULTIPARAM_V4_Service(void);
+
+/*
+ * 函数用途：挂起UART6主动帧的PendSV延后处理。
+ * 调用场景：UART6接收、错误中断或测试字节注入完成后。
+ * 关键约束：只置位请求，不做CRC、浮点解析、打印或等待。
+ */
+void MULTIPARAM_V4_RequestDeferredFromISR(void);
+
+/*
+ * 函数用途：在PendSV中有界搬运、重同步、校验并发布主动帧。
+ * 调用场景：统一PendSV_Handler每轮调用一次。
+ * 关键约束：每轮最多处理128字节和2个候选帧；有积压时重新挂起。
+ * 返回值：非0表示本轮发布了至少一个新快照。
+ */
+uint8_t MULTIPARAM_V4_ProcessDeferredPendSV(void);
+
+/*
+ * 函数用途：记录 UART6 Receive-to-IDLE 事件中的新字节并切换接收缓冲。
+ * 调用场景：HAL_UARTEx_RxEventCallback 确认来源为 USART6 后调用。
+ * 关键约束：仅复制字节、更新计数和重启DMA，不解析浮点、不打印、不阻塞。
+ */
+void MULTIPARAM_V4_OnUartRxEventISR(uint16_t received_length);
+
+/*
+ * 函数用途：记录 UART6 硬件错误并请求线程态有界恢复。
+ * 调用场景：HAL_UART_ErrorCallback 确认来源为 USART6 后调用。
+ * 关键约束：中断中不打印、不延时、不执行协议解析。
+ */
+void MULTIPARAM_V4_OnUartErrorISR(uint32_t uart_error);
+/* TIM4中只检查恢复条件并挂起PendSV，不执行DMA停止或协议解析。 */
+void MULTIPARAM_V4_PollRecoveryFromTimerISR(void);
+/* 异步终止接收完成后只更新状态并重新挂起PendSV。 */
+void MULTIPARAM_V4_OnUartAbortReceiveCompleteISR(void);
+
+uint8_t MULTIPARAM_V4_IsActiveReceiverRunning(void);
+void MULTIPARAM_V4_FeedBytes(const uint8_t *data, uint16_t length);
+uint32_t MULTIPARAM_V4_ParseActiveFrame(const uint8_t frame[MULTIPARAM_V4_ACTIVE_FRAME_SIZE],
+                                        multiparam_v4_snapshot_t *snapshot);
+uint32_t MULTIPARAM_V4_CopyLatestSnapshot(multiparam_v4_snapshot_t *snapshot);
+void MULTIPARAM_V4_GetDiagnostics(multiparam_v4_diagnostics_t *diagnostics);
+uint8_t MULTIPARAM_V4_IsSnapshotFresh(uint32_t maximum_age_ms);
+uint32_t MULTIPARAM_V4_GetSnapshotAgeMs(void);
+
+uint8_t MULTIPARAM_V4_CalculateChecksum(const uint8_t frame[MULTIPARAM_V4_INTERACTIVE_FRAME_SIZE]);
+void MULTIPARAM_V4_BuildRequestFrame(uint8_t address,
+                                     uint8_t function,
+                                     uint32_t raw_value,
+                                     uint8_t parameter,
+                                     uint8_t frame[MULTIPARAM_V4_INTERACTIVE_FRAME_SIZE]);
+uint32_t MULTIPARAM_V4_ValidateReply(const uint8_t request[MULTIPARAM_V4_INTERACTIVE_FRAME_SIZE],
+                                    const uint8_t reply[MULTIPARAM_V4_INTERACTIVE_FRAME_SIZE]);
+
+uint32_t MULTIPARAM_V4_ReadParamRaw(uint8_t parameter, uint32_t *raw_value);
+uint32_t MULTIPARAM_V4_ReadIntParam(uint8_t parameter, int32_t *value);
+uint32_t MULTIPARAM_V4_ReadFloatParam(uint8_t parameter, float *value);
+uint32_t MULTIPARAM_V4_WriteParamRaw(uint8_t parameter, uint32_t raw_value);
+/**
+ * @brief 读取R01并判断是否为多参数V4协议版本。
+ * @param protocol_version R01为有限浮点数时返回实际版本；版本不是4.0时仍返回该值并报告版本不兼容。
+ * @return NO_ERROR表示R01约等于4.0；其他值为通信、响应或版本错误。
+ */
+uint32_t MULTIPARAM_V4_ProbeProtocolVersion(float *protocol_version);
+uint32_t MULTIPARAM_V4_SelectDensityMode(void);
+uint32_t MULTIPARAM_V4_SelectLevelMode(void);
+uint32_t MULTIPARAM_V4_EnsureWaterEnabled(uint8_t enabled);
+uint32_t MULTIPARAM_V4_EnsureMagneticZeroEnabled(uint8_t enabled);
+uint32_t MULTIPARAM_V4_EnterInteractive(void);
+uint32_t MULTIPARAM_V4_EnterActive(void);
+multiparam_v4_communication_mode_t MULTIPARAM_V4_GetCommunicationMode(void);
+
+#endif /* MULTIPARAM_V4_COMMUNICATION_H */

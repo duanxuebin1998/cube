@@ -1844,12 +1844,9 @@ static uint32_t determine_level_status_internal(Level_StateTypeDef *state_out, u
     mode_text = allow_mode_recovery ? "静态" : "运动";
     if (allow_mode_recovery) {
         ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
-    } else if (g_deviceParams.sensorType == DSM_SENSOR) {
-        ret = Read_Level_Frequency(&current_frequency);
-    } else if (g_deviceParams.sensorType == SAFE_SENSOR) {
-        ret = SensorSafeAdapter_ReadLevelFrequency(&current_frequency);
     } else {
-        ret = DSM_V2_Read_LevelFrequency(&current_frequency);
+        /* 运动中不执行模式恢复；统一入口会按V4主动快照或交互R04读取，并拒绝未知类型。 */
+        ret = Sensor_ReadLevelFrequency(&current_frequency);
     }
 
     CHECK_COMMAND_SWITCH(ret);

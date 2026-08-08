@@ -8,7 +8,7 @@
 
 #include "wartsila_density_measurement.h"
 #include "measure_oilLevel.h"
-#include "ltd_sensor_communication.h"
+#include "multiparam_v3_communication.h"
 #include "sensor.h"
 #include "measure_density.h"
 #include "abortable_delay.h"

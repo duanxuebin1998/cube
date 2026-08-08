@@ -9,6 +9,7 @@
 #include "system_parameter.h"
 #include "cpu2_communicate.h"
 #include "cpu3_comm_display_params.h"
+#include "cpu3_debug_log.h"
 #include "param_float32.h"
 #include <math.h>     /* for pow() */
 
@@ -389,6 +390,12 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
 
     /* ===================== 基础参数 ===================== */
     g_deviceParams.sensorType            = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SENSORTYPE);
+    if (!DeviceParam_IsSensorTypeSupported(g_deviceParams.sensorType)) {
+        /* 保留CPU2原始值用于诊断，但明确报警，禁止后续把未知值按LTD或V4解释。 */
+        CPU3_LOG_WARNING("CPU2参数",
+                         "收到未知传感器类型 值=%lu",
+                         (unsigned long)g_deviceParams.sensorType);
+    }
     g_deviceParams.sensorID              = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SENSORID);
     g_deviceParams.sensorSoftwareVersion = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SENSOR_SOFTWARE_VERSION);
     g_deviceParams.softwareVersion       = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SOFTWAREVERSION);
@@ -615,6 +622,16 @@ void read_measurement_result_from_InputRegisters(uint16_t *regs) {
 	/* 电机状态 */
 	g_measurement.debug_data.motor_speed = read_u32_from_regs(cregs, REG_DEBUG_MOTOR_SPEED);
 	g_measurement.debug_data.motor_state = read_u32_from_regs(cregs, REG_DEBUG_MOTOR_STATE);
+
+	/* 多参数传感器调试测量结果 */
+	g_measurement.debug_data.magnetic_zero_voltage =
+	    read_float_from_regs(cregs, REG_DEBUG_MAGNETIC_ZERO_VOLTAGE);
+	g_measurement.debug_data.dynamic_viscosity_cp =
+	    read_float_from_regs(cregs, REG_DEBUG_DYNAMIC_VISCOSITY_CP);
+	g_measurement.debug_data.kinematic_viscosity_cst =
+	    read_float_from_regs(cregs, REG_DEBUG_KINEMATIC_VISCOSITY_CST);
+	g_measurement.debug_data.supply_voltage_v =
+	    read_float_from_regs(cregs, REG_DEBUG_SUPPLY_VOLTAGE_V);
 
 	/* ==== OilMeasurement ==== */
 	g_measurement.oil_measurement.oil_level = read_u32_from_regs(cregs, REG_OIL_MEASUREMENT_OIL_LEVEL);

@@ -266,7 +266,7 @@ static SensorSafeServiceResult SensorSafeAdapter_EnsureInitialized(void)
  * @brief 探测并建立安全传感器会话，输出传感器唯一标识。
  *
  * @details 调用场景：传感器自动识别在蓝牙链路失败后、旧协议探测前调用。
- * @note 关键约束：任一失败均撤销活动态并释放 UART6，保证 LTD/V2 与 DSM 可继续回退。
+ * @note 关键约束：任一失败均撤销活动态并释放 UART6，保证多参数传感器通信协议 V3.0（当前LTD使用）与 DSM 可继续回退。
  *
  * @param sensor_id 用于返回探测到的传感器编号。
  * @return NO_ERROR 表示 HELLO、状态读取和传感器编号输出均完成；sensor_id 为空返回 SYSTEM_CALL_CONDITION_ERROR，其他值由安全服务结果映射为具体通信、协议、身份、会话或远端错误。
