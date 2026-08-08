@@ -10,7 +10,7 @@
 | --- | --- |
 | [DSM传感器协议/README.md](DSM传感器协议/README.md) | CPU2 UART6 与 DSM CPU1 传感器之间的传统 `C + 单字符命令` 协议入口，包含上游自动同步副本、来源清单、CUBE 当前命令子集和适配边界 |
 | [Newhall称重传感器协议/README.md](Newhall称重传感器协议/README.md) | 独立 MSP430FR2476 称重主控的 `19200 8N1` UART 协议归档，包含当前 `0x83` 全量帧、未启用 `0x81/0x82` 组包、下行查询、BCC、字段格式和联调边界；CUBE协议31已实现CPU2被动接收`0x83`重量/温度帧并由CPU3显示，真实串口和整机联调仍未完成 |
-| [传感器安全协议SIL/README.md](传感器安全协议SIL/README.md) | 新一代安全通信协议的集中维护入口，包含 V1 协议正文、双功能传感器同总线优化设计、落地方案、验证记录和残余危险失效率论证 |
+| [传感器安全协议SIL/README.md](传感器安全协议SIL/README.md) | 安全通信协议集中入口，按现行V1、候选V2、实施验证、安全论证和历史方案分层；V2采用单活动端点纯单向主动上报 |
 | [sensor_safe_protocol_v1.json](golden_frames/sensor_safe_protocol_v1.json) | V1 控制帧、44 字节快报、连续序号和异常注入的确定性 golden vectors |
 | [sensor_safe_param_digest_v1.json](golden_frames/sensor_safe_param_digest_v1.json) | `param_crc` 与 `safety_param_crc` 规范化序列化和字段顺序向量 |
 
