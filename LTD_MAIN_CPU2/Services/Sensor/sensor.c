@@ -277,6 +277,33 @@ static uint32_t Sensor_ProbeLtdSensor(uint32_t *sensor_id_out)
 }
 
 /**
+ * @brief 返回 DSM RAM 会话版本分类的诊断名称。
+ * @param profile DSM CPU1 版本所属维护线。
+ * @return 只读静态文字，用于探测阶段日志，不参与协议或持久化判断。
+ */
+static const char *Sensor_DsmVersionProfileName(DsmVersionProfile profile)
+{
+    switch (profile) {
+    case DSM_VERSION_PROFILE_UNREAD:
+        return "unread";
+    case DSM_VERSION_PROFILE_CV07_AMBIGUOUS:
+        return "CV07-ambiguous";
+    case DSM_VERSION_PROFILE_V3:
+        return "V3";
+    case DSM_VERSION_PROFILE_V4:
+        return "V4";
+    case DSM_VERSION_PROFILE_V5_0_AMBIGUOUS:
+        return "V5.0-ambiguous";
+    case DSM_VERSION_PROFILE_V5:
+        return "V5";
+    case DSM_VERSION_PROFILE_V6:
+        return "V6";
+    default:
+        return "unknown";
+    }
+}
+
+/**
  * @brief 用振动管编号探测 DSM 一代传感器。
  *
  * CN 编号读取用于识别协议并保存编号；识别成功后仍切到密度模式，保持初始化后的运行模式语义不变。
@@ -287,8 +314,46 @@ static uint32_t Sensor_ProbeLtdSensor(uint32_t *sensor_id_out)
 static uint32_t Sensor_ProbeDsmSensor(uint32_t *sensor_id_out)
 {
     char id_text[RCVBUFFLEN] = {0};
+    const DsmSessionContext *version_context;
     uint32_t sensor_id = 0U;
+    uint32_t version_ret;
     uint32_t ret;
+
+    version_ret = DSM_ReadVersionContext();
+    if (version_ret == STATE_SWITCH) {
+        return STATE_SWITCH;
+    }
+
+    version_context = DSM_GetSessionContext();
+    if ((version_context != NULL) &&
+        ((version_context->cpu1_valid != 0U) || (version_context->cpu0_valid != 0U))) {
+        if (version_context->cpu1_valid != 0U) {
+            printf("DSM版本 | CPU1=%s | profile=%s | 低电压=%lu",
+                   version_context->cpu1_version,
+                   Sensor_DsmVersionProfileName(version_context->profile),
+                   (unsigned long)version_context->low_voltage);
+        } else {
+            printf("DSM版本 | CPU1=%s | profile=%s | 低电压=%lu",
+                   (version_context->profile == DSM_VERSION_PROFILE_CV07_AMBIGUOUS)
+                       ? "Cv未响应"
+                       : "未读取",
+                   Sensor_DsmVersionProfileName(version_context->profile),
+                   (unsigned long)version_context->low_voltage);
+        }
+        if (version_context->cpu0_valid != 0U) {
+            printf(" | CPU0=%lu.%02lu | 组合前缀=%s\r\n",
+                   (unsigned long)(version_context->cpu0_version_x100 / 100U),
+                   (unsigned long)(version_context->cpu0_version_x100 % 100U),
+                   version_context->combined_prefix);
+        } else {
+            printf(" | CPU0=未读取\r\n");
+        }
+    }
+    if (version_ret != NO_ERROR) {
+        /* 老版本可能不支持 Cv；版本读取失败不能替代 CN 探测结果。 */
+        printf("DSM版本读取未完成，继续按CN兼容探测。错误码=0x%08lX\r\n",
+               (unsigned long)version_ret);
+    }
 
     ret = Read_VibrationTube_ID(id_text, sizeof(id_text));
     if (ret != NO_ERROR) {
@@ -1289,11 +1354,16 @@ static uint32_t Sensor_UpdateWirelessRssiForPartParams(uint8_t force_update)
 static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
 {
     uint32_t ret = NO_ERROR;
+    uint32_t voltage_ret = NO_ERROR;
+    uint32_t density_analysis_ret = NO_ERROR;
     uint8_t is_ltd_sensor = (g_deviceParams.sensorType == LTD_SENSOR) ? 1U : 0U;
 
     float ax = 0.0f, ay = 0.0f;
     float freq = 0.0f, dens = 0.0f, temp = 0.0f;
     float cap = 0.0f;
+    float supply_voltage = 0.0f;
+    float period_225 = 0.0f, period_45 = 0.0f;
+    float dynamic_viscosity = 0.0f;
 
     if (update_command_state) {
         ret = (uint32_t)MeasureStart();
@@ -1396,7 +1466,43 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
         /* debug_data.temperature 在 Read_Density 内已 TEMP_TO_RAW，避免重复计算 */
     }
 
-    /* ---------- 6) 水位电容 ---------- */
+    /* ---------- 6) DSM 传感器电压、密度分析参数 ---------- */
+    if (g_deviceParams.sensorType == DSM_SENSOR) {
+        /* CK/CM 是扩展诊断数据；命令切换仍立即退出，读取失败不阻断核心参数和故障恢复。 */
+        voltage_ret = Read_Sensor_Voltage(&supply_voltage);
+        voltage_ret = Sensor_DiagnoseCommTimeout(voltage_ret, "读取DSM传感器电压");
+        if (voltage_ret == STATE_SWITCH) {
+            return STATE_SWITCH;
+        }
+        if (voltage_ret != NO_ERROR) {
+            printf("读取部件参数\tDSM传感器电压未更新，保留核心参数结果。错误码=0x%08lX\r\n",
+                   (unsigned long)voltage_ret);
+        }
+
+        density_analysis_ret = DSM_ReadDensityAnalysis(&period_225,
+                                                       &period_45,
+                                                       &dynamic_viscosity);
+        density_analysis_ret = Sensor_DiagnoseCommTimeout(density_analysis_ret,
+                                                          "读取DSM密度分析参数");
+        if (density_analysis_ret == STATE_SWITCH) {
+            return STATE_SWITCH;
+        }
+        if (density_analysis_ret != NO_ERROR) {
+            printf("读取部件参数\tDSM密度分析参数未更新，保留核心参数结果。错误码=0x%08lX\r\n",
+                   (unsigned long)density_analysis_ret);
+        }
+
+        if (voltage_ret == NO_ERROR) {
+            printf("DSM扩展参数 | 传感器电压=%.4fV\r\n", supply_voltage);
+        }
+        if (density_analysis_ret == NO_ERROR) {
+            printf("DSM扩展参数 | 22.5度周期平方=%.0f | 45度周期平方=%.0f | 动态黏度=%.1f\r\n",
+                   period_225,
+                   period_45,
+                   dynamic_viscosity);
+        }
+    }
+    /* ---------- 7) 水位电容 ---------- */
     if ((!update_command_state) && HasEffectiveCommandSwitchRequest()) {
         return STATE_SWITCH;
     }
@@ -1415,7 +1521,7 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
         printf("读取部件参数\t当前传感器类型不支持水位电容读取，已跳过\r\n");
     }
 
-    /* ---------- 7) 蓝牙连接 RSSI ---------- */
+    /* ---------- 8) 蓝牙连接 RSSI ---------- */
     if ((!update_command_state) && HasEffectiveCommandSwitchRequest()) {
         return STATE_SWITCH;
     }
@@ -1432,15 +1538,15 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
         return STATE_SWITCH;
     }
 
-    /* ---------- 8) 预留接口：后续新增部件参数统一挂这里 ---------- */
+    /* ---------- 9) 预留接口：后续新增部件参数统一挂这里 ---------- */
     /* TODO:
-       - 读电源电压/驱动电压
+       - 读非DSM传感器电源电压/驱动电压
        - 读TMC5130错误寄存器(GSTAT/DRV_STATUS)
-       - 读DSP/传感器版本号
+       - 读非DSM传感器版本号
        - 读温度2/环境温度
     */
 
-    /* ---------- 9) 打印汇总：正常信息集中一行 ---------- */
+    /* ---------- 10) 打印汇总：正常信息集中一行 ---------- */
     printf("读取部件参数完成 | 编码值=%ld 位置=%ld 缆长=%ld 步数=%ld 距离=%ld(0.1mm) "
            "| freq=%lu temp=%lu | cap=%lu | w=%lu | ang_x=%ld ang_y=%ld(0.01deg) | mspd=%lu mstate=%lu | rssi_valid=%lu rssi=%ld\r\n",
            (long)g_measurement.debug_data.current_encoder_value,

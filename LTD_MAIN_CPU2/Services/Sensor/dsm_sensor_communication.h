@@ -10,6 +10,7 @@
 #define SENSOR_DSM_SENSOR_COMMUNICATION_H_
 
 #include <stddef.h>
+#include <stdint.h>
 #include "sensor.h"
 
 #define DSM_WATER_CAP "Cl"		 /* 读取测水电容数据 */
@@ -39,11 +40,52 @@ typedef struct
 	float MeanSquareOf225DegreeSweepPeriod; /* 225度扫频均方根 */
 	float SquareMeanOf45degreeSweepPeriod; /* 45度扫频均方根 */
 	float Power_Voltage; /* 电压 */
+	uint8_t Density_Analysis_Valid; /* 密度分析参数有效标志 */
+	uint8_t Power_Voltage_Valid; /* 供电电压有效标志 */
 	float level_frequency; /* 液位频率 */
 	float capacitance; /* 电容 */
 }DSMSENSOR_DATA;
 extern DSMSENSOR_DATA dsmsensor_data;
+
+/* DSM CPU1 版本所属维护线；只用于当前 UART6 会话，不写入设备参数。 */
+typedef enum
+{
+	DSM_VERSION_PROFILE_UNREAD = 0,
+	DSM_VERSION_PROFILE_CV07_AMBIGUOUS,
+	DSM_VERSION_PROFILE_V3,
+	DSM_VERSION_PROFILE_V4,
+	DSM_VERSION_PROFILE_V5_0_AMBIGUOUS,
+	DSM_VERSION_PROFILE_V5,
+	DSM_VERSION_PROFILE_V6,
+	DSM_VERSION_PROFILE_UNKNOWN
+} DsmVersionProfile;
+
+/* DSM 版本查询结果；字段只在对应 valid 标志非零时有效。 */
+typedef struct
+{
+	DsmVersionProfile profile;
+	char cpu1_version[6];
+	char combined_prefix[3];
+	uint16_t cpu1_version_x100;
+	uint16_t cpu0_version_x100;
+	uint8_t cpu1_valid;
+	uint8_t cpu0_valid;
+	uint8_t low_voltage;
+} DsmSessionContext;
+
 /* int DSMSendcommand3times(uint8_t *pCommand, uint16_t commandLen); */
+
+/**
+ * @brief 读取 DSM CPU1/CPU0 版本并刷新 RAM 会话上下文。
+ * @return NO_ERROR 表示版本上下文可用；前缀 07 允许仅 CV 有效，其他失败返回原错误码。
+ */
+uint32_t DSM_ReadVersionContext(void);
+
+/**
+ * @brief 获取当前 DSM RAM 会话上下文。
+ * @return 只读上下文指针；调用方必须检查 valid 标志后再使用对应字段。
+ */
+const DsmSessionContext *DSM_GetSessionContext(void);
 
 /**
  * @brief 开启液位模式。
@@ -62,6 +104,17 @@ int DSM_EnableDensityMode(void);
  * @return NO_ERROR 表示读取成功，其他值表示通信异常。
  */
 uint32_t Read_Sensor_Voltage(float *voltage_out);
+
+/**
+ * @brief 读取 DSM 密度分析参数。
+ * @param period_225_out 22.5 度扫频周期平方输出指针。
+ * @param period_45_out 45 度扫频周期平方输出指针。
+ * @param dynamic_viscosity_out 动态黏度输出指针。
+ * @return NO_ERROR 表示 CM 定长帧和三个业务字段均解析成功，其他值表示调用条件、通信或响应异常。
+ */
+uint32_t DSM_ReadDensityAnalysis(float *period_225_out,
+                                 float *period_45_out,
+                                 float *dynamic_viscosity_out);
 /**
  * @brief 读取液位跟随频率（单次）。
  *

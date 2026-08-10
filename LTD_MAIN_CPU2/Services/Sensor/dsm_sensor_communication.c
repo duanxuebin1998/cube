@@ -17,6 +17,7 @@
 #include <inttypes.h>
 
 DSMSENSOR_DATA dsmsensor_data; /* 最近一次 DSM 传感器有效响应解码后的共享测量数据。 */
+static DsmSessionContext s_dsm_session_context; /* 当前 DSM UART6 链路的 RAM-only 版本上下文。 */
 
 char DSMCommand[RCVBUFFLEN]; /* 兼容旧 DSM 文本收发接口保留的全局命令缓冲区；当前本文件收发实现未读写该数组，不能据此判断正在发送的命令。 */
 char DSMRcvBuffer[RCVBUFFLEN]; /* 兼容旧 DSM 文本收发接口保留的全局接收缓冲区；当前 DMA 接收使用 s_uart6_dma_rx_buf，不能把本数组当作最新应答。 */
@@ -26,6 +27,7 @@ static char CalculationBCC_DSM(char command[], int count);
 static bool DSM_IsSevenDigitInteger(const char *value);
 static bool DSM_IsSevenDigitValue(const char *value);
 static bool DSM_IsSignedSevenDigitValue(const char *value, uint8_t require_decimal);
+static bool DSM_IsSignedSevenDigitInteger(const char *value);
 static bool DSM_ParseSevenByteFloat(const char *value, float *result_out);
 static uint32_t s_uart6_last_error = HAL_UART_ERROR_NONE; /* 最近一次 DSM UART6 事务锁存的 HAL 硬件错误位。 */
 
@@ -40,6 +42,7 @@ typedef enum {
     DSM_FRAME_SUPPLY_VOLTAGE,
     DSM_FRAME_LEVEL_FREQUENCY,
     DSM_FRAME_DENSITY,
+    DSM_FRAME_DENSITY_ANALYSIS,
     DSM_FRAME_GYRO_ANGLE,
     DSM_FRAME_WATER_CAPACITANCE
 } DsmFrameType;
@@ -63,6 +66,7 @@ static const DsmCommandFrameSpec s_dsm_frame_specs[] = {
     {"CK", 11U, 0U, DSM_FRAME_SUPPLY_VOLTAGE, "读取传感器电压"},
     {"Cb", 11U, 19U, DSM_FRAME_LEVEL_FREQUENCY, "读取液位频率"},
     {"Cd", 27U, 19U, DSM_FRAME_DENSITY, "读取频率密度温度"},
+    {"CM", 27U, 19U, DSM_FRAME_DENSITY_ANALYSIS, "读取密度分析参数"},
     {"Ch", 19U, 19U, DSM_FRAME_GYRO_ANGLE, "读取传感器倾角"},
     {"Cl", 11U, 19U, DSM_FRAME_WATER_CAPACITANCE, "读取测水电容"}
 };
@@ -135,7 +139,7 @@ static const DsmResponseErrorMap s_dsm_response_errors[] = {
  */
 static void DSM_LogLowVoltageFrame(const char *resp)
 {
-    if ((resp != NULL) && ((resp[0] == 'E') || (resp[0] == 'e'))) {
+    if ((resp != NULL) && (resp[0] == 'E')) {
         printf("DSM传感器电压过低\r\n");
     }
 }
@@ -187,7 +191,8 @@ static const DsmCommandFrameSpec *DSM_FindFrameSpec(const char *cmd)
 /**
  * @brief 根据命令规格和响应首字节确定本次候选帧的精确长度。
  *
- * 数据命令以 A 开头时使用 19 字节统一错误帧长度；其它首字节使用正常响应长度。
+ * 多数字段命令以 A 开头时使用 19 字节统一错误帧长度；其它首字节使用正常响应长度。
+ * CM 正常帧也以 A 开头，只有第 18、19 字节已经收到 CRLF 时才按 19 字节错误帧结束。
  * Ch 的正常帧和错误帧同为 19 字节，不需要额外分支。
  *
  * @param spec 当前命令规格。
@@ -201,6 +206,17 @@ static uint16_t DSM_GetExpectedFrameLength(const DsmCommandFrameSpec *spec,
 {
     if (spec == NULL) {
         return 0U;
+    }
+    if ((spec->frame_type == DSM_FRAME_DENSITY_ANALYSIS) &&
+        (spec->error_len != 0U) &&
+        (rx != NULL) &&
+        (recv_len >= spec->error_len) &&
+        (rx[spec->error_len - 2U] == (uint8_t)'\r') &&
+        (rx[spec->error_len - 1U] == (uint8_t)'\n')) {
+        return spec->error_len;
+    }
+    if (spec->frame_type == DSM_FRAME_DENSITY_ANALYSIS) {
+        return spec->normal_len;
     }
     if ((spec->error_len != 0U) &&
         (spec->error_len != spec->normal_len) &&
@@ -567,6 +583,24 @@ static bool DSM_IsSignedSevenDigitValue(const char *value, uint8_t require_decim
 }
 
 /**
+ * @brief 检查符号加六位数字组成的 DSM 7 字节整数字段。
+ * @param value 指向字段首地址。
+ * @return true 表示首字节为正负号且其余六字节全为数字。
+ */
+static bool DSM_IsSignedSevenDigitInteger(const char *value)
+{
+    if ((value == NULL) || ((value[0] != '+') && (value[0] != '-'))) {
+        return false;
+    }
+    for (uint8_t i = 1U; i < 7U; i++) {
+        if (!isdigit((unsigned char)value[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
  * @brief 只解析协议规定的 7 字节数值字段，禁止把后续 BCC 当成数字继续消费。
  *
  * @param value 指向 7 字节协议字段首地址。
@@ -682,6 +716,15 @@ static uint32_t DSM_ValidateFixedFrame(const DsmCommandFrameSpec *spec,
                                      (response[16] == 'T') &&
                                      DSM_IsSignedSevenDigitValue(&response[1], 0U) &&
                                      DSM_IsSignedSevenDigitValue(&response[9], 1U) &&
+                                     DSM_IsSignedSevenDigitValue(&response[17], 1U));
+            break;
+        case DSM_FRAME_DENSITY_ANALYSIS:
+            normal_shape = (uint8_t)((recv_len == 27U) &&
+                                     ((response[0] == 'A') || (response[0] == 'E')) &&
+                                     (response[8] == 'B') &&
+                                     (response[16] == 'C') &&
+                                     DSM_IsSignedSevenDigitInteger(&response[1]) &&
+                                     DSM_IsSignedSevenDigitInteger(&response[9]) &&
                                      DSM_IsSignedSevenDigitValue(&response[17], 1U));
             break;
         case DSM_FRAME_GYRO_ANGLE:
@@ -827,20 +870,24 @@ static int UART6_SendCommand(const DsmCommandFrameSpec *frame_spec,
 }
 
 /**
- * @brief 发送指令，带重试机制。
+ * @brief 按指定次数和日志策略发送 DSM 命令。
  *
- * @param cmd 准备通过 UART6 发送、重试或写入诊断详情的 NUL 结尾传感器命令文字。
- * @param response UART6 响应文字缓冲区；接收函数按 response_size 限制写入并保证 NUL 结尾，格式化函数只读有效内容。
- * @param maxLen 调用方接收缓冲区的最大容量，单位字节。
- * @param recv_len_out 用于返回本次收到的有效 DSM 文本应答长度，单位字节。
+ * @param cmd 准备通过 UART6 发送、可读且以 NUL 结尾的两字节命令文本。
+ * @param response UART6 响应可写缓冲区；接收前清零 response_size 字节并保证 NUL 结尾，格式错误时只包含实际收到的字节。
+ * @param maxLen 调用方接收缓冲区容量，单位字节。
+ * @param recv_len_out 用于返回本轮收到的有效 DSM 文本响应长度，单位字节。
  * @param timeout 本次操作使用的超时门限。
- * @return NO_ERROR 表示某次尝试完成有效收发；命令切换立即返回 STATE_SWITCH，全部重试失败时返回最后一次 UART6、超时、格式或 BCC 错误。
+ * @param max_attempts 本轮允许的发送次数，不得超过 DSM 统一重试次数。
+ * @param log_retry 非零时记录错误重试和恢复日志；零用于兼容性静默探测。
+ * @return NO_ERROR 表示某次尝试完成有效收发；命令切换立即返回 STATE_SWITCH，全部尝试失败时返回最后一次错误。
  */
-static int UART6_SendWithRetry(const char *cmd,
-                               char *response,
-                               uint16_t maxLen,
-                               uint16_t *recv_len_out,
-                               uint32_t timeout) {
+static int UART6_SendWithPolicy(const char *cmd,
+                                char *response,
+                                uint16_t maxLen,
+                                uint16_t *recv_len_out,
+                                uint32_t timeout,
+                                uint32_t max_attempts,
+                                uint8_t log_retry) {
     uint32_t ret = SENSOR_DEVICE_COMM_TIMEOUT;
     uint16_t recvLen = 0;
     char detail[160];
@@ -848,7 +895,9 @@ static int UART6_SendWithRetry(const char *cmd,
     const DsmCommandFrameSpec *frame_spec = DSM_FindFrameSpec(cmd);
     const char *operation;
 
-    if (frame_spec == NULL) {
+    if ((frame_spec == NULL) ||
+        (max_attempts == 0U) ||
+        (max_attempts > DSM_UART_MAX_RETRY)) {
         return SYSTEM_CALL_CONDITION_ERROR;
     }
     operation = frame_spec->operation_name;
@@ -859,7 +908,7 @@ static int UART6_SendWithRetry(const char *cmd,
 
     link_state = CH9141_AT_GetUart6LinkState();
     if (link_state == CH9141_UART6_NOT_READY) {
-        /* NOT_READY 表示上一轮 AT 收尾已经结束但交接失败；新 DSM 事务前只执行一次有界恢复。 */
+        /* NOT_READY 表示上一轮 AT 收尾已经结束但恢复失败；发 DSM 前只执行一次有界恢复。 */
         printf("DSM通信\tUART6透明链路恢复\tcmd=%s\t原状态=%u\r\n",
                cmd,
                (unsigned)link_state);
@@ -874,18 +923,18 @@ static int UART6_SendWithRetry(const char *cmd,
         }
         printf("DSM通信\tUART6透明链路恢复成功\tcmd=%s\r\n", cmd);
     } else if (link_state != CH9141_UART6_TRANSPARENT_READY) {
-        /* ENTERING_AT、AT_ACTIVE 和 RECOVERING 属于正在执行的交接，DSM 不得抢占。 */
+        /* ENTERING_AT、AT_ACTIVE 或 RECOVERING 都属于正在执行的事务，DSM 不得抢占。 */
         printf("DSM通信\tUART6透明链路忙\tcmd=%s\t状态=%u\r\n",
                cmd,
                (unsigned)link_state);
         return SENSOR_MODE_NOT_READY;
     }
 
-    for (int i = 0; i < DSM_UART_MAX_RETRY; i++) {
+    for (uint32_t i = 0U; i < max_attempts; i++) {
         if (HasEffectiveCommandSwitchRequest()) {
             return STATE_SWITCH;
         }
-        if (i > 0) {
+        if (i > 0U) {
             HAL_Delay(DSM_PRE_SEND_DELAY);
         }
         ret = UART6_SendCommand(frame_spec, response, maxLen, &recvLen, timeout);
@@ -904,26 +953,28 @@ static int UART6_SendWithRetry(const char *cmd,
                 if (recv_len_out != NULL) {
                     *recv_len_out = recvLen;
                 }
-                if (i > 0) {
-                    /* 实际打印：错误，阶段为重试成功，操作名来自当前 DSM 命令规格。 */
+                if ((i > 0U) && (log_retry != 0U)) {
+                    /* 实际打印“错误，阶段：重试成功”，描述重试成功的当前 DSM 操作。 */
                     ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
                                      operation,
                                      ERROR_LOG_REASON_COMM_FAIL,
-                                     (uint32_t)(i + 1),
-                                     DSM_UART_MAX_RETRY);
+                                     i + 1U,
+                                     max_attempts);
                 }
                 return NO_ERROR;
             }
 
-            /* 实际打印：错误重试，操作名和远端错误原因均来自当前 DSM 命令。 */
-            ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
-                           operation,
-                           ErrorLog_GetReasonByCode(response_error),
-                           (uint32_t)(i + 1),
-                           DSM_UART_MAX_RETRY,
-                           response_error);
+            if (log_retry != 0U) {
+                /* 实际打印“错误，阶段：错误重试”，描述远端错误原因和当前 DSM 操作。 */
+                ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
+                               operation,
+                               ErrorLog_GetReasonByCode(response_error),
+                               i + 1U,
+                               max_attempts,
+                               response_error);
+            }
             ret = response_error;
-        } else {
+        } else if (log_retry != 0U) {
             UART6_FormatHexDetail(ErrorLog_GetReasonByCode(ret),
                                   cmd,
                                   response,
@@ -931,17 +982,151 @@ static int UART6_SendWithRetry(const char *cmd,
                                   s_uart6_last_error,
                                   detail,
                                   sizeof(detail));
-            /* 实际打印：错误重试，操作名来自命令规格，详情保留命令、长度、UART 位图和 HEX。 */
+            /* 实际打印“错误，阶段：错误重试”，诊断详情保留命令、长度、UART 位图和 HEX。 */
             ErrorLog_RetryDetail(ERROR_LOG_MODULE_SENSOR,
                                  operation,
                                  ErrorLog_GetReasonByCode(ret),
-                                 (uint32_t)(i + 1),
-                                 DSM_UART_MAX_RETRY,
+                                 i + 1U,
+                                 max_attempts,
                                  ret,
                                  detail);
         }
     }
     return ret;
+}
+
+/**
+ * @brief 使用统一三次重试和错误日志策略发送 DSM 命令。
+ * @return 透传策略发送函数的通信、格式、远端或命令切换结果。
+ */
+static int UART6_SendWithRetry(const char *cmd,
+                               char *response,
+                               uint16_t maxLen,
+                               uint16_t *recv_len_out,
+                               uint32_t timeout) {
+    return UART6_SendWithPolicy(cmd,
+                                response,
+                                maxLen,
+                                recv_len_out,
+                                timeout,
+                                DSM_UART_MAX_RETRY,
+                                1U);
+}
+
+/**
+ * @brief 把五字节 CPU1 版本文本转换为百分之一版本整数。
+ * @param version 指向形如 05.40 的五字节版本文本。
+ * @return 版本乘以 100 后的整数，例如 05.40 返回 540。
+ */
+static uint16_t DSM_ParseCpu1VersionX100(const char *version)
+{
+    uint16_t major = (uint16_t)(((uint16_t)(version[0] - '0') * 10U) +
+                                (uint16_t)(version[1] - '0'));
+    uint16_t minor = (uint16_t)(((uint16_t)(version[3] - '0') * 10U) +
+                                (uint16_t)(version[4] - '0'));
+    return (uint16_t)((major * 100U) + minor);
+}
+
+/**
+ * @brief 根据 CPU1 版本值分类 DSM 维护线。
+ * @param version_x100 版本乘以 100 后的整数。
+ * @return 版本维护线；05.00 单独标记为无法区分标准版和 Lemis。
+ */
+static DsmVersionProfile DSM_ClassifyVersion(uint16_t version_x100)
+{
+    if ((version_x100 >= 300U) && (version_x100 < 400U)) {
+        return DSM_VERSION_PROFILE_V3;
+    }
+    if ((version_x100 >= 400U) && (version_x100 < 500U)) {
+        return DSM_VERSION_PROFILE_V4;
+    }
+    if (version_x100 == 500U) {
+        return DSM_VERSION_PROFILE_V5_0_AMBIGUOUS;
+    }
+    if ((version_x100 > 500U) && (version_x100 < 600U)) {
+        return DSM_VERSION_PROFILE_V5;
+    }
+    if ((version_x100 >= 600U) && (version_x100 < 700U)) {
+        return DSM_VERSION_PROFILE_V6;
+    }
+    return DSM_VERSION_PROFILE_UNKNOWN;
+}
+
+/**
+ * @brief 读取 DSM CPU1/CPU0 版本并刷新 RAM 会话上下文。
+ * @return NO_ERROR 表示版本上下文可用；前缀 07 允许仅 CV 有效，其他失败返回原错误码。
+ */
+uint32_t DSM_ReadVersionContext(void)
+{
+    char resp[RX_BUF_LEN] = {0};
+    uint32_t cpu1_ret;
+    uint32_t ret;
+
+    memset(&s_dsm_session_context, 0, sizeof(s_dsm_session_context));
+    s_dsm_session_context.profile = DSM_VERSION_PROFILE_UNREAD;
+
+    /* V3.02 以前不支持 Cv；只静默探测一次，避免旧设备产生三轮超时和错误日志。 */
+    cpu1_ret = UART6_SendWithPolicy("Cv", resp, RX_BUF_LEN, NULL, 500U, 1U, 0U);
+    if (cpu1_ret == STATE_SWITCH) {
+        return STATE_SWITCH;
+    }
+    if (cpu1_ret == NO_ERROR) {
+        memcpy(s_dsm_session_context.cpu1_version, resp, 5U);
+        s_dsm_session_context.cpu1_version[5] = '\0';
+        if ((resp[0] == 'E') || (resp[0] == 'e')) {
+            s_dsm_session_context.cpu1_version[0] = '0';
+            s_dsm_session_context.low_voltage = 1U;
+        }
+        s_dsm_session_context.cpu1_version_x100 =
+            DSM_ParseCpu1VersionX100(s_dsm_session_context.cpu1_version);
+        s_dsm_session_context.profile =
+            DSM_ClassifyVersion(s_dsm_session_context.cpu1_version_x100);
+        s_dsm_session_context.cpu1_valid = 1U;
+    }
+
+    /* Cv 失败时仍读取所有历史版本都支持的 CV，保留可用的 CPU0 组合版本。 */
+    memset(resp, 0, sizeof(resp));
+    ret = UART6_SendWithRetry("CV", resp, RX_BUF_LEN, NULL, 500U);
+    if (ret != NO_ERROR) {
+        if (cpu1_ret != NO_ERROR) {
+            s_dsm_session_context.profile = DSM_VERSION_PROFILE_UNKNOWN;
+        }
+        return ret;
+    }
+
+    s_dsm_session_context.combined_prefix[0] =
+        ((resp[0] == 'E') || (resp[0] == 'e')) ? '0' : resp[0];
+    s_dsm_session_context.combined_prefix[1] = resp[1];
+    s_dsm_session_context.combined_prefix[2] = '\0';
+    s_dsm_session_context.cpu0_version_x100 =
+        (uint16_t)(((uint16_t)(resp[2] - '0') * 100U) +
+                   ((uint16_t)(resp[3] - '0') * 10U) +
+                   (uint16_t)(resp[4] - '0'));
+    s_dsm_session_context.cpu0_valid = 1U;
+    if ((resp[0] == 'E') || (resp[0] == 'e')) {
+        s_dsm_session_context.low_voltage = 1U;
+    }
+
+    if (cpu1_ret != NO_ERROR) {
+        if ((cpu1_ret == SENSOR_DEVICE_COMM_TIMEOUT) &&
+            (strcmp(s_dsm_session_context.combined_prefix, "07") == 0)) {
+            /* 前缀 07 覆盖 V1/V2、历史过渡线和 V3；Cv 未响应时保留可用的 CV 上下文。 */
+            s_dsm_session_context.profile = DSM_VERSION_PROFILE_CV07_AMBIGUOUS;
+            return NO_ERROR;
+        }
+        s_dsm_session_context.profile = DSM_VERSION_PROFILE_UNKNOWN;
+        return cpu1_ret;
+    }
+    return NO_ERROR;
+}
+
+/**
+ * @brief 获取当前 DSM RAM 会话上下文。
+ * @return 只读上下文指针。
+ */
+const DsmSessionContext *DSM_GetSessionContext(void)
+{
+    return &s_dsm_session_context;
 }
 
 /**
@@ -959,6 +1144,7 @@ uint32_t Read_Sensor_Voltage(float *voltage_out) {
         return SYSTEM_CALL_CONDITION_ERROR;
     }
 
+    dsmsensor_data.Power_Voltage_Valid = 0U;
     ret = UART6_SendWithRetry("CK", resp, RX_BUF_LEN, NULL, 500);
     if (ret != NO_ERROR) {
         return ret;
@@ -966,7 +1152,54 @@ uint32_t Read_Sensor_Voltage(float *voltage_out) {
     if (!DSM_ParseSevenByteFloat(&resp[1], &voltage)) {
         return SENSOR_RESP_FORMAT_ERROR;
     }
+    dsmsensor_data.Power_Voltage = voltage;
+    dsmsensor_data.Power_Voltage_Valid = 1U;
     *voltage_out = voltage;
+    return NO_ERROR;
+}
+
+/**
+ * @brief 读取 DSM 22.5 度、45 度扫频周期平方和动态黏度。
+ * @param period_225_out 22.5 度扫频周期平方输出指针。
+ * @param period_45_out 45 度扫频周期平方输出指针。
+ * @param dynamic_viscosity_out 动态黏度输出指针。
+ * @return NO_ERROR 表示 CM 帧及三个字段均有效；其他值为调用条件、通信或响应格式错误。
+ */
+uint32_t DSM_ReadDensityAnalysis(float *period_225_out,
+                                 float *period_45_out,
+                                 float *dynamic_viscosity_out)
+{
+    char resp[RX_BUF_LEN] = {0};
+    uint32_t ret;
+    float parsed_period_225;
+    float parsed_period_45;
+    float parsed_dynamic_viscosity;
+
+    if ((period_225_out == NULL) ||
+        (period_45_out == NULL) ||
+        (dynamic_viscosity_out == NULL)) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
+
+    dsmsensor_data.Density_Analysis_Valid = 0U;
+    ret = UART6_SendWithRetry("CM", resp, RX_BUF_LEN, NULL, 500U);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+    if (!DSM_ParseSevenByteFloat(&resp[1], &parsed_period_225) ||
+        !DSM_ParseSevenByteFloat(&resp[9], &parsed_period_45) ||
+        !DSM_ParseSevenByteFloat(&resp[17], &parsed_dynamic_viscosity)) {
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+
+    /* 三个字段全部解析成功后一次性发布，避免调用方观察到混合新旧值。 */
+    dsmsensor_data.MeanSquareOf225DegreeSweepPeriod = parsed_period_225;
+    dsmsensor_data.SquareMeanOf45degreeSweepPeriod = parsed_period_45;
+    dsmsensor_data.Dynamic_Viscosity = parsed_dynamic_viscosity;
+    dsmsensor_data.Density_Analysis_Valid = 1U;
+    *period_225_out = parsed_period_225;
+    *period_45_out = parsed_period_45;
+    *dynamic_viscosity_out = parsed_dynamic_viscosity;
     return NO_ERROR;
 }
 
