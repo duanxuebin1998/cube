@@ -1494,7 +1494,7 @@ static bool ParamAllowsSignedInput(int operaNum)
 	case COM_NUM_DEVICEPARAM_LIQUID_SENSOR_DISTANCE_DIFF:
 	case COM_NUM_DEVICEPARAM_DENSITYCORRECTION:
 	case COM_NUM_DEVICEPARAM_TEMPERATURECORRECTION:
-	case COM_NUM_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X100:
+	case COM_NUM_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X1000:
 	case COM_NUM_CPU3_SI_LOW_TEMPERATURE_SETPOINT:
 	case COM_NUM_CPU3_SI_HIGH_TEMPERATURE_SETPOINT:
 	case COM_NUM_SCREEN_INPUT_T:
@@ -2090,7 +2090,7 @@ static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 		{ COM_NUM_DEVICEPARAM_AO_WORK_MODE, (uint8_t*)"工作模式", (uint8_t*)"Work Mode" },
 		{ COM_NUM_DEVICEPARAM_AO_CURRENT_MODE, (uint8_t*)"电流模式", (uint8_t*)"Current Mode" },
 		{ COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE, (uint8_t*)"输出源", (uint8_t*)"Source" },
-		{ COM_NUM_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X100, (uint8_t*)"电流修正", (uint8_t*)"AO Trim" },
+		{ COM_NUM_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X1000, (uint8_t*)"电流修正", (uint8_t*)"AO Trim" },
 		{ COM_NUM_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100, (uint8_t*)"固定电流", (uint8_t*)"Fixed Current" },
 		{ COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM, (uint8_t*)"0%对应值", (uint8_t*)"0% Value" },
 		{ COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM, (uint8_t*)"100%值", (uint8_t*)"100% Value" },
@@ -3953,7 +3953,7 @@ static bool ao_param_is_config(int operaNum)
 	case COM_NUM_DEVICEPARAM_AO_WORK_MODE:
 	case COM_NUM_DEVICEPARAM_AO_CURRENT_MODE:
 	case COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE:
-	case COM_NUM_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X100:
+	case COM_NUM_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X1000:
 	case COM_NUM_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100:
 	case COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM:
 	case COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM:
@@ -3981,7 +3981,7 @@ static bool ao_param_is_editable(int operaNum)
 	case COM_NUM_DEVICEPARAM_AO_WORK_MODE:
 	case COM_NUM_DEVICEPARAM_AO_CURRENT_MODE:
 	case COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE:
-	case COM_NUM_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X100:
+	case COM_NUM_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X1000:
 	case COM_NUM_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100:
 	case COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM:
 	case COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM:
@@ -6107,7 +6107,7 @@ static MenuGroup ParamGroupOf(int operaNum)
         return MENU_GRP_AO_CHANNEL;
 
     /* AO量程设置 */
-    case COM_NUM_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X100:
+    case COM_NUM_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X1000:
     case COM_NUM_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100:
     case COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM:
     case COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM:
@@ -7463,7 +7463,7 @@ static void ao_format_percent_x100(int32_t percent_x100,
  *
  * 返回键直接回到 AO 菜单；普通刷新时一次性复制 CPU2 AO 运行态快照，避免同一页面的输出源、过程值、比例和电流来自不同通信时刻。
  * 只有 CPU2 通信可用、AO 处于输出工作模式、来源属于过程量或保持或故障输出且过程值有效时，才显示输入值和比例；否则显示 N/A。
- * 最近成功下发电流只有在输出模式启用、来源不是禁用且缓存值非零时显示，并按 0.01 mA 格式化；输出来源索引非法时统一显示不可用项。
+ * 最近成功下发电流只有在输出模式启用、来源不是禁用且缓存值非零时显示，并按 0.001 mA 格式化；输出来源索引非法时统一显示不可用项。
  */
 static void menu_ao_runtime(void)
 {
@@ -7497,7 +7497,7 @@ static void menu_ao_runtime(void)
 	current_valid = runtime_valid &&
 	                ao_work_mode_is_output() &&
 	                (snapshot.source != AO_RUNTIME_SOURCE_DISABLED) &&
-	                (snapshot.last_sent_mA_x100 != 0U);
+	                (snapshot.last_sent_mA_x1000 != 0U);
 
 	oled_clear();
 	func_index = KEYNUM_MENU_AO_RUNTIME;
@@ -7528,9 +7528,9 @@ static void menu_ao_runtime(void)
 	if (current_valid) {
 		(void)snprintf(current_text,
 		               sizeof(current_text),
-		               "%lu.%02lumA",
-		               (unsigned long)(snapshot.last_sent_mA_x100 / 100U),
-		               (unsigned long)(snapshot.last_sent_mA_x100 % 100U));
+		               "%lu.%03lumA",
+		               (unsigned long)(snapshot.last_sent_mA_x1000 / 1000U),
+		               (unsigned long)(snapshot.last_sent_mA_x1000 % 1000U));
 		OledDisplayLineWords((uint8_t*)current_text, line, OLED_ROW4_4, 0);
 	} else {
 		OledDisplayLineWords((uint8_t*)"N/A", line, OLED_ROW4_4, 0);

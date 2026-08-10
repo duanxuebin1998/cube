@@ -82,8 +82,12 @@ def repository_state(repo: Path) -> dict[str, object]:
         "branch": git_text(repo, "branch", "--show-current"),
         "head": git_text(repo, "rev-parse", "--short=12", "HEAD"),
         "statusSha256": sha256_bytes(git_bytes(repo, "status", "--porcelain=v1", "-z")),
-        "stagedPatchSha256": sha256_bytes(git_bytes(repo, "diff", "--cached", "--binary")),
-        "worktreePatchSha256": sha256_bytes(git_bytes(repo, "diff", "--binary")),
+        "stagedPatchSha256": sha256_bytes(
+            git_bytes(repo, "diff", "--cached", "--binary", "--no-textconv")
+        ),
+        "worktreePatchSha256": sha256_bytes(
+            git_bytes(repo, "diff", "--binary", "--no-textconv")
+        ),
         "untrackedListSha256": sha256_bytes(
             git_bytes(repo, "ls-files", "--others", "--exclude-standard", "-z")
         ),

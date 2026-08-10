@@ -44,7 +44,7 @@ static const LhWritableField s_lh_writable_fields[] = {
     {LH_HR_AO_WORK_MODE,                   1U, HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE},
     {LH_HR_AO_CURRENT_MODE,                1U, HOLDREGISTER_DEVICEPARAM_AO_CURRENT_MODE},
     {LH_HR_AO_OUTPUT_SOURCE,               1U, HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_SOURCE},
-    {LH_HR_AO_CURRENT_CORRECTION_MA_X100,  2U, HOLDREGISTER_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X100},
+    {LH_HR_AO_CURRENT_CORRECTION_MA_X1000, 2U, HOLDREGISTER_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X1000},
     {LH_HR_AO_FIXED_CURRENT_MA_X100,       2U, HOLDREGISTER_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100},
     {LH_HR_AO_RANGE_0_01MM,                2U, HOLDREGISTER_DEVICEPARAM_AO_RANGE_0_01MM},
     {LH_HR_AO_RANGE_100_01MM,              2U, HOLDREGISTER_DEVICEPARAM_AO_RANGE_100_01MM},
@@ -391,8 +391,8 @@ static void lh_build_holding_registers(uint16_t *regs)
     regs[LH_HR_AO_WORK_MODE] = (uint16_t)g_deviceParams.ao_output.work_mode;
     regs[LH_HR_AO_CURRENT_MODE] = (uint16_t)g_deviceParams.ao_output.current_mode;
     regs[LH_HR_AO_OUTPUT_SOURCE] = (uint16_t)g_deviceParams.ao_output.output_source;
-    lh_write_u32_to_regs(regs, LH_HR_AO_CURRENT_CORRECTION_MA_X100,
-                         (uint32_t)g_deviceParams.ao_output.current_correction_mA_x100);
+    lh_write_u32_to_regs(regs, LH_HR_AO_CURRENT_CORRECTION_MA_X1000,
+                         (uint32_t)g_deviceParams.ao_output.current_correction_mA_x1000);
     lh_write_u32_to_regs(regs, LH_HR_AO_FIXED_CURRENT_MA_X100,
                          g_deviceParams.ao_output.fixed_current_mA_x100);
     lh_write_u32_to_regs(regs, LH_HR_AO_RANGE_0_01MM,
@@ -745,9 +745,9 @@ static bool lh_holding_field_value_is_valid(const LhWritableField *field,
         return raw <= AO_CURRENT_MODE_FIXED;
     case LH_HR_AO_OUTPUT_SOURCE:
         return raw <= AO_PROCESS_SOURCE_WATER_LEVEL;
-    case LH_HR_AO_CURRENT_CORRECTION_MA_X100:
-        return (signed_value >= AO_CURRENT_CORRECTION_MIN_MA_X100) &&
-               (signed_value <= AO_CURRENT_CORRECTION_MAX_MA_X100);
+    case LH_HR_AO_CURRENT_CORRECTION_MA_X1000:
+        return (signed_value >= AO_CURRENT_CORRECTION_MIN_MA_X1000) &&
+               (signed_value <= AO_CURRENT_CORRECTION_MAX_MA_X1000);
     case LH_HR_AO_FIXED_CURRENT_MA_X100:
         return (raw >= AO_FIXED_CURRENT_MIN_MA_X100) &&
                (raw <= AO_FIXED_CURRENT_MAX_MA_X100);

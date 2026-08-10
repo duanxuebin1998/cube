@@ -6,6 +6,8 @@
 | --- | --- |
 | [二代计量仪modbus使用手册（2026版）（LH协议）.docx](二代计量仪modbus使用手册（2026版）（LH协议）.docx) | LH 外部 Modbus RTU 交付手册；包含串口参数、功能码、17 个线圈、28 个输入寄存器、保持寄存器、参考帧和状态码 |
 
+协议33说明：AO电流修正保持寄存器仍为`0x0018~0x0019`，按Int32补码、0.001mA和-1000～+1000解释；手册中的`-0.25mA`参考帧已更新为原始值`-250 = 0xFFFFFF06`及对应CRC。
+
 维护规则：
 
 - 地址、类型、读写权限和命令映射以 `LTD_DISPLAY_CPU3/Communication/external/lh_modbus/lh_register_map.h` 与 `lh_modbus_slave.c` 为源码依据。

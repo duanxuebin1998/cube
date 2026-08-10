@@ -298,7 +298,7 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE, g_deviceParams.ao_output.work_mode);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_CURRENT_MODE, g_deviceParams.ao_output.current_mode);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_SOURCE, g_deviceParams.ao_output.output_source);
-    write_i32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X100, g_deviceParams.ao_output.current_correction_mA_x100);
+    write_i32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X1000, g_deviceParams.ao_output.current_correction_mA_x1000);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100, g_deviceParams.ao_output.fixed_current_mA_x100);
     write_i32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_RANGE_0_01MM, g_deviceParams.ao_output.range_0_01mm);
     write_i32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_RANGE_100_01MM, g_deviceParams.ao_output.range_100_01mm);
@@ -492,7 +492,7 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.ao_output.work_mode = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE);
     g_deviceParams.ao_output.current_mode = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_CURRENT_MODE);
     g_deviceParams.ao_output.output_source = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_SOURCE);
-    g_deviceParams.ao_output.current_correction_mA_x100 = read_i32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X100);
+    g_deviceParams.ao_output.current_correction_mA_x1000 = read_i32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X1000);
     g_deviceParams.ao_output.fixed_current_mA_x100 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100);
     g_deviceParams.ao_output.range_0_01mm = read_i32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_RANGE_0_01MM);
     g_deviceParams.ao_output.range_100_01mm = read_i32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_RANGE_100_01MM);
@@ -717,8 +717,8 @@ void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 	/* ==== AOÔËÐÐ×´Ì¬¹Ì¶¨¿é£º0x1400 ==== */
 	AoOutputRuntime ao_runtime;
 	AoOutput_GetRuntimeSnapshot(&ao_runtime);
-	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_TARGET_MA_X100, ao_runtime.target_mA_x100);
-	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_SENT_MA_X100, ao_runtime.last_sent_mA_x100);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_TARGET_MA_X1000, ao_runtime.target_mA_x1000);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_SENT_MA_X1000, ao_runtime.last_sent_mA_x1000);
 	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_SOURCE, ao_runtime.source);
 	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_DRIVER_FAULT_FLAGS, ao_runtime.driver_fault_flags);
 	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_DRIVER_FAULT_REGISTER, ao_runtime.driver_fault_register);

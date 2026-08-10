@@ -22,332 +22,183 @@ vertical-align: middle;
 .display.math{display: block; text-align: center; margin: 0.5rem auto;}
 </style>
   <style type="text/css">:root {
-color-scheme: light;
---ink: #1d2935;
---muted: #5e6b75;
---line: #d8e0e6;
---soft: #f4f7f9;
---accent: #1f5f78;
---accent-soft: #eaf3f6;
---paper: #ffffff;
+--navy: #071827;
+--navy-2: #0d293b;
+--paper: #f3f6f4;
+--white: #ffffff;
+--ink: #132936;
+--muted: #5c6e75;
+--line: #d1dcda;
+--cyan: #18a99e;
+--cyan-soft: #e3f4f1;
+--amber: #c87a17;
+--amber-soft: #fbf0df;
 }
-* {
-box-sizing: border-box;
-}
-html {
-scroll-behavior: smooth;
-}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
 body {
 max-width: 1500px;
 margin: 0 auto;
-padding: 0 3rem 4rem 21rem;
+padding: 0 3.3rem 5rem 22rem;
 color: var(--ink);
 background: var(--paper);
-font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
 font-size: 16px;
 line-height: 1.78;
 }
-body > *:not(nav) {
-max-width: 980px;
-}
+body > *:not(nav) { max-width: 1020px; }
 nav#TOC {
 position: fixed;
-top: 0;
-bottom: 0;
-left: max(0px, calc((100vw - 1500px) / 2));
-width: 18rem;
+inset: 0 auto 0 max(0px, calc((100vw - 1500px) / 2));
+width: 19rem;
 padding: 2rem 1.25rem;
 overflow-y: auto;
-border-right: 1px solid var(--line);
-background: #f8fafb;
+color: #a9bec4;
+background: var(--navy);
+border-right: 1px solid #254657;
 }
-nav#TOC > h2 {
-margin: 0 0 1rem;
-padding: 0 0 .65rem;
-border-bottom: 1px solid var(--line);
-color: var(--ink);
-font-size: 1rem;
-}
-nav#TOC ul {
-margin: 0;
-padding-left: 1rem;
-list-style: none;
-}
-nav#TOC > ul {
-padding-left: 0;
-}
-nav#TOC li {
-margin: .34rem 0;
-line-height: 1.42;
-}
-nav#TOC a {
-color: #40515e;
-text-decoration: none;
-font-size: .88rem;
-}
-nav#TOC a:hover,
-nav#TOC a:focus {
-color: var(--accent);
-text-decoration: underline;
-}
-h1 {
-margin: 0;
-padding-top: 3rem;
-color: #173f51;
-font-size: 2.05rem;
-line-height: 1.25;
-letter-spacing: .01em;
-}
-h2 {
-margin: 3rem 0 1rem;
-padding-bottom: .45rem;
-border-bottom: 1px solid var(--line);
-color: #173f51;
-font-size: 1.55rem;
-line-height: 1.35;
-}
-h3 {
-margin: 2rem 0 .75rem;
-color: #244f62;
-font-size: 1.15rem;
-line-height: 1.4;
-}
-p {
-margin: .75rem 0 1rem;
-}
-h1 + p {
-margin-top: .65rem;
-color: var(--muted);
-font-size: .92rem;
-}
-a {
-color: #17627e;
-text-decoration-thickness: .08em;
-text-underline-offset: .15em;
-}
-code {
-padding: .08rem .3rem;
+nav#TOC::before {
+content: "DM4 TECHNICAL NOTE";
+display: block;
+margin-bottom: 1.25rem;
+padding: .7rem .75rem;
+color: #061b20;
+background: #2bc8bb;
 border-radius: 3px;
-color: #7a2f25;
-background: #f5f1ef;
-font-family: Consolas, "Cascadia Mono", monospace;
-font-size: .9em;
+font: 800 .72rem "Cascadia Mono", Consolas, monospace;
+letter-spacing: .09em;
 }
-table {
-display: block;
-width: 100%;
-margin: 1rem 0 1.4rem;
-overflow-x: auto;
-border-collapse: collapse;
-border: 1px solid var(--line);
-font-size: .92rem;
-line-height: 1.55;
+nav#TOC > h2 { margin: 0 0 .75rem; color: #d9e7e9; font-size: .9rem; }
+nav#TOC ul { margin: 0; padding-left: .9rem; list-style: none; }
+nav#TOC > ul { padding-left: 0; }
+nav#TOC li { margin: .32rem 0; line-height: 1.4; }
+nav#TOC a { color: #91aab2; text-decoration: none; font-size: .79rem; }
+nav#TOC a:hover, nav#TOC a:focus { color: #3dd9cc; }
+h1 {
+margin: 0 -3.3rem 2rem;
+padding: 4.6rem 3.3rem 4rem;
+color: #f4f8f7;
+background: linear-gradient(120deg, var(--navy), var(--navy-2));
+font-size: 2.65rem;
+line-height: 1.18;
+letter-spacing: -.035em;
 }
-thead {
-background: #edf3f6;
-}
-th,
-td {
-min-width: 7.5rem;
-padding: .62rem .72rem;
-border: 1px solid var(--line);
-text-align: left;
-vertical-align: top;
-}
-th {
-color: #234857;
-font-weight: 650;
-}
-tbody tr:nth-child(even) {
-background: #fafcfd;
-}
-ol,
-ul {
-padding-left: 1.45rem;
-}
-li {
-margin: .28rem 0;
-}
-.formula {
-margin: 1rem 0;
-padding: .8rem 1rem;
-overflow-x: auto;
-border-left: 3px solid #6e9caf;
-background: var(--soft);
-color: #263f4a;
-font-family: Cambria, "Times New Roman", serif;
-text-align: center;
-white-space: nowrap;
-}
-.system-flow,
-.signal-chain {
-display: flex;
-align-items: stretch;
-gap: .55rem;
-margin: 1.2rem 0 1.5rem;
-padding: .9rem;
-overflow-x: auto;
-border: 1px solid var(--line);
-border-radius: 6px;
-background: #fafcfd;
-}
-.signal-chain {
-display: block;
-}
-.signal-chain > p {
-display: flex;
-align-items: stretch;
-gap: .55rem;
-margin: 0;
-}
-.system-flow .board,
-.signal-chain span {
-display: flex;
-min-width: 8.5rem;
-flex: 1 0 8.5rem;
-flex-direction: column;
-justify-content: center;
-padding: .7rem;
-border: 1px solid #bfd0d8;
-border-radius: 4px;
-background: #fff;
-text-align: center;
-}
-.system-flow .board b {
-margin-bottom: .32rem;
-color: #194f65;
-}
-.system-flow .board span {
-color: var(--muted);
-font-size: .84rem;
-}
-.flow-arrow,
-.signal-chain i {
-display: flex;
-align-items: center;
-color: #68808c;
-font-style: normal;
-font-weight: 700;
-}
-@media (max-width: 1050px) {
-body {
-max-width: none;
-padding: 0 2rem 3rem;
-}
-nav#TOC {
-position: static;
-width: auto;
-margin: 1.25rem 0 2rem;
-padding: 1rem 1.15rem;
-border: 1px solid var(--line);
-border-radius: 6px;
-}
-nav#TOC > ul {
-columns: 2;
-column-gap: 2rem;
-}
+h2 { margin: 4rem 0 1.2rem; padding-bottom: .55rem; border-bottom: 1px solid var(--line); color: #0a3345; font-size: 1.78rem; line-height: 1.3; }
+h2::before { content: ""; display: inline-block; width: .35rem; height: 1.35rem; margin-right: .65rem; background: var(--cyan); vertical-align: -.12rem; }
+h3 { margin: 2.4rem 0 .8rem; color: #17465a; font-size: 1.22rem; }
+h4 { margin: 2rem 0 .65rem; color: #1c596e; font-size: 1.05rem; }
+p { margin: .75rem 0 1rem; }
+h1 + p { margin-top: -1rem; padding: .75rem 1rem; color: #d0e0e3; background: #0d293b; font-size: .85rem; }
+a { color: #0c716c; text-underline-offset: .15em; }
+strong { color: #102c3a; }
+code { padding: .08rem .32rem; color: #8b4320; background: #f2ebe5; border-radius: 3px; font: .9em "Cascadia Mono", Consolas, monospace; }
+table { display: block; width: 100%; margin: 1.1rem 0 1.6rem; overflow-x: auto; border-collapse: collapse; background: var(--white); font-size: .9rem; line-height: 1.55; }
+thead { background: #e5ecea; }
+th, td { min-width: 8rem; padding: .72rem .78rem; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: #244a58; font-size: .82rem; }
+tbody tr:nth-child(even) { background: #fafcfb; }
+ol, ul { padding-left: 1.4rem; }
+li { margin: .32rem 0; }
+blockquote { margin: 1.2rem 0; padding: .9rem 1.1rem; color: var(--muted); border-left: 3px solid var(--amber); background: var(--amber-soft); }
+.formula { margin: 1rem 0; padding: 1rem 1.2rem; overflow-x: auto; color: #e8f4f3; background: var(--navy-2); border-left: 4px solid var(--cyan); font-family: Cambria, "Times New Roman", serif; font-size: 1.08rem; text-align: center; white-space: nowrap; }
+.system-flow, .signal-chain { display: flex; align-items: stretch; gap: .55rem; margin: 1.25rem 0 1.6rem; padding: .9rem; overflow-x: auto; border: 1px solid var(--line); background: #e9efed; }
+.signal-chain { display: block; }
+.signal-chain > p { display: flex; align-items: stretch; gap: .55rem; margin: 0; }
+.system-flow .board, .signal-chain span { display: flex; min-width: 8.7rem; flex: 1 0 8.7rem; flex-direction: column; justify-content: center; padding: .78rem; color: #1d3c49; border: 1px solid #b9ceca; background: var(--white); text-align: center; }
+.system-flow .board { border-top: 3px solid var(--cyan); }
+.system-flow .board b { margin-bottom: .25rem; color: #0c5d63; }
+.system-flow .board span { color: var(--muted); font-size: .8rem; }
+.flow-arrow, .signal-chain i { display: flex; align-items: center; color: #6d8b91; font-style: normal; font-weight: 800; }
+hr { margin: 3rem 0; border: 0; border-top: 1px solid var(--line); }
+@media (max-width: 1100px) {
+body { max-width: none; padding: 0 2rem 4rem; }
+nav#TOC { position: static; width: auto; margin: 1rem 0 2rem; border: 1px solid #254657; }
+nav#TOC > ul { columns: 2; column-gap: 2rem; }
+h1 { margin: 0 -2rem 2rem; padding-left: 2rem; padding-right: 2rem; }
 }
 @media (max-width: 620px) {
-body {
-padding: 0 .95rem 2.5rem;
-font-size: 15px;
-}
-nav#TOC > ul {
-columns: 1;
-}
-h1 {
-padding-top: 1.75rem;
-font-size: 1.65rem;
-}
-h2 {
-margin-top: 2.35rem;
-font-size: 1.35rem;
-}
-h3 {
-font-size: 1.08rem;
-}
-th,
-td {
-min-width: 8.5rem;
-padding: .55rem .62rem;
-}
-.system-flow,
-.signal-chain {
-padding: .65rem;
-}
+body { padding: 0 .9rem 3rem; font-size: 15px; }
+nav#TOC > ul { columns: 1; }
+h1 { margin: 0 -.9rem 1.5rem; padding: 3rem .9rem; font-size: 2rem; }
+h2 { margin-top: 3rem; font-size: 1.45rem; }
+h3 { font-size: 1.14rem; }
+th, td { min-width: 8.5rem; padding: .6rem; }
+.system-flow, .signal-chain { padding: .6rem; }
 }
 @media print {
-body {
-max-width: none;
-padding: 0;
-font-size: 10.5pt;
-}
-nav#TOC {
-position: static;
-width: auto;
-border: 0;
-}
-h2,
-h3 {
-break-after: avoid;
-}
-table,
-.formula,
-.system-flow,
-.signal-chain {
-break-inside: avoid;
-}
+body { max-width: none; padding: 0; background: #fff; font-size: 10pt; }
+nav#TOC { position: static; width: auto; color: #333; background: #fff; border: 0; }
+nav#TOC::before { color: #111; background: #eee; }
+h1 { margin: 0; color: #111; background: #fff; }
+table, .formula, .system-flow, .signal-chain { break-inside: avoid; }
 }
 </style>
-  <meta name="artifact-source-sha256" content="D79014D635C9A5055C88A5EAB54B3D51A91F60B47714C2CE62F33F507E137537">
+  <meta name="artifact-source-sha256" content="90BEB9FD366BD2C1A472F306DDC06A14EECF9CFD4427F03ABEC647FD33A725B9">
+  <meta name="description" content="DM4 V6.0 双 DDS、45°与22.5°相位、扫频、密度和黏度计算原理详解">
 </head>
 <body>
-<header id="title-block-header">
-<h1 class="title">DM4 四代数字驱动 V6.0 原理图详细分析</h1>
-</header>
 <nav id="TOC" role="doc-toc">
-<h2 id="toc-title">目录</h2>
 <ul>
-<li><a href="#1-文档目的与使用边界" id="toc-1-文档目的与使用边界">1.
+<li><a href="#dm4-四代数字驱动-v6.0-原理图详细分析" id="toc-dm4-四代数字驱动-v6.0-原理图详细分析">DM4 四代数字驱动 V6.0
+原理图详细分析</a>
+<ul>
+<li><a href="#文档目的与使用边界" id="toc-文档目的与使用边界">1.
 文档目的与使用边界</a>
 <ul>
-<li><a href="#11-分析范围" id="toc-11-分析范围">1.1 分析范围</a></li>
-<li><a href="#12-原始资料" id="toc-12-原始资料">1.2 原始资料</a></li>
+<li><a href="#分析范围" id="toc-分析范围">1.1 分析范围</a></li>
+<li><a href="#原始资料" id="toc-原始资料">1.2 原始资料</a></li>
 </ul></li>
-<li><a href="#2-dm4-系统组成" id="toc-2-dm4-系统组成">2. DM4
+<li><a href="#dm4-系统组成" id="toc-dm4-系统组成">2. DM4
 系统组成</a></li>
-<li><a href="#3-密度测量原理" id="toc-3-密度测量原理">3.
-密度测量原理</a>
+<li><a href="#密度测量原理" id="toc-密度测量原理">3. 密度测量原理</a>
 <ul>
-<li><a href="#31-测量对象与基本关系" id="toc-31-测量对象与基本关系">3.1
+<li><a href="#测量对象与基本关系" id="toc-测量对象与基本关系">3.1
 测量对象与基本关系</a></li>
-<li><a href="#32-从激励到密度结果" id="toc-32-从激励到密度结果">3.2
+<li><a href="#从激励到密度结果" id="toc-从激励到密度结果">3.2
 从激励到密度结果</a></li>
-<li><a href="#33-dds-扫频谐振点判定与反馈自激" id="toc-33-dds-扫频谐振点判定与反馈自激">3.3 DDS
-扫频、谐振点判定与反馈自激</a></li>
-<li><a href="#34-标定温度补偿与结果有效性" id="toc-34-标定温度补偿与结果有效性">3.4
-标定、温度补偿与结果有效性</a></li>
-<li><a href="#35-原理图中的关键信号" id="toc-35-原理图中的关键信号">3.5
+<li><a href="#dds-扫频谐振点判定与反馈自激" id="toc-dds-扫频谐振点判定与反馈自激">3.3 DDS
+扫频、谐振点判定与反馈自激</a>
+<ul>
+<li><a href="#第二路为什么叫选频" id="toc-第二路为什么叫选频">3.3.1
+第二路为什么叫“选频”</a></li>
+<li><a href="#和-22.5到底是什么角度" id="toc-和-22.5到底是什么角度">3.3.2 45°和 22.5°到底是什么角度</a></li>
+<li><a href="#swap-对应两种工作模式" id="toc-swap-对应两种工作模式">3.3.3 <code>SWAP</code>
+对应两种工作模式</a></li>
+<li><a href="#扫频怎样得到谐振区域和相位特征点" id="toc-扫频怎样得到谐振区域和相位特征点">3.3.4
+扫频怎样得到谐振区域和相位特征点</a></li>
+</ul></li>
+<li><a href="#标定温度补偿与结果有效性" id="toc-标定温度补偿与结果有效性">3.4 标定、温度补偿与结果有效性</a>
+<ul>
+<li><a href="#基础密度" id="toc-基础密度">3.4.1 基础密度</a></li>
+<li><a href="#动力黏度和运动黏度" id="toc-动力黏度和运动黏度">3.4.2
+动力黏度和运动黏度</a></li>
+<li><a href="#黏度温度和固定修正" id="toc-黏度温度和固定修正">3.4.3
+黏度、温度和固定修正</a></li>
+<li><a href="#只为看懂流程的算术示例" id="toc-只为看懂流程的算术示例">3.4.4 只为看懂流程的算术示例</a></li>
+<li><a href="#标定和结果有效性" id="toc-标定和结果有效性">3.4.5
+标定和结果有效性</a></li>
+</ul></li>
+<li><a href="#原理图中的关键信号" id="toc-原理图中的关键信号">3.5
 原理图中的关键信号</a></li>
 </ul></li>
-<li><a href="#4-四块板的电路实现" id="toc-4-四块板的电路实现">4.
+<li><a href="#四块板的电路实现" id="toc-四块板的电路实现">4.
 四块板的电路实现</a>
 <ul>
-<li><a href="#41-电源与-rs485-通信" id="toc-41-电源与-rs485-通信">4.1
-电源与 RS485 通信</a></li>
-<li><a href="#42-控制dds-与精密采样" id="toc-42-控制dds-与精密采样">4.2
+<li><a href="#电源与-rs485-通信" id="toc-电源与-rs485-通信">4.1 电源与
+RS485 通信</a></li>
+<li><a href="#控制dds-与精密采样" id="toc-控制dds-与精密采样">4.2
 控制、DDS 与精密采样</a></li>
-<li><a href="#43-压电驱动采集与同步检测" id="toc-43-压电驱动采集与同步检测">4.3 压电驱动、采集与同步检测</a></li>
-<li><a href="#44-测水温度姿态与零点" id="toc-44-测水温度姿态与零点">4.4
+<li><a href="#压电驱动采集与同步检测" id="toc-压电驱动采集与同步检测">4.3 压电驱动、采集与同步检测</a></li>
+<li><a href="#测水温度姿态与零点" id="toc-测水温度姿态与零点">4.4
 测水、温度、姿态与零点</a></li>
 </ul></li>
-<li><a href="#5-mcu-可观测信号与诊断" id="toc-5-mcu-可观测信号与诊断">5.
-MCU 可观测信号与诊断</a></li>
-<li><a href="#6-主要风险和待确认问题" id="toc-6-主要风险和待确认问题">6.
+<li><a href="#mcu-可观测信号与诊断" id="toc-mcu-可观测信号与诊断">5. MCU
+可观测信号与诊断</a></li>
+<li><a href="#主要风险和待确认问题" id="toc-主要风险和待确认问题">6.
 主要风险和待确认问题</a></li>
-<li><a href="#7-板级验证建议" id="toc-7-板级验证建议">7.
+<li><a href="#板级验证建议" id="toc-板级验证建议">7.
 板级验证建议</a></li>
-<li><a href="#8-结论" id="toc-8-结论">8. 结论</a></li>
+<li><a href="#结论" id="toc-结论">8. 结论</a></li>
 <li><a href="#附录-a主要器件" id="toc-附录-a主要器件">附录
 A：主要器件</a></li>
 <li><a href="#附录-b静态计算汇总" id="toc-附录-b静态计算汇总">附录
@@ -356,14 +207,18 @@ B：静态计算汇总</a></li>
 C：故障注入要点</a></li>
 <li><a href="#附录-d原理图解析提示" id="toc-附录-d原理图解析提示">附录
 D：原理图解析提示</a></li>
+</ul></li>
 </ul>
 </nav>
-<p>分析日期：2026-08-04；结构与密度章节整理：2026-08-06；扫频判定说明补充：2026-08-07</p>
+<h1 id="dm4-四代数字驱动-v6.0-原理图详细分析">DM4 四代数字驱动 V6.0
+原理图详细分析</h1>
+<p>分析日期：2026-08-04；结构与密度章节整理：2026-08-06；扫频判定说明补充：2026-08-07；双
+DDS、密度与黏度链路补充：2026-08-10</p>
 <p>DM4 V6.0
 由电源板、驱动板、采集板和测水连接板组成。四块板共同完成供电与 RS485
 通信、振动式密度测量、温度采集、电容式测水、姿态和零点检测。本文按“测量原理—电路实现—可观测信号—风险与验证”的顺序整理四份原理图，便于设计评审、固件对接和后续安全分析使用。</p>
-<h2 id="1-文档目的与使用边界">1. 文档目的与使用边界</h2>
-<h3 id="11-分析范围">1.1 分析范围</h3>
+<h2 id="文档目的与使用边界">1. 文档目的与使用边界</h2>
+<h3 id="分析范围">1.1 分析范围</h3>
 <p>本文回答三个问题：DM4
 各板如何配合；密度等物理量怎样从传感器信号得到；现有硬件为诊断和安全通信提供了哪些观测入口。</p>
 <p>分析依据只有四份 V6.0 原理图及其转换 PDF。没有
@@ -407,7 +262,7 @@ BOM、PCB、装配图、机械图纸、传感器端固件、标定记录和台�
 <p>原理图可以证明 DM4
 具备多参数测量和部分诊断所需的硬件链路，但不能证明传感器端已经实现安全协议，也不能替代
 BOM 核对、样机测试、故障注入和功能安全认证。</p>
-<h3 id="12-原始资料">1.2 原始资料</h3>
+<h3 id="原始资料">1.2 原始资料</h3>
 <table>
 <colgroup>
 <col style="width: 25%" />
@@ -455,7 +310,7 @@ README</a>。四份图的标题栏没有填写独立的 Title、Number、Revisio
 或原始发布日期；转换 PDF 中的 <code>8/03/2026</code>
 是渲染日期，不能作为设计批准日期。本文也不把相似的 <a href="LTD传感器S002-2026-V1.1原理图整理.md">LTD 传感器 S002
 原理图整理</a>中的 MCU 引脚、固件参数或测试结论直接移植到 DM4。</p>
-<h2 id="2-dm4-系统组成">2. DM4 系统组成</h2>
+<h2 id="dm4-系统组成">2. DM4 系统组成</h2>
 <div class="system-flow">
 <div class="board board-power">
 <b>电源板</b><span>VCC → 5 V / 3.3
@@ -569,8 +424,8 @@ V</span><span>RS485</span><span>POWERTEST / SWD</span>
 </table>
 <p>堆叠连接器一侧标注“插针，底层”，另一侧标注“插母，顶层”。同一物理连接在两张图上的脚号可能因镜像方向产生偏移，不能只按相同脚号判断连通性，最终应结合
 PCB、装配方向和实物导通测试确认。</p>
-<h2 id="3-密度测量原理">3. 密度测量原理</h2>
-<h3 id="31-测量对象与基本关系">3.1 测量对象与基本关系</h3>
+<h2 id="密度测量原理">3. 密度测量原理</h2>
+<h3 id="测量对象与基本关系">3.1 测量对象与基本关系</h3>
 <p>密度表示单位体积内包含多少质量。对同样大小的一杯液体，质量越大，密度越高。DM4
 并不是直接称量液体，而是让一个机械敏感结构在液体中振动，再根据谐振频率反推密度。</p>
 <p>这套结构可以近似理解为“弹簧上挂着砝码”：弹簧越硬，振动越快；参与振动的质量越大，振动越慢。对应的简化关系为：</p>
@@ -591,7 +446,7 @@ m<sub>eff</sub> = m<sub>0</sub> + αρ
 <p>这个式子只是物理近似，不是已经确认的 DM4
 产品公式。实际算法还可能考虑温度、黏度、幅值、相位和探头个体标定，形式更接近
 <code>ρ = F(f_r, T, A, Q, C_cal)</code>。</p>
-<h3 id="32-从激励到密度结果">3.2 从激励到密度结果</h3>
+<h3 id="从激励到密度结果">3.2 从激励到密度结果</h3>
 <div class="signal-chain">
 <p><span>STM32G071</span><i>→</i> <span>DDS A / Drive_A</span><i>→</i>
 <span>压电差分驱动</span><i>→</i> <span>机械结构与液体</span><i>→</i>
@@ -607,9 +462,77 @@ m<sub>eff</sub> = m<sub>0</sub> + αρ
 <p>因此，硬件直接提供的是电压、边沿、周期和状态，密度是后续计算结果。<code>IN_AD</code>
 不是“密度电压”，<code>LEVEL_INT</code>
 也不是密度值；它们只用于判断当前机械响应是否足够、稳定和可信。</p>
-<h3 id="33-dds-扫频谐振点判定与反馈自激">3.3 DDS
+<h3 id="dds-扫频谐振点判定与反馈自激">3.3 DDS
 扫频、谐振点判定与反馈自激</h3>
-<p>两颗 AD9832 的作用并不相同：</p>
+<p>先明确一个容易混淆的结论：<strong>DDS A 是实际激励路，DDS B
+是选频/同步参考路。45°和 22.5°首先表示 DDS B
+的参考相位设置，不是第二个机械振动通道，也不是电路直接输出的机械相位测量值。</strong></p>
+<p>两颗 AD9832 的作用如下：</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>通道</th>
+<th>原理图连接</th>
+<th>是否直接驱动压电</th>
+<th>实际作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DDS A / <code>Drive_A</code></td>
+<td>经 C701 和 TS5A3160 U7 进入 <code>Drive</code></td>
+<td>是</td>
+<td>产生实际激励正弦波，用于定频、扫频或为自激切换提供起始激励</td>
+</tr>
+<tr>
+<td>DDS B / <code>Drive_B</code></td>
+<td>经 C501、MAX942 U5A 形成 <code>Select_A</code>，控制 ADG702 U8</td>
+<td>否</td>
+<td>产生与 DDS A 同频、相位可调的选频参考，控制 U8
+对接收信号同步取样</td>
+</tr>
+</tbody>
+</table>
+<div class="signal-chain">
+<p><span>DDS A 激励</span><i>→</i> <span>压电与机械结构</span><i>→</i>
+<span>Ain1/Ain2 接收</span><i>→</i> <span>LEVEL 放大信号</span><i>→</i>
+<span>DDS B 控制同步取样</span><i>→</i> <span>低通积分得到
+IN_AD</span></p>
+</div>
+<h4 id="第二路为什么叫选频">3.3.1 第二路为什么叫“选频”</h4>
+<p><code>Drive_B</code> 先由 U5A 比较器整形成方波
+<code>Select_A</code>，再控制 U8 周期性地接通或断开
+<code>LEVEL</code>。如果 <code>LEVEL</code> 中某一部分与 DDS B
+同频且相位关系稳定，连续多个周期取样后会在低通电路中累积成稳定的直流分量；其它频率、随机噪声和不稳定分量则会相互抵消。因此，第二路不是再激励一次探头，而是像一把只按指定节奏开门的“电子快门”，从接收信号中选择与参考频率和参考相位匹配的成分。</p>
+<p>同步检测结果可用下式说明大致关系：</p>
+<div class="formula">
+IN_AD ∝ A<sub>response</sub> × cos(θ<sub>response</sub> −
+θ<sub>reference</sub>)
+</div>
+<p>其中 <code>A_response</code> 是接收响应幅值，<code>θ_response</code>
+是包含机械结构、压电、放大器和线缆在内的总响应相位，<code>θ_reference</code>
+是 DDS B 的参考相位。该式只用于解释同步检波方向，不是已经确认的 DM4
+产品公式。</p>
+<h4 id="和-22.5到底是什么角度">3.3.2 45°和 22.5°到底是什么角度</h4>
+<p>AD9832 数据手册确认每颗芯片有四个 12
+位相位寄存器，所选相位寄存器的数值会作为相位偏移量加到相位累加器输出上。理想数字相位偏移关系为：</p>
+<div class="formula">
+φ<sub>register</sub> = 360° × N / 4096，N = 0～4095
+</div>
+<p>因此，如果以 DDS A 为 0°基准、DDS B 没有额外固定偏移，则
+45°对应寄存器值 <code>512</code>，22.5°对应寄存器值
+<code>256</code>。V4.0 协议中的“选频相位”参数范围也是 0～4095，与 AD9832
+的 12
+位相位寄存器一致。这里能够确认的是数字寄存器的换算关系；当前协议没有直接写明产品运行时一定把
+<code>512</code> 和 <code>256</code>
+写入哪个相位寄存器，仍需传感器端固件或串行总线抓取确认。</p>
+<p>还要区分三个容易混为一谈的角度：</p>
 <table>
 <colgroup>
 <col style="width: 33%" />
@@ -618,90 +541,245 @@ m<sub>eff</sub> = m<sub>0</sub> + αρ
 </colgroup>
 <thead>
 <tr>
-<th>通道</th>
-<th>原理图连接</th>
-<th>作用</th>
+<th>角度</th>
+<th>由什么决定</th>
+<th>是否就是协议中的 45°/22.5°</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>DDS A / <code>Drive_A</code></td>
-<td>经 C701 和 TS5A3160 U7 进入 <code>Drive</code></td>
-<td>实际压电激励，可用于定频或扫频</td>
+<td>DDS 数字设定角</td>
+<td>MCU 写入 DDS B 的 12 位相位寄存器决定</td>
+<td>是，最直接的含义</td>
 </tr>
 <tr>
-<td>DDS B / <code>Drive_B</code></td>
-<td>经 C501、MAX942 U5A 形成 <code>Select_A</code>，控制 ADG702 U8</td>
-<td>为同步检测提供同频、相位可控的选通参考</td>
+<td>电路参考相位</td>
+<td>DDS 数字设定角再叠加比较器、开关极性、连线和器件延时</td>
+<td>不一定完全相等</td>
+</tr>
+<tr>
+<td>机械响应相位</td>
+<td>激励频率、机械结构、液体密度与黏度、压电和模拟前端共同决定</td>
+<td>不是；它是被同步检测的对象</td>
 </tr>
 </tbody>
 </table>
-<p>DDS
-扫频并不是“扫到有信号就结束”，而是逐点建立“激励频率—探头响应”曲线。MCU
-在每个频点设置 DDS A 的激励频率，同时保持 DDS B
-的同步参考关系；等待机械振动和 <code>IN_AD</code>
-低通链路稳定；连续读取若干组 <code>IN_AD</code> 和
-<code>LEVEL_INT</code>，若捕获链路已经配置则同时记录周期信息；剔除切换瞬态后，再对有效样本进行平均或稳定性判断。</p>
-<p><code>IN_AD</code> 由同步选通和低通电路产生，既受接收幅值影响，也与
-<code>Drive_B</code> 的参考相位有关。因此，最终谐振判据可能是
-<code>IN_AD</code>
-的最大值、绝对值最大点，或某个规定的相位/过零条件。原理图能够确认这些观测入口，但没有给出
-STM32G071
-固件，不能据此确定产品实际采用哪一种选峰算法。<code>LEVEL_INT</code>
-只用于确认响应是否越过门限，不能单独确定谐振点。</p>
-<p>下表用一组示意数据说明幅值峰值法。数值只用于解释方法，不是 DM4
-的实测参数：</p>
+<p>所以“为什么选 45°和
+22.5°”不能只回答成“硬件固定的”。更准确的说法是：固件选择两个参考相位，在机械响应相位随频率变化的曲线上取得两个特征频率。密度主要移动这条曲线的位置，黏度主要改变相位过渡的宽度；两个特征点之间的间隔因而能为黏度计算提供信息。至于
+DM4
+为什么最终选择这两个具体角度，以及角度中是否已经包含板级固定补偿，现有原理图和协议没有给出设计推导或标定试验，属于待确认项。</p>
+<h4 id="swap-对应两种工作模式">3.3.3 <code>SWAP</code>
+对应两种工作模式</h4>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th><code>SWAP</code> 状态</th>
+<th>U7 选择</th>
+<th>工作方式</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>低电平</td>
+<td>DDS A 输出</td>
+<td>外部受迫激励</td>
+<td>主动改变频率，逐点扫描机械响应</td>
+</tr>
+<tr>
+<td>高电平</td>
+<td>模拟反馈输出</td>
+<td>反馈自激</td>
+<td>让环路在满足增益与相位条件的频率附近自行振荡，供连续跟踪或复核</td>
+</tr>
+</tbody>
+</table>
+<p>扫频模式下，DDS A 负责“敲”，DDS B
+负责“按指定节奏听”；自激模式下，接收信号经增益和移相网络返回驱动端，<code>TA1CLK</code>
+可作为 MCU
+的周期观测入口。原理图证明硬件具备这两种模式，但没有传感器端固件，不能确认产品是否在每次密度测量中都执行自激复核。</p>
+<h4 id="扫频怎样得到谐振区域和相位特征点">3.3.4
+扫频怎样得到谐振区域和相位特征点</h4>
+<p>协议给出的密度扫频默认范围为 5500 Hz 到 3000
+Hz，并允许配置扫频方向。一次合理的逐点扫描过程如下；等待时间、步长和判定阈值仍需由传感器端固件确认：</p>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 30%" />
+<col style="width: 30%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: right;">步骤</th>
+<th>MCU 与电路动作</th>
+<th>得到的数据</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">1</td>
+<td><code>SWAP</code> 选择 DDS A；DDS A 设置当前激励频率</td>
+<td>当前频率寄存器值</td>
+</tr>
+<tr>
+<td style="text-align: right;">2</td>
+<td>DDS B 跟随相同频率，并设置选频参考相位</td>
+<td>45°或 22.5°参考条件</td>
+</tr>
+<tr>
+<td style="text-align: right;">3</td>
+<td>等待机械振动和约 0.1 s 名义时间常数的 <code>IN_AD</code>
+低通链路稳定</td>
+<td>剔除切换瞬态后的响应</td>
+</tr>
+<tr>
+<td style="text-align: right;">4</td>
+<td>连续读取 <code>IN_AD</code>，同时观察 <code>LEVEL_INT</code>
+和可用的周期捕获信号</td>
+<td>当前频率 AD 平均值和质量状态</td>
+</tr>
+<tr>
+<td style="text-align: right;">5</td>
+<td>改变频率并重复上述过程</td>
+<td>“频率—相敏响应”曲线</td>
+</tr>
+<tr>
+<td style="text-align: right;">6</td>
+<td>在曲线中寻找峰值、过零点或规定阈值交点</td>
+<td>候选谐振区域或相位特征频率</td>
+</tr>
+<tr>
+<td style="text-align: right;">7</td>
+<td>重复扫描并平均，必要时切换自激，用 <code>TA1CLK</code> 复核</td>
+<td>最终周期、频率和稳定度</td>
+</tr>
+</tbody>
+</table>
+<p>密度增大主要增加等效振动质量，使整条响应曲线沿频率轴移动；黏度增大主要增加阻尼，使响应幅值降低、相位过渡变缓、曲线变宽。用两个固定参考相位观察同一条曲线，可以同时获得“曲线位置”和“曲线宽度”信息。</p>
+<p>协议将两组结果命名为“45°扫频周期平方均值”和“22.5°扫频周期平方均值”。按硬件连接和“选频相位”参数，更合理的理解是：传感器在
+DDS B
+的两个参考相位条件下分别提取特征频率，可能采用两次独立扫描，也可能在同一频点交替相位取样。原理图和协议没有给出这两种实现的裁决证据。</p>
+<p>若两个相位条件下得到的特征频率分别为 <code>f_45</code> 和
+<code>f_22.5</code>，周期平方量可写成：</p>
+<div class="formula">
+S<sub>45</sub> = mean[(K / f<sub>45</sub>)<sup>2</sup>]
+</div>
+<div class="formula">
+S<sub>22.5</sub> = mean[(K / f<sub>22.5</sub>)<sup>2</sup>]
+</div>
+<p>其中 <code>K</code>
+表示定时器计数或单位换算比例；当前协议没有写出周期平方的单位和缩放。协议还上报两者的差值
+<code>ΔS</code>，但没有规定是 <code>S_22.5 − S_45</code>
+还是相反方向。</p>
+<p>候选点还必须通过质量检查：结果不能位于扫描边界；主响应应明显高于背景且不能同时出现多个相近峰；正向扫频、反向扫频和重复扫描的结果应在允许偏差内；<code>IN_AD</code>
+不应饱和，<code>LEVEL_INT</code>
+应保持稳定；如果启用自激复核，<code>TA1CLK</code>
+测得的频率应与扫频区域一致。任一条件不满足时，应报告无峰、多峰、信号过弱、模式不一致或频率不稳定，而不是继续换算密度。</p>
+<div class="signal-chain">
+<p><span>宽范围粗扫</span><i>→</i> <span>确定主响应区</span><i>→</i>
+<span>45°与 22.5°相敏取样</span><i>→</i>
+<span>重复扫描并平均</span><i>→</i> <span>必要时自激复核</span></p>
+</div>
+<p>双 DDS 共用
+MCU、时钟、供电和串行控制链路，且只连接一套机械测量结构，因此它们构成激励与同步参考，不是两套独立的安全冗余密度通道。</p>
+<h3 id="标定温度补偿与结果有效性">3.4 标定、温度补偿与结果有效性</h3>
+<p>V4.0
+协议的参数结构可以确认“哪些原始量参与哪类标定”，但没有给出插值函数、差值方向和修正顺序。下述公式按参数名称说明最可能的数据关系，不能替代
+DM4 传感器端算法源码。</p>
+<h4 id="基础密度">3.4.1 基础密度</h4>
+<p>协议提供四组“已知密度—45°扫频周期平方”标定点：</p>
 <table>
 <thead>
 <tr>
-<th style="text-align: right;">激励频率</th>
-<th style="text-align: right;">响应值</th>
+<th>标定输入</th>
+<th>标定输出</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td style="text-align: right;">980 Hz</td>
-<td style="text-align: right;">0.42</td>
+<td><code>S_45,1</code></td>
+<td>密度点 1</td>
 </tr>
 <tr>
-<td style="text-align: right;">990 Hz</td>
-<td style="text-align: right;">0.81</td>
+<td><code>S_45,2</code></td>
+<td>密度点 2</td>
 </tr>
 <tr>
-<td style="text-align: right;">1000 Hz</td>
-<td style="text-align: right;">1.36</td>
+<td><code>S_45,3</code></td>
+<td>密度点 3</td>
 </tr>
 <tr>
-<td style="text-align: right;">1010 Hz</td>
-<td style="text-align: right;">0.88</td>
-</tr>
-<tr>
-<td style="text-align: right;">1020 Hz</td>
-<td style="text-align: right;">0.45</td>
+<td><code>S_45,4</code></td>
+<td>密度点 4</td>
 </tr>
 </tbody>
 </table>
-<p>如果 1000 Hz 附近形成清晰且唯一的峰，可先把它作为候选谐振频率，再在
-990～1010 Hz
-范围内减小步长进行精扫，并通过邻近点拟合或规定相位条件得到更精确的
-<code>f_r</code>。实际流程通常是：</p>
-<div class="signal-chain">
-<p><span>宽范围粗扫</span><i>→</i> <span>确定主响应区</span><i>→</i>
-<span>小步长精扫</span><i>→</i> <span>峰值或相位判定</span><i>→</i>
-<span>自激频率复核</span><i>→</i> <span>确认谐振频率</span></p>
+<p>因此，基础密度可概括为：</p>
+<div class="formula">
+ρ<sub>raw</sub> = F<sub>density</sub>(S<sub>45</sub>)
 </div>
-<p>候选点还必须通过质量检查：峰值不能位于扫描边界；峰应明显高于背景且不能同时出现多个相近峰；正向扫频、反向扫频和重复扫描的结果应在允许偏差内；<code>IN_AD</code>
-不应饱和，<code>LEVEL_INT</code>
-应保持稳定；切换到自激模式后，<code>TA1CLK</code>
-测得的频率应与扫频结果一致。任一条件不满足时，应报告无峰、多峰、信号过弱、模式不一致或频率不稳定，而不是继续换算密度。</p>
-<p><code>SWAP</code> 控制 TS5A3160 在 DDS
-激励和模拟反馈之间切换。切入反馈后，接收信号经增益和移相网络返回驱动端，环路在满足增益和相位条件的频率附近自激，<code>TA1CLK</code>
-可作为 MCU
-的周期观测入口。扫频适合主动搜索和验证谐振点，自激适合连续跟踪；两种模式得到的频率如果明显不一致，应先判为测量质量异常。</p>
-<p>双 DDS 共用
-MCU、时钟、供电和串行控制链路，且只连接一套机械测量结构，因此它们构成激励与同步参考，不是两套独立的安全冗余密度通道。</p>
-<h3 id="34-标定温度补偿与结果有效性">3.4 标定、温度补偿与结果有效性</h3>
-<p>标定用于建立“已知密度—实测频率”的对应关系。通常需要在受控温度下使用若干已知密度的参考介质，记录谐振频率和信号质量，再拟合每支探头或受控批次的标定系数，并用独立参考点验证误差。探头的机械尺寸、粘接、预紧和压电装配存在差异，标定系数应与硬件身份、标定版本和适用温度范围绑定。</p>
+<p><code>F_density</code>
+可能是分段插值、多项式拟合或其它标定函数，当前资料无法确认。选用周期平方的物理原因是振动系统近似满足
+<code>T² ∝ m_eff</code>，液体密度改变附加质量后，密度与周期平方通常比与频率本身更接近线性关系。</p>
+<h4 id="动力黏度和运动黏度">3.4.2 动力黏度和运动黏度</h4>
+<p>协议提供十三组“扫频周期平方均值的差—动力黏度×密度²”标定点。令：</p>
+<div class="formula">
+ΔS = S<sub>22.5</sub> − S<sub>45</sub>　或　S<sub>45</sub> −
+S<sub>22.5</sub>
+</div>
+<p>按参数名称，黏度换算关系可概括为：</p>
+<div class="formula">
+G = F<sub>viscosity</sub>(ΔS),　G = η × ρ<sup>2</sup>
+</div>
+<div class="formula">
+η<sub>raw</sub> ≈ G / ρ<sup>2</sup>
+</div>
+<p>其中 <code>η</code>
+为动力黏度。十三点如何排序、越界如何处理、密度采用修正前还是修正后数值，以及单位缩放均需由传感器端固件确认。运动黏度的常用物理换算为：</p>
+<div class="formula">
+ν(cSt) = 1000 × η(cP) / ρ(kg/m³)
+</div>
+<h4 id="黏度温度和固定修正">3.4.3 黏度、温度和固定修正</h4>
+<p>协议另有十三组“动力黏度—密度修正值”、四组 30 ℃ 密度温度修正、四组 10
+℃副温度修正，以及黏度、密度等固定修正参数。因此最终结果的合理结构为：</p>
+<div class="signal-chain">
+<p><span>45°周期平方得到基础密度</span><i>→</i>
+<span>双相位差值得到动力黏度</span><i>→</i>
+<span>黏度引起的密度修正</span><i>→</i>
+<span>温度与固定修正</span><i>→</i> <span>最终密度和黏度</span></p>
+</div>
+<p>上述流程方向有协议字段支持，但加减符号、插值算法和执行顺序没有直接证据，不应写成已确认的产品公式。CUBE
+CPU2
+侧读取的是传感器已经计算完成的频率、密度、动力黏度和运动黏度结果，不负责用
+45°、22.5°原始量重新计算。</p>
+<h4 id="只为看懂流程的算术示例">3.4.4 只为看懂流程的算术示例</h4>
+<p>下面故意使用虚构系数，只演示数据怎样逐层流动，不能用于 DM4
+标定或现场计算。假设某次重复扫描得到
+<code>f_45 = 4000 Hz</code>、<code>f_22.5 = 3900 Hz</code>，用微秒表示周期，则：</p>
+<div class="formula">
+T<sub>45</sub> = 1 / 4000 = 250.00 μs，S<sub>45</sub> = 62500 μs²
+</div>
+<div class="formula">
+T<sub>22.5</sub> = 1 / 3900 ≈ 256.41 μs，S<sub>22.5</sub> ≈ 65746 μs²
+</div>
+<p>若示例中约定 <code>ΔS = S_22.5 − S_45</code>，则
+<code>ΔS ≈ 3246 μs²</code>。再假设四点密度插值得到
+<code>ρ = 810 kg/m³</code>，十三点黏度插值得到
+<code>G = η × ρ² = 65,610,000</code>，则：</p>
+<div class="formula">
+η = G / ρ² = 100 cP，ν = 1000 × 100 / 810 ≈ 123.46 cSt
+</div>
+<p>这个示例只说明“45°特征周期平方 → 密度”“两个特征周期平方的差 →
+黏度相关量”“动力黏度除以密度 →
+运动黏度”的层级关系。真实设备的周期单位、差值正负方向、插值表数值、温度补偿和固定修正顺序均应以传感器端固件与标定记录为准。</p>
+<h4 id="标定和结果有效性">3.4.5 标定和结果有效性</h4>
+<p>标定需要在受控温度下使用若干已知密度、已知黏度的参考介质，记录两个相位条件下的周期平方、温度和信号质量，再拟合每支探头或受控批次的标定系数，并用独立参考点验证误差。探头的机械尺寸、粘接、预紧和压电装配存在差异，标定系数应与硬件身份、标定版本和适用温度范围绑定。</p>
 <p>温度补偿不可省略。温度既会改变液体密度，也会改变敏感结构的刚度和压电、模拟前端特性。DM4
 的 ADS1247
 温度/电阻通道为补偿提供了硬件入口，但原理图没有给出实际温度元件、补偿模型和标定系数。</p>
@@ -758,7 +836,7 @@ MCU、时钟、供电和串行控制链路，且只连接一套机械测量结�
 </tbody>
 </table>
 <p>出现无峰、多峰、响应过小、频率越界或跳变、温度无效、扫频与自激不一致、标定身份不一致时，本次密度应标为无效并报告原因，不能沿用旧值或强行输出平滑结果。</p>
-<h3 id="35-原理图中的关键信号">3.5 原理图中的关键信号</h3>
+<h3 id="原理图中的关键信号">3.5 原理图中的关键信号</h3>
 <table>
 <colgroup>
 <col style="width: 33%" />
@@ -821,8 +899,8 @@ MCU、时钟、供电和串行控制链路，且只连接一套机械测量结�
 </tbody>
 </table>
 <p>一条可用的密度结果至少应同时满足：谐振频率有效、响应幅值和相位稳定、温度有效、标定身份正确、关键诊断无故障。只有密度数值而没有这些质量信息，接收方无法区分真实介质变化与传感器故障。</p>
-<h2 id="4-四块板的电路实现">4. 四块板的电路实现</h2>
-<h3 id="41-电源与-rs485-通信">4.1 电源与 RS485 通信</h3>
+<h2 id="四块板的电路实现">4. 四块板的电路实现</h2>
+<h3 id="电源与-rs485-通信">4.1 电源与 RS485 通信</h3>
 <p>电源板使用 ADP7102-3.3 和 ADP7102-5，把外部 <code>VCC</code> 转换为
 3.3 V 和 5 V。两颗 LDO 的 <code>EN/UVLO</code> 直接接
 VCC，<code>PG</code> 未进入 MCU 或板间连接器，因此图中没有独立的 3.3
@@ -844,7 +922,7 @@ POWERTEST ≈ VCC × 10 / (100 + 10) = VCC / 11
 下拉，形成弱空闲偏置。图中未见 120 Ω 终端、总线
 TVS、共模电感、隔离和浪涌保护；这些器件是否位于线束或其他板卡需要另行核对。长线使用前应冻结线缆阻抗、终端位置、唯一偏置点、屏蔽接地、DE/RE
 时序和 EMC 方案。</p>
-<h3 id="42-控制dds-与精密采样">4.2 控制、DDS 与精密采样</h3>
+<h3 id="控制dds-与精密采样">4.2 控制、DDS 与精密采样</h3>
 <p>驱动板主控为 <code>STM32G071RBT6</code>，外接 7.3728 MHz 晶振。MCU
 管理双 DDS、ADS1247、FDC2212、ADXL345、Hall 零点、RS485
 以及采集板的模拟和数字信号。</p>
@@ -872,7 +950,7 @@ f<sub>c</sub> ≈ 1 / [2π × (47 Ω + 47 Ω) × 100 nF] ≈ 16.9 kHz
 V；<code>CAPTURE</code> 同时连接 MCU 的 PC9 和
 PA15，固件必须避免双输出争用；SWD 和 TEST
 信号经连接器外露，量产时应明确调试口保护和维护解锁策略。</p>
-<h3 id="43-压电驱动采集与同步检测">4.3 压电驱动、采集与同步检测</h3>
+<h3 id="压电驱动采集与同步检测">4.3 压电驱动、采集与同步检测</h3>
 <p>采集板用两只 10 kΩ 电阻对 3.3 V 分压，并由 U6C 缓冲形成
 <code>MidV≈1.65 V</code>。MidV
 是单电源模拟链路的公共参考，漂移会同时影响接收放大、比较阈值、自激反馈和
@@ -909,7 +987,7 @@ kHz。真实环路相位还包含机械结构、压电、运放、线缆和寄�
 <p>图中还给出了 R408、R609 的 3.3 V/5 V
 装配选项。装配差异会改变模拟前端的偏置或范围，应纳入硬件配置 ID、BOM
 和标定版本管理。</p>
-<h3 id="44-测水温度姿态与零点">4.4 测水、温度、姿态与零点</h3>
+<h3 id="测水温度姿态与零点">4.4 测水、温度、姿态与零点</h3>
 <p>温度测量链路为
 <code>I+/I- 激励 → 温度敏感元件 → AIN1+/AIN1- → RC 滤波 → ADS1247 → SPI/DRDY → 温度换算</code>。原理图没有给出外部温度元件的完整参数，实际量程、接线和换算公式需要结合探头资料确认。</p>
 <p>测水连接板使用 <code>FDC2212</code> 和 LC 网络测量 TWater
@@ -964,10 +1042,10 @@ f<sub>0</sub> ≈ 1 / [2π√(18 uH × 33 pF)] ≈ 6.53 MHz
 </tbody>
 </table>
 <p>测水板同时转接压电、温度和测试端子，堆叠连接器故障可能一次影响多个测量通道，应按公共原因故障处理。</p>
-<h2 id="5-mcu-可观测信号与诊断">5. MCU 可观测信号与诊断</h2>
+<h2 id="mcu-可观测信号与诊断">5. MCU 可观测信号与诊断</h2>
 <p>驱动板上的 STM32G071
 是所有测量状态的汇聚点，也是传感器端安全协议执行节点的合理候选。当前
-CUBE <a href="../01_协议与寄存器/传感器通信协议/传感器安全协议SIL/传感器新一代安全通信协议卷.md">传感器安全协议
+CUBE <a href="../01_协议与寄存器/传感器通信协议/传感器安全协议SIL/01_现行协议V1/传感器安全通信协议V1.md">传感器安全协议
 V1</a>已定义
 CRC32C、会话、序号、采样计数、数据年龄、状态位、诊断位和配置一致性，但
 DM4 传感器端实现及硬件联调仍需单独取证。</p>
@@ -1036,7 +1114,7 @@ DM4 传感器端实现及硬件联调仍需单独取证。</p>
 只能发现传输损坏，<code>sample_counter</code>
 只能证明快照在更新，<code>data_age_ms</code>
 只能约束数据新鲜度；它们都不能证明机械响应、温度或电容值本身正确。密度上报应在同一采样快照中至少包含原始频率或周期、测量模式、信号质量、温度有效性、诊断状态、采样计数、数据年龄以及硬件/标定配置身份。</p>
-<h2 id="6-主要风险和待确认问题">6. 主要风险和待确认问题</h2>
+<h2 id="主要风险和待确认问题">6. 主要风险和待确认问题</h2>
 <p>下表按处理时机归并原理图评审中最重要的问题。优先级表示建议的关闭顺序，不代表现场故障频率。</p>
 <table>
 <colgroup>
@@ -1137,7 +1215,7 @@ DM4 传感器端实现及硬件联调仍需单独取证。</p>
 <p>目前有利的基础是测量功能分区清楚，MCU
 能观察电源、频率、模拟量、ADC、FDC、姿态和零点状态；主要缺口集中在独立电源诊断、复位与看门狗证据、通信物理层、共同故障、传感器端固件和生产配置管理。安全评审应围绕这些可观测量建立诊断覆盖，而不是把“双
 DDS”或“多个传感器”直接解释为冗余。</p>
-<h2 id="7-板级验证建议">7. 板级验证建议</h2>
+<h2 id="板级验证建议">7. 板级验证建议</h2>
 <table>
 <colgroup>
 <col style="width: 33%" />
@@ -1205,7 +1283,7 @@ DDS”或“多个传感器”直接解释为冗余。</p>
 </tbody>
 </table>
 <p>验证时应保留原始波形、配置、环境条件、样机编号和判定标准。静态检查、协议对拍和构建结果不能替代真实探头、长线、温度、介质和故障注入试验。</p>
-<h2 id="8-结论">8. 结论</h2>
+<h2 id="结论">8. 结论</h2>
 <p>DM4 V6.0 已形成完整的多参数传感器硬件骨架。双 DDS
 与压电前端承担振动式密度测量，ADS1247 提供温度/电阻采样，FDC2212
 承担电容式测水，ADXL345 和 Hall 通道提供姿态与零点信息，STM32G071

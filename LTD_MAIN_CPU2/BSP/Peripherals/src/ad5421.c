@@ -21,7 +21,7 @@ static inline void AD5421_CS_HIGH(void)
 }
 
 #define AD5421_SPI_TIMEOUT_MS 10U /* AD5421 SPI 传输超时时间，单位 ms。 */
-#define AD5421_DAC_FULL_SCALE 65535.0f /* AD5421 16 位 DAC 满量程换算系数。 */
+#define AD5421_DAC_FULL_SCALE 65535U /* AD5421 16 位 DAC 满量程换算系数。 */
 static volatile uint32_t ad5421_fault_flags = 0U;
 static volatile uint32_t ad5421_fault_register = 0U;
 static volatile uint8_t ad5421_trace_suppressed = 0U;
@@ -504,17 +504,47 @@ uint32_t AD5421_SetCurrent(float mA)
 }
 
 /**
- * @brief 按 0.01mA 单位设置 AD5421 输出电流。
+ * @brief 按0.001mA单位换算并写入AD5421输出电流。
  *
- * @details 调用场景：AO 服务使用参数原始单位写入电流。
- * @note 关键约束：内部转为 mA 后复用 AD5421_SetCurrent()。
+ * @details 调用场景：AO服务完成基础电流和修正量合成后，以整数路径写入最终目标。
+ * @note 关键约束：使用64位乘法和整数四舍五入，避免浮点换算吞掉0.001mA修正步进。
  *
- * @param mA_x100 准备写入 AD5421 的目标电流，单位 0.01 mA。
- * @return 返回整机错误码；NO_ERROR 表示 0.01 mA 定点目标已成功写入，其他值透传范围或驱动错误。
+ * @param mA_x1000 准备写入AD5421的目标电流，单位0.001mA。
+ * @return 返回整机错误码；NO_ERROR表示目标已换算并写入DAC，其他值透传驱动错误。
+ */
+uint32_t AD5421_SetCurrentX1000(uint32_t mA_x1000)
+{
+    uint32_t offset_mA_x1000;
+    uint32_t span_mA_x1000 = STOPFULLSCALE_MA_X1000 - STARTFULLSCALE_MA_X1000;
+    uint16_t dac_value;
+
+    if (mA_x1000 < STARTFULLSCALE_MA_X1000) {
+        mA_x1000 = STARTFULLSCALE_MA_X1000;
+    }
+    if (mA_x1000 > STOPFULLSCALE_MA_X1000) {
+        mA_x1000 = STOPFULLSCALE_MA_X1000;
+    }
+    offset_mA_x1000 = mA_x1000 - STARTFULLSCALE_MA_X1000;
+    dac_value = (uint16_t)((((uint64_t)offset_mA_x1000 * AD5421_DAC_FULL_SCALE) +
+                            ((uint64_t)span_mA_x1000 / 2U)) /
+                           (uint64_t)span_mA_x1000);
+    return AD5421_SetDacRaw(dac_value);
+}
+
+/**
+ * @brief 保留0.01mA旧接口并转调x1000整数输出路径。
+ *
+ * @param mA_x100 准备写入AD5421的目标电流，单位0.01mA。
+ * @return 返回整机错误码；缩放后透传x1000接口结果。
  */
 uint32_t AD5421_SetCurrentX100(uint32_t mA_x100)
 {
-    return AD5421_SetCurrent(((float)mA_x100) / 100.0f);
+    uint64_t scaled_mA_x1000 = (uint64_t)mA_x100 * 10U;
+
+    if (scaled_mA_x1000 > UINT32_MAX) {
+        scaled_mA_x1000 = UINT32_MAX;
+    }
+    return AD5421_SetCurrentX1000((uint32_t)scaled_mA_x1000);
 }
 
 /**
@@ -744,13 +774,13 @@ static uint32_t WriteControlRegister(uint16_t controldata)
 /**
  * @brief 执行 AD5421 复位、控制寄存器回读、目标电流写入和故障诊断公共序列。
  *
- * @details 调用场景：Ad5421Init() 和 AD5421_RecoverCurrentX100() 共用。
+ * @details 调用场景：Ad5421Init() 和 AD5421_RecoverCurrentX1000() 共用。
  * @note 关键约束：会占用 sequence 并访问 SPI/GPIO，不应在中断中调用。
  *
- * @param target_mA_x100 目标电流定点值，单位 0.01 mA。
+ * @param target_mA_x1000 目标电流定点值，单位 0.001 mA。
  * @return NO_ERROR 表示复位、控制寄存器回读、目标电流写入和最终诊断均通过；复位或参数阶段失败返回 AD5421_INIT_ERROR，其他值保留具体 SPI、回读或器件故障码。
  */
-static uint32_t AD5421_RunCurrentStartupSequence(uint32_t target_mA_x100)
+static uint32_t AD5421_RunCurrentStartupSequenceX1000(uint32_t target_mA_x1000)
 {
     uint32_t ret;
 
@@ -762,7 +792,7 @@ static uint32_t AD5421_RunCurrentStartupSequence(uint32_t target_mA_x100)
                               (uint32_t)HAL_BUSY,
                               AD5421_INIT_ERROR,
                               AD5421_INIT_ERROR,
-                              target_mA_x100,
+                              target_mA_x1000,
                               0U);
         return AD5421_INIT_ERROR;
     }
@@ -779,7 +809,7 @@ static uint32_t AD5421_RunCurrentStartupSequence(uint32_t target_mA_x100)
         ret = WriteControlRegister(CUR_SPIOFF_READBACK_COMMAND);
     }
     if (ret == NO_ERROR) {
-        ret = AD5421_SetCurrentX100(target_mA_x100);
+        ret = AD5421_SetCurrentX1000(target_mA_x1000);
     }
     if (ret == NO_ERROR) {
         HAL_Delay(10);
@@ -801,8 +831,25 @@ static uint32_t AD5421_RunCurrentStartupSequence(uint32_t target_mA_x100)
  */
 uint32_t AD5421_InitCurrentX100(uint32_t initial_mA_x100)
 {
-    return AD5421_RunCurrentStartupSequence(initial_mA_x100);
+    uint64_t scaled_mA_x1000 = (uint64_t)initial_mA_x100 * 10U;
+
+    if (scaled_mA_x1000 > UINT32_MAX) {
+        scaled_mA_x1000 = UINT32_MAX;
+    }
+    return AD5421_RunCurrentStartupSequenceX1000((uint32_t)scaled_mA_x1000);
 }
+
+/**
+ * @brief 按0.001mA目标复位、初始化并写入AD5421。
+ *
+ * @param initial_mA_x1000 初始化完成后准备输出的起始电流，单位0.001mA。
+ * @return 返回整机错误码；NO_ERROR表示完整启动序列成功。
+ */
+uint32_t AD5421_InitCurrentX1000(uint32_t initial_mA_x1000)
+{
+    return AD5421_RunCurrentStartupSequenceX1000(initial_mA_x1000);
+}
+
 
 /**
  * @brief 保留历史无参数初始化接口，供旧测试和调用点兼容使用。
@@ -828,7 +875,23 @@ uint32_t Ad5421Init(void)
  */
 uint32_t AD5421_RecoverCurrentX100(uint32_t target_mA_x100)
 {
-    return AD5421_RunCurrentStartupSequence(target_mA_x100);
+    uint64_t scaled_mA_x1000 = (uint64_t)target_mA_x100 * 10U;
+
+    if (scaled_mA_x1000 > UINT32_MAX) {
+        scaled_mA_x1000 = UINT32_MAX;
+    }
+    return AD5421_RunCurrentStartupSequenceX1000((uint32_t)scaled_mA_x1000);
+}
+
+/**
+ * @brief 按0.001mA目标执行AD5421运行期恢复序列。
+ *
+ * @param target_mA_x1000 恢复后准备输出的目标电流，单位0.001mA。
+ * @return 返回整机错误码；NO_ERROR表示复位、回读、写电流和诊断均成功。
+ */
+uint32_t AD5421_RecoverCurrentX1000(uint32_t target_mA_x1000)
+{
+    return AD5421_RunCurrentStartupSequenceX1000(target_mA_x1000);
 }
 
 

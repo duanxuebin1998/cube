@@ -2,7 +2,7 @@
 
 ## 适用协议
 
-覆盖 CPU3 对外 DSM、Wartsila、SI、LTD 共享 Modbus 网关、协议切换，以及 CPU2 调试串口命令和现场兼容协议。CPU2/CPU3 板间共享协议本身读取 `internal-protocol-and-storage.md`。
+覆盖 CPU3 对外 DSM、Wartsila、SI、LTD 标准 Modbus、协议切换，以及 CPU2 调试串口命令和现场兼容协议。CPU2/CPU3 板间共享协议读取 `internal-protocol-and-storage.md`；其中 LTD 标准 Modbus 的共享区与板间共享契约是同一协议，不是独立适配映射。
 
 ## 证据和实施状态分离
 
@@ -47,7 +47,9 @@
 - CPU2业务动作和数据是权威端；CPU3读取可使用已确认快照，写操作必须获得 CPU2 ACK。
 - CPU3断链、快照无效、协议不匹配或参数刷新中时返回明确忙/失败，不返回旧数据或伪成功。
 - 未知字段可以做本地兼容影子，但不得猜测业务含义或参与控制；读写、范围和持久化策略必须由用户确认。
-- 外部协议行为变化只升级受影响 CPU 固件；只有依赖共享契约变化时才提升 `DEVICE_PROTOCOL_VERSION`。
+- LTD 标准 Modbus 的共享保持寄存器、共享输入寄存器、命令值和字段语义直接跟随 CPU2/CPU3 共享契约；修改这些对象时同步两端源码、CPU3 对外响应、`DEVICE_PROTOCOL_VERSION`、正式协议资料和契约测试，不得只改板间或对外一侧。
+- CPU3 本机 `0x7000` 高地址段不属于 CPU2/CPU3 共享区；只改该段时按 CPU3 对外行为处理，不自动提升 `DEVICE_PROTOCOL_VERSION`。
+- 除 LTD 共享区外，DSM、Wartsila、SI 等外部适配行为变化只升级受影响 CPU 固件；只有依赖 CPU2/CPU3 共享契约变化时才提升 `DEVICE_PROTOCOL_VERSION`。
 
 ## 协议设计负面检查
 

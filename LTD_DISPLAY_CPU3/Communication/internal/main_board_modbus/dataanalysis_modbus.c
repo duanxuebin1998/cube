@@ -165,8 +165,8 @@ static void read_relay_alarm_runtime_from_regs(const uint16_t *regs, uint32_t ch
  */
 static void read_ao_output_runtime_from_regs(const uint16_t *regs, volatile AoOutputRuntime *state)
 {
-    state->target_mA_x100 = read_u32_from_regs(regs, REG_AO_OUTPUT_RUNTIME_TARGET_MA_X100);
-    state->last_sent_mA_x100 = read_u32_from_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_SENT_MA_X100);
+    state->target_mA_x1000 = read_u32_from_regs(regs, REG_AO_OUTPUT_RUNTIME_TARGET_MA_X1000);
+    state->last_sent_mA_x1000 = read_u32_from_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_SENT_MA_X1000);
     state->source = read_u32_from_regs(regs, REG_AO_OUTPUT_RUNTIME_SOURCE);
     state->driver_fault_flags = read_u32_from_regs(regs, REG_AO_OUTPUT_RUNTIME_DRIVER_FAULT_FLAGS);
     state->driver_fault_register = read_u32_from_regs(regs, REG_AO_OUTPUT_RUNTIME_DRIVER_FAULT_REGISTER);
@@ -320,7 +320,7 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE, g_deviceParams.ao_output.work_mode);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_CURRENT_MODE, g_deviceParams.ao_output.current_mode);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_SOURCE, g_deviceParams.ao_output.output_source);
-    write_i32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X100, g_deviceParams.ao_output.current_correction_mA_x100);
+    write_i32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X1000, g_deviceParams.ao_output.current_correction_mA_x1000);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100, g_deviceParams.ao_output.fixed_current_mA_x100);
     write_i32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_RANGE_0_01MM, g_deviceParams.ao_output.range_0_01mm);
     write_i32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_RANGE_100_01MM, g_deviceParams.ao_output.range_100_01mm);
@@ -516,7 +516,7 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.ao_output.work_mode = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE);
     g_deviceParams.ao_output.current_mode = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_CURRENT_MODE);
     g_deviceParams.ao_output.output_source = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_SOURCE);
-    g_deviceParams.ao_output.current_correction_mA_x100 = read_i32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X100);
+    g_deviceParams.ao_output.current_correction_mA_x1000 = read_i32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X1000);
     g_deviceParams.ao_output.fixed_current_mA_x100 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100);
     g_deviceParams.ao_output.range_0_01mm = read_i32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_RANGE_0_01MM);
     g_deviceParams.ao_output.range_100_01mm = read_i32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_RANGE_100_01MM);

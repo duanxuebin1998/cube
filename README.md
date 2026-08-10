@@ -1,272 +1,123 @@
-# CUBE 仓库导览与新人上手指南
+# CUBE
 
-> 最后核对时间：2026-08-04
-> 目标：帮助新同学在 1~2 天内建立“能编译、能跟流程、知道改哪里”的整体认知。
+> CUBE 是二代计量仪的嵌入式固件与工程资料仓库。仓库以 CPU2 主控固件和 CPU3 显示通信固件为核心，同时维护两块板之间的共享协议、构建配置、版本记录和项目文档。
 
----
+## 项目组成
 
-## 1. 仓库定位
+| 工程 | 主要职责 |
+| --- | --- |
+| `LTD_MAIN_CPU2/` | 测量流程、运动控制、传感器接入、参数与 FRAM 持久化、故障处理、输出控制，以及 CPU2/CPU3 共享数据的权威实现 |
+| `LTD_DISPLAY_CPU3/` | OLED 显示、菜单与按键、CPU2 数据轮询和参数同步，以及 DSM、Wärtsilä、LTD、LH、SI 等外部协议适配 |
 
-该仓库是 **STM32 双板固件项目**，主线是两个工程：
+两块板的主要关系如下：
 
-- `LTD_MAIN_CPU2/`：CPU2 主控测量板固件（测量流程、参数管理、设备控制、Modbus 从站）
-- `LTD_DISPLAY_CPU3/`：CPU3 显示通讯板固件（显示、外部协议适配、轮询 CPU2、参数下发）
+```text
+上位机 / PLC / 外部系统
+          ↕
+CPU3 显示与通信板
+          ↕  UART5 + RS485（共享 Modbus）
+CPU2 主控测量板
+          ↕
+传感器 / 电机 / 编码器 / 称重 / AO / HART 等外设
+```
 
-当前采用两个子工程各自独立配置和构建的 CMake/Ninja 入口：
+CPU2 负责核心测量与设备控制，CPU3 负责人机界面和外部通信适配。涉及共享参数、测量结果、命令或故障语义的改动，需要同时核对 CPU2、CPU3、共享寄存器映射和协议版本。
 
-- `LTD_MAIN_CPU2`
-- `LTD_DISPLAY_CPU3`
+## 仓库目录
 
-当前文档核对基线：
+### Git 中维护的主要内容
 
-- CPU2 固件版本：`V1.36.2.0`
-- CPU3 固件版本：`V1.36.0.0`
-- CPU2/CPU3 共享协议版本：`DEVICE_PROTOCOL_VERSION = 31`
-- CPU2 参数存储版本：`DEVICE_PARAM_VERSION = 3`
-- CPU3 本地显示/通信参数版本：`CPU3_PARAM_VERSION = 0x0007`
+| 路径 | 用途 |
+| --- | --- |
+| `LTD_MAIN_CPU2/` | CPU2 STM32F429 固件工程 |
+| `LTD_DISPLAY_CPU3/` | CPU3 STM32F429 固件工程 |
+| `docs/` | 唯一正式项目文档源，包含构建、协议、需求、问题、测试、功能安全和硬件资料 |
+| `cmake/` | CPU2/CPU3 共用的 Arm GNU 工具链配置 |
+| `.github/workflows/` | CPU2/CPU3 持续集成构建配置 |
+| `.agents/`、`AGENTS.md` | 本仓库的自动化协作和工程维护规则 |
+| `CHANGELOG.md` | 固件版本改动记录 |
 
----
+### 本机工作区内容
 
-## 2. 当前仓库目录（以实际内容为准）
+以下目录可能存在于开发机，但不作为 Git 业务资料维护：
 
-根目录当前主要包含：
+| 路径 | 用途 |
+| --- | --- |
+| `build/LTD_MAIN_CPU2/`、`build/LTD_DISPLAY_CPU3/` | 两个固件工程的本地构建输出 |
+| `tools/` | 本机构建、检查、文档预览和 Git 门禁工具 |
+| `docs/00_程序流程导航/` | 本机生成并同步的程序流程导航 |
+| `docs-site/` | 从 `docs/` 同步生成的本机文档预览站点 |
+| `tmp/` | 可清理的任务临时产物 |
+| `outputs/` | 需要在本机长期保留、但默认不提交的验证证据 |
 
-- `LTD_MAIN_CPU2/`：CPU2 主工程
-- `LTD_DISPLAY_CPU3/`：CPU3 主工程
-- `docs/`：文档
-- `cmake/`：通用工具链配置
-- `tools/`：构建、版本和契约检查脚本
-- `old/`：历史归档
-- `WirelessHost_V4.1_init/`：历史/独立验证工程
-- `build/`：本地构建输出（可删除重建）
+## 快速构建
 
-说明：
+### 环境要求
 
-- 历史版本文档里出现过的目录（如 `LTD_MAIN_CPU2_TEXT/`、`MOTOR_TMC5130/`、`measure_water/` 等）在当前仓库中已不存在或不在主线。
-- 新人开发入口请固定为 `LTD_MAIN_CPU2/` 与 `LTD_DISPLAY_CPU3/`。
+- CMake 3.20 或更高版本
+- Ninja
+- Arm GNU Toolchain，并确保 `arm-none-eabi-gcc`、`arm-none-eabi-objcopy`、`arm-none-eabi-size` 等命令已加入 `PATH`
 
----
-
-## 3. 系统架构与通信拓扑
-
-### 3.1 双板职责
-
-- **CPU2（主控）**
-  - 执行测量命令与状态机
-  - 管理设备参数（FRAM 持久化）
-  - 控制传感器、电机、4-20mA、HART 等外设
-  - 对外暴露 Modbus 保持/输入寄存器
-
-- **CPU3（显示通讯）**
-  - 处理屏幕与菜单
-  - 管理 COM1/COM2/COM3 的协议适配（DSM/Wartsila/LTD/LH/SI）
-  - 通过 UART5/RS485 轮询 CPU2（Modbus）
-  - 同步参数并展示测量结果
-
-### 3.2 通信链路（简化）
-
-- 外部设备/上位机 ↔ CPU3（COM1/2/3，RS485/UART）
-- CPU3 ↔ CPU2（UART5 + RS485，Modbus RTU）
-- CPU2 ↔ 板载外设（SPI/UART/GPIO 等）
-
-### 3.3 Modbus 功能码
-
-CPU2 从站主路径支持：
-
-- `0x03` 读保持寄存器（参数）
-- `0x04` 读输入寄存器（测量结果/状态）
-- `0x10` 写多个保持寄存器（参数下发）
-
----
-
-## 4. 构建体系（必须先打通）
-
-### 4.1 工具链
-
-- `cmake >= 3.20`
-- `ninja`
-- `arm-none-eabi-*` 工具链（GCC）
-
-统一工具链文件：
-
-- `cmake/toolchain-arm-none-eabi.cmake`
-
-关键编译选项：
-
-- `-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard`
-
-### 4.2 推荐构建方式
+### CPU2
 
 ```bash
-cmake -S LTD_MAIN_CPU2 -B build/LTD_MAIN_CPU2 -G Ninja \
-  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake \
-  -DCMAKE_BUILD_TYPE=Debug
+cmake -S LTD_MAIN_CPU2 -B build/LTD_MAIN_CPU2 -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake -DCMAKE_BUILD_TYPE=Debug
 cmake --build build/LTD_MAIN_CPU2
+```
 
-cmake -S LTD_DISPLAY_CPU3 -B build/LTD_DISPLAY_CPU3 -G Ninja \
-  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake \
-  -DCMAKE_BUILD_TYPE=Debug
+### CPU3
+
+```bash
+cmake -S LTD_DISPLAY_CPU3 -B build/LTD_DISPLAY_CPU3 -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake -DCMAKE_BUILD_TYPE=Debug
 cmake --build build/LTD_DISPLAY_CPU3
 ```
 
-也可使用：
+发布候选应使用全量清理构建：
 
-- `tools/build_cpu2.sh`
-- `tools/build_cpu3.sh`
+```bash
+cmake --build build/LTD_MAIN_CPU2 --clean-first
+cmake --build build/LTD_DISPLAY_CPU3 --clean-first
+```
 
----
+构建目录会生成 `.elf`、`.hex`、`.bin` 和 `.map` 文件，其中还包括带固件版本号的 HEX。构建成功只能证明当前源码完成编译和链接，不能替代烧写、台架、硬件或现场验证。
 
-## 5. CPU2 代码主线（主控测量板）
+更完整的环境、产物和发布前检查说明见：
 
-### 5.1 启动主流程
+- [CPU2 构建说明](docs/00_构建与版本/CPU2构建说明.md)
+- [CPU3 构建说明](docs/00_构建与版本/CPU3构建说明.md)
 
-1. `main()`：时钟与外设初始化
-2. `App_Init()`：业务初始化（编码器、电机、参数、通信等）
-3. `App_MainLoop()`：命令处理与测量调度
+## 代码入口
 
-### 5.2 核心模块分层
+第一次阅读代码时，建议从以下入口开始：
 
-- `Core/`：CubeMX 生成的硬件初始化与中断
-- `Application/`：应用调度（`app_main.c`、`measure.c`）
-- `Services/`
-  - `Modbus/`：协议处理与寄存器映射
-  - `ParamStorage/`：参数结构、FRAM 持久化、CRC
-  - `MotorControl/`、`Sensor/`、`Weight/`、`Relay/` 等：业务服务
-- `BSP/Peripherals/`：具体芯片驱动（TMC5130、AS5145、AD5421、FRAM、CH9141K 等）
+| 目标 | CPU2 | CPU3 |
+| --- | --- | --- |
+| 启动与硬件初始化 | `LTD_MAIN_CPU2/Core/Src/main.c` | `LTD_DISPLAY_CPU3/Core/Src/main.c` |
+| 应用初始化与主循环 | `LTD_MAIN_CPU2/Application/Src/app_main.c` | `LTD_DISPLAY_CPU3/Application/app_main.c` |
+| 核心业务 | `LTD_MAIN_CPU2/Services/` | `LTD_DISPLAY_CPU3/Application/` |
+| 通信实现 | `LTD_MAIN_CPU2/Services/Modbus/` | `LTD_DISPLAY_CPU3/Communication/` |
 
-### 5.3 串口收包进入业务路径
+修改共享数据契约时，重点检查两端的 `system_parameter.h`、寄存器地址、结构体与寄存器之间的映射，以及 CPU3 的显示和外部协议消费点。
 
-- `UART5 IDLE + DMA` 收到一帧后进入 `HostCommuProcess()`（Modbus）
-- `USART1 IDLE + DMA` 触发文本命令接收，置位 `new_command_ready`
-- `App_MainLoop()` 中处理 `new_command_ready` 与 `g_deviceParams.command`
+## 文档与版本入口
 
----
+- [文档库入口](docs/README.md)：按构建、协议、需求、问题、测试、功能安全和硬件资料分类查找。
+- [构建与版本文档](docs/00_构建与版本/README.md)：查看构建说明、版本总览、升级和版本测试资料。
+- [协议与寄存器文档](docs/01_协议与寄存器/README.md)：查看 CPU2/CPU3 共享协议、外部协议和传感器协议。
+- [CHANGELOG](CHANGELOG.md)：查看已发布或待发布的固件改动。
 
-## 6. CPU3 代码主线（显示通讯板）
+README 不固定抄录当前固件和协议版本，避免首页随版本演进失真。需要确认当前口径时，以以下来源为准：
 
-### 6.1 启动主流程
+- CPU2 固件版本：`LTD_MAIN_CPU2/Application/Inc/app_version.h`
+- CPU3 固件版本：`LTD_DISPLAY_CPU3/Application/app_version.h`
+- CPU2 共享协议定义：`LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`
+- CPU3 共享协议定义：`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h`
+- 版本组合、兼容性和验证记录：`CHANGELOG.md` 与 `docs/00_构建与版本/版本改动与测试/`
 
-1. `main()`：时钟与外设初始化
-2. `App_Init()`：显示初始化、CPU3 本机参数加载、串口重配
-3. `App_MainLoop()`：COM1/2/3 分发处理 + 轮询 CPU2
+## 开发约定
 
-### 6.2 关键实现点
-
-- `Application/app_main.c`
-  - 协议分发入口（按每个 COM 口配置）
-  - 串口 busy/pending 发送控制
-  - 按 100 ms 调度门限执行 `PollingInputData()` 轮询 CPU2，持续外部流量不能永久饿死内部轮询
-- `Communication/internal/main_board_modbus/cpu2_communicate.c`
-  - 组包发送、等待响应、解析 CPU2 返回
-  - 分别维护状态、完整参数和当前连接协议快照；连续 10 次请求未获得合法响应时锁存 CPU2 通信故障
-  - 依赖 CPU2 的普通命令和参数写入只有在三类快照完整、协议匹配且无通信故障时开放，写入成功以合法 CPU2 ACK 为准
-- `Application/system_param/cpu3_comm_display_params.c`
-  - CPU3 本地参数加载/保存 FRAM
-  - COM1/2/3 运行时重配（波特率、校验、协议）
-
-### 6.3 中断模型
-
-CPU3 使用统一的 `IDLE + DMA` 接收框架：
-
-- COM1/2/3：置 `comX_rx_ready`，主循环处理
-- UART5（到 CPU2）：根据 `wait_response` 机制接收应答
-
----
-
-## 7. 跨板“数据契约”（最重要）
-
-### 7.1 两个核心结构
-
-- `DeviceParameters`：设备参数全集（控制、算法、输出、校验）
-- `MeasurementResult`：运行态结果全集（状态、调试、油水位、密度、无线滑环匹配、继电器报警输出运行态等）
-
-CPU2 全局对象：
-
-- `g_deviceParams`
-- `g_measurement`
-
-### 7.2 寄存器映射
-
-映射由以下文件共同定义：
-
-- `stateformodbus.h`：寄存器地址与布局
-- `dataanalysis_modbus.c`：
-  - 结构体 -> 寄存器
-  - 寄存器 -> 结构体
-
-修改任何参数/测量字段时，必须联动检查：
-
-1. 结构体定义
-2. 寄存器枚举/地址
-3. 读写映射代码
-4. CPU3 参数元数据（菜单、读写权限、显示）
-5. `DEVICE_PROTOCOL_VERSION` 与 `docs/01_协议与寄存器/CPU2_CPU3协议变更记录.md`
-
-当前 CPU2/CPU3 共享协议使用 `DeviceParameters.protocolVersion` 严格相等判断兼容性；固件版本只用于显示、发布追踪和构建产物命名。
-
----
-
-## 8. 建议阅读顺序（新人 Day0）
-
-1. `LTD_MAIN_CPU2/Core/Src/main.c`
-2. `LTD_DISPLAY_CPU3/Core/Src/main.c`
-3. `LTD_MAIN_CPU2/Application/Src/app_main.c`
-4. `LTD_DISPLAY_CPU3/Application/app_main.c`
-5. `LTD_MAIN_CPU2/Application/Src/measure.c`
-6. `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`
-7. `LTD_MAIN_CPU2/Services/Modbus/stateformodbus.h`
-8. `LTD_MAIN_CPU2/Services/Modbus/dataanalysis_modbus.c`
-9. `LTD_MAIN_CPU2/Services/Modbus/hostcommu.c`
-10. `LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/cpu2_communicate.c`
-11. `LTD_MAIN_CPU2/Application/Src/wartsila_density_measurement.c`
-12. `LTD_MAIN_CPU2/Application/Src/test.c`
-
----
-
-## 9. 新人第一周建议（可执行）
-
-### Day 1：编译打通
-
-- 成功构建 `build/LTD_MAIN_CPU2` 和 `build/LTD_DISPLAY_CPU3`
-- 确认分别生成 `LTD_MAIN_CPU2.elf`、`LTD_DISPLAY_CPU3.elf` 以及对应 `hex/bin/map` 产物
-
-### Day 2：跑通一条命令链路
-
-- 从 CPU3 下发一个简单写参数或命令
-- 跟到 CPU2 `HostCommuProcess()` 与 `ProcessMeasureCmd()`
-
-### Day 3：跑通一条参数链路
-
-- UI 改参数 -> CPU3 本地参数 -> 下发 CPU2 -> CPU2 持久化 FRAM
-
-### Day 4：理解中断与调度
-
-- 重点看 `IDLE + DMA + ready flag` 如何把数据从 ISR 交给主循环
-
-### Day 5：做一次“小闭环改动”
-
-- 新增或修改一个参数项，完整打通：
-  - 结构体
-  - 寄存器映射
-  - CPU3 参数元数据/显示
-  - 通信读写
-
----
-
-## 10. 常见坑（提前规避）
-
-1. **只改结构体不改映射**：会导致寄存器错位、参数串位。  
-2. **忽略 CPU3 参数表**：UI 看起来改了，实际未同步/未下发。  
-3. **RS485 方向切换时机不对**：会造成偶发丢包。  
-4. **把历史目录当主线**：请以当前仓库实际目录和本文为准。  
-5. **把 `command` 当持久化参数长期保存**：CPU2 已有专门处理逻辑，注意不要破坏。
-
----
-
-## 11. 相关文档
-
-- `docs/00_构建与版本/CPU2构建说明.md`
-- `docs/00_构建与版本/CPU3构建说明.md`
-- `docs/01_协议与寄存器/SI协议适配/README.md`
-
-建议新同学先看本导览，再看两份构建文档。
+- 正式文档只维护在 `docs/`；`docs-site/` 只是本机预览层。
+- 修改文件前确认编码和换行。部分历史固件源码使用 GBK/CP936，避免批量转码造成中文乱码。
+- 共享协议、参数存储、故障码和显示语义变更必须核对通信两端及对应正式文档。
+- 不要把构建或静态检查结果表述为真实硬件、通信、运动、输出或现场验证。
+- 自动化执行和提交前门禁以 [AGENTS.md](AGENTS.md) 及仓库级 CUBE skill 为准。

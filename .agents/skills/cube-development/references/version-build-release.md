@@ -34,9 +34,9 @@
 - CPU2 版本文件：`D:\CUBE\LTD_MAIN_CPU2\Application\Inc\app_version.h`。
 - CPU3 版本文件：`D:\CUBE\LTD_DISPLAY_CPU3\Application\app_version.h`。
 - 版本编码格式：`0xMMmmppbb`，显示为 `V<major>.<minor>.<patch>.<build>`。
-- 固件版本和 `DEVICE_PROTOCOL_VERSION` 是两套独立判断：`DEVICE_PROTOCOL_VERSION` 只跟 CPU2/CPU3 共享命令、共享寄存器、共享状态、共享参数语义或共享结构体契约有关；固件版本覆盖本 CPU 固件行为和对外可见行为。
-- “不升级 `DEVICE_PROTOCOL_VERSION`”不等于“不升级固件版本”。外部 DSM、SI、Wartsila、LTD 等协议适配层的状态翻译、寄存器响应、异常码、命令拦截或兼容占位变化，只要改变 CPU3 对外行为，提交前仍需升级 CPU3 固件版本。
-- 只影响外部适配层且不改 CPU2/CPU3 共享协议时，保持 `DEVICE_PROTOCOL_VERSION` 不变；提交前仍按影响范围升级对应 CPU 固件版本。
+- 固件版本和 `DEVICE_PROTOCOL_VERSION` 是两套独立判断：`DEVICE_PROTOCOL_VERSION` 覆盖 CPU2/CPU3 共享命令、共享寄存器、共享状态、共享参数语义和共享结构体契约；CPU3 对外 LTD 标准 Modbus 的共享区直接使用同一契约，也随该版本同步。固件版本覆盖本 CPU 固件行为和对外可见行为。
+- “不升级 `DEVICE_PROTOCOL_VERSION`”不等于“不升级固件版本”。外部 DSM、SI、Wartsila 等协议适配层，或 LTD 的 CPU3 本机高地址段/非共享行为发生状态翻译、寄存器响应、异常码、命令拦截或兼容占位变化时，只要改变 CPU3 对外行为，提交前仍需升级 CPU3 固件版本。
+- 除 LTD 标准 Modbus 共享区外，只影响外部适配层且不改 CPU2/CPU3 共享协议时，保持 `DEVICE_PROTOCOL_VERSION` 不变；提交前仍按影响范围升级对应 CPU 固件版本。LTD 的 CPU3 本机 `0x7000` 高地址段按 CPU3 本机对外字段单独判断。
 - 普通小改动升 `BUILD`。
 - 修复 bug 或明显行为错误时升 `PATCH`，并重置 `BUILD` 为 0。
 - 新功能、新命令、新参数、新菜单、新协议字段或功能级显示新增时升 `MINOR`，并重置 `PATCH/BUILD` 为 0。

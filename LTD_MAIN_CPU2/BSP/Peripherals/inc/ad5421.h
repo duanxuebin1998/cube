@@ -54,6 +54,8 @@ typedef struct {
 /* 满量程电流范围 */
 #define STARTFULLSCALE 3.2 /* AD5421 起始满量程电流值，单位 mA。 */
 #define STOPFULLSCALE 24.0 /* AD5421 终止满量程电流值，单位 mA。 */
+#define STARTFULLSCALE_MA_X1000 3200U /* AD5421 3.2 mA下限的千倍定点值。 */
+#define STOPFULLSCALE_MA_X1000 24000U /* AD5421 24.0 mA上限的千倍定点值。 */
 /* AD5421 寄存器指令 */
 #define WRITEDAC 0x01u /* AD5421 写 DAC 寄存器命令。 */
 #define WRITECONTROL 0x02u /* AD5421 写控制寄存器命令。 */
@@ -104,6 +106,7 @@ uint32_t Ad5421Init(void);
  * @return 返回整机错误码；NO_ERROR 表示 AD5421 已复位、初始化并输出目标电流，其他值标识失败阶段。
  */
 uint32_t AD5421_InitCurrentX100(uint32_t initial_mA_x100);
+uint32_t AD5421_InitCurrentX1000(uint32_t initial_mA_x1000);
 /**
  * @brief 按 mA 值换算并写入 AD5421 输出电流。
  *
@@ -125,6 +128,13 @@ uint32_t AD5421_SetCurrent(float mA);
  */
 uint32_t AD5421_SetCurrentX100(uint32_t mA_x100);
 /**
+ * @brief 按0.001mA单位设置AD5421输出电流。
+ *
+ * @param mA_x1000 准备写入AD5421的目标电流，单位0.001mA。
+ * @return NO_ERROR表示目标已换算并写入，其他值透传驱动错误。
+ */
+uint32_t AD5421_SetCurrentX1000(uint32_t mA_x1000);
+/**
  * @brief 按指定目标电流恢复 AD5421 输出。
  *
  * @details 调用场景：AO 运行期 READFAULT 异常后的自动恢复。
@@ -134,6 +144,7 @@ uint32_t AD5421_SetCurrentX100(uint32_t mA_x100);
  * @return 返回整机错误码；NO_ERROR 表示 AD5421 已恢复目标电流，其他值标识复位、初始化或写入失败。
  */
 uint32_t AD5421_RecoverCurrentX100(uint32_t target_mA_x100);
+uint32_t AD5421_RecoverCurrentX1000(uint32_t target_mA_x1000);
 /**
  * @brief 轮询 AD5421 故障寄存器。
  *

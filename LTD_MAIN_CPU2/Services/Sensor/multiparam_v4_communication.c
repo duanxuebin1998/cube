@@ -1161,6 +1161,64 @@ uint32_t MULTIPARAM_V4_ReadFloatParam(uint8_t parameter, float *value)
     return result;
 }
 
+/*
+ * 函数用途：以单次短事务读取一个有限浮点参数。
+ * 调用场景：交互核心测量完成后的非关键调试量刷新。
+ * 关键约束：不重试，避免附加量缺失时把业务流程阻塞数秒。
+ */
+uint32_t MULTIPARAM_V4_ReadFloatParamOnce(uint8_t parameter, float *value)
+{
+    uint32_t raw;
+    uint32_t result;
+
+    if (value == NULL) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
+    if (s_active_receive_requested != 0U) {
+        return SENSOR_STREAM_STATE_ERROR;
+    }
+    result = MULTIPARAM_V4_ReadParamRawInternal(parameter,
+                                                &raw,
+                                                0U,
+                                                MULTIPARAM_V4_ACTIVE_RESPONSE_TIMEOUT_MS);
+    if (result == NO_ERROR) {
+        float parsed = MULTIPARAM_V4_RawToFloat(raw);
+        if (!isfinite(parsed)) {
+            return SENSOR_RESP_FORMAT_ERROR;
+        }
+        *value = parsed;
+    }
+    return result;
+}
+
+/*
+ * 函数用途：读取R02并统一解析测量模式、功能状态和异常位原值。
+ * 调用场景：交互测量读取R04、R05、R11和R12之前。
+ * 关键约束：无法识别的低四位状态视为响应格式错误。
+ */
+uint32_t MULTIPARAM_V4_ReadOperatingState(uint32_t *status_word,
+                                          multiparam_v4_measurement_mode_t *mode,
+                                          multiparam_v4_feature_state_t *feature)
+{
+    uint32_t raw_status;
+    uint32_t result;
+
+    if ((status_word == NULL) || (mode == NULL) || (feature == NULL)) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
+    result = MULTIPARAM_V4_ReadParamRaw(MULTIPARAM_V4_PARAM_STATUS, &raw_status);
+    if (result != NO_ERROR) {
+        return result;
+    }
+    MULTIPARAM_V4_DecodeOperatingState(raw_status, mode, feature);
+    if ((*mode == MULTIPARAM_V4_MEASUREMENT_INVALID) ||
+        (*feature == MULTIPARAM_V4_FEATURE_INVALID)) {
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+    *status_word = raw_status;
+    return NO_ERROR;
+}
+
 uint32_t MULTIPARAM_V4_WriteParamRaw(uint8_t parameter, uint32_t raw_value)
 {
     uint8_t request[8];
@@ -1235,7 +1293,7 @@ static uint32_t MULTIPARAM_V4_SelectMeasurementMode(uint8_t function,
 {
     uint8_t request[8];
     uint8_t reply[8];
-    int32_t status_word;
+    uint32_t status_word;
     multiparam_v4_measurement_mode_t mode;
     multiparam_v4_feature_state_t feature;
     uint32_t result;
@@ -1248,11 +1306,10 @@ static uint32_t MULTIPARAM_V4_SelectMeasurementMode(uint8_t function,
     if (result != NO_ERROR) {
         return result;
     }
-    result = MULTIPARAM_V4_ReadIntParam(MULTIPARAM_V4_PARAM_STATUS, &status_word);
+    result = MULTIPARAM_V4_ReadOperatingState(&status_word, &mode, &feature);
     if (result != NO_ERROR) {
         return result;
     }
-    MULTIPARAM_V4_DecodeOperatingState((uint32_t)status_word, &mode, &feature);
     return ((mode == expected_mode) && (feature == MULTIPARAM_V4_FEATURE_NONE))
                ? NO_ERROR
                : SENSOR_STREAM_STATE_ERROR;

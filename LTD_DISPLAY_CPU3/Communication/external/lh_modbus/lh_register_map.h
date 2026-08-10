@@ -117,8 +117,8 @@
 #define LH_HR_AO_CURRENT_MODE                0x0016U
 /* LH 保持寄存器“AO 过程量来源”的起始地址；该字段占 1 个 16 位寄存器，并映射到 CPU2 对应设备参数。 */
 #define LH_HR_AO_OUTPUT_SOURCE               0x0017U
-/* LH 保持寄存器“AO 电流修正量，单位 0.01 mA”的起始地址；该字段占 2 个 16 位寄存器，并映射到 CPU2 对应设备参数。 */
-#define LH_HR_AO_CURRENT_CORRECTION_MA_X100  0x0018U
+/* LH 保持寄存器“AO 电流修正量，单位 0.001 mA”的起始地址；该字段占 2 个 16 位寄存器，并映射到 CPU2 对应设备参数。 */
+#define LH_HR_AO_CURRENT_CORRECTION_MA_X1000 0x0018U
 /* LH 保持寄存器“AO 固定输出电流，单位 0.01 mA”的起始地址；该字段占 2 个 16 位寄存器，并映射到 CPU2 对应设备参数。 */
 #define LH_HR_AO_FIXED_CURRENT_MA_X100       0x001AU
 /* LH 保持寄存器“AO 量程 0% 对应过程量，单位 0.01 mm”的起始地址；该字段占 2 个 16 位寄存器，并映射到 CPU2 对应设备参数。 */

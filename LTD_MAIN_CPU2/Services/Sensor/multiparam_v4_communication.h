@@ -170,6 +170,20 @@ uint32_t MULTIPARAM_V4_ValidateReply(const uint8_t request[MULTIPARAM_V4_INTERAC
 uint32_t MULTIPARAM_V4_ReadParamRaw(uint8_t parameter, uint32_t *raw_value);
 uint32_t MULTIPARAM_V4_ReadIntParam(uint8_t parameter, int32_t *value);
 uint32_t MULTIPARAM_V4_ReadFloatParam(uint8_t parameter, float *value);
+/*
+ * 函数用途：以单次、短超时事务读取一个浮点参数。
+ * 调用场景：交互测量完成后的附加调试量刷新。
+ * 关键约束：不做协议层重试，避免非关键刷新长时间阻塞核心测量流程。
+ */
+uint32_t MULTIPARAM_V4_ReadFloatParamOnce(uint8_t parameter, float *value);
+/*
+ * 函数用途：读取R02并解析当前测量模式和功能使能状态。
+ * 调用场景：交互方式读取R04、R05、R11和R12前核对数据语义与异常位。
+ * 关键约束：状态低四位无法映射时返回响应格式错误，不输出伪造模式。
+ */
+uint32_t MULTIPARAM_V4_ReadOperatingState(uint32_t *status_word,
+                                          multiparam_v4_measurement_mode_t *mode,
+                                          multiparam_v4_feature_state_t *feature);
 uint32_t MULTIPARAM_V4_WriteParamRaw(uint8_t parameter, uint32_t raw_value);
 /**
  * @brief 读取R01并判断是否为多参数V4协议版本。

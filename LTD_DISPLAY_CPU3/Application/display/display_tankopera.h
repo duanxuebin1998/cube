@@ -413,7 +413,7 @@ typedef enum
     COM_NUM_DEVICEPARAM_AO_WORK_MODE,                   /* AO工作模式 */
     COM_NUM_DEVICEPARAM_AO_CURRENT_MODE,                /* AO电流模式 */
     COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE,               /* AO输出源 */
-    COM_NUM_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X100,  /* AO电流修正，单位0.01mA */
+    COM_NUM_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X1000, /* AO电流修正，单位0.001mA */
     COM_NUM_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100,       /* AO固定电流 */
     COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM,                /* AO 0%对应值 */
     COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM,              /* AO 100%对应值 */

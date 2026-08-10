@@ -25,8 +25,9 @@
 ## Office、HTML 和 PDF
 
 - 修改 `.docx`、`.xlsx` 或复杂 HTML 时同时使用对应格式 skill，完成结构与视觉检查。
-- 现有 PDF 仍检查来源、关联性、时效、敏感性和提交清单。
-- 修改 Markdown、Word、HTML 或其它源文件不自动生成、刷新或新增 PDF；只有用户在当前任务明确要求 PDF 交付物时才生成并执行 PDF 校验。
+- 现有或用户人工维护的 PDF 仍检查来源、关联性、时效、敏感性和提交清单；任务开始时已经存在的 PDF 改动属于正常 Git 可见改动。
+- 修改 Markdown、Word、HTML 或其它源文件不自动生成、刷新或新增 PDF；只有用户在当前任务明确要求 PDF 交付物时，Codex 才生成或更新并执行 PDF 校验。
+- 不得仅因 PDF 存在同名 Markdown 就自动排除、拒绝暂存或拒绝提交。用户人工维护、明确要求处理或已纳入当前提交范围的 PDF，按普通项目资料处理，并在需要检查内容或版式时使用 PDF skill。
 - 面向外发的资料与内部治理资料分开；提交或推送前检查禁止外传、密钥、现场原始信息和个人数据。
 
 ## 当前 turn 必读
@@ -115,6 +116,6 @@ py .agents/skills/cube-development/scripts/check_commit_message_format.py --mess
 
 ## 验证边界
 
-- 文档改动至少运行文档结构、Markdown 链接、编码和 `git diff --check`。
+- 文档改动至少运行文档结构、Markdown 链接、编码和 `git diff --check`；不因源文档变化自动生成或刷新 PDF。人工维护且纳入当前交付范围的 PDF，按任务需要执行内容和版式检查。
 - 源码改动运行相关静态契约与 clean-first 构建；最终代码晚于构建时必须重建。
 - 真实目标板、传感器、RS485、FRAM、OLED、电机、故障注入和现场验证未执行时必须明确列出，不得用静态或构建证据替代。

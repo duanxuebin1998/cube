@@ -28,8 +28,8 @@ typedef struct {
 
 typedef struct {
     /* AO 对外运行态快照；同时保存目标/实发电流、输入过程量、百分比、驱动诊断和更新时间。 */
-    uint32_t target_mA_x100; /* 目标输出电流百倍定点值，单位为 0.01 mA；该字段保存已经缩放的整数定点值，换算物理量时只能应用一次缩放。 */
-    uint32_t last_sent_mA_x100; /* 最近实发电流百倍定点值，单位为 0.01 mA；该字段保存已经缩放的整数定点值，换算物理量时只能应用一次缩放。 */
+    uint32_t target_mA_x1000; /* 目标输出电流千倍定点值，单位为 0.001 mA；该字段保存已经缩放的整数定点值，换算物理量时只能应用一次缩放。 */
+    uint32_t last_sent_mA_x1000; /* 最近实发电流千倍定点值，单位为 0.001 mA；该字段保存已经缩放的整数定点值，换算物理量时只能应用一次缩放。 */
     uint32_t source; /* 当前目标电流的实际来源，取值遵循 AoOutputSource。 */
     uint32_t driver_fault_flags; /* AO 驱动最近一次诊断得到的归一化故障位集合。 */
     uint32_t driver_fault_register; /* AO 驱动最近一次故障寄存器原始值。 */
@@ -129,7 +129,7 @@ const AoOutputRuntime *AoOutput_GetRuntime(void);
  *
  * HART使用最后成功下发电流和真实过程百分数。
  *
- * @return 返回运行快照中最后一次成功下发电流 last_sent_mA_x100 除以 100 后的值，单位 mA；未确认的目标电流不参与返回。
+ * @return 返回运行快照中最后一次成功下发电流 last_sent_mA_x1000 除以 1000 后的值，单位 mA；未确认的目标电流不参与返回。
  */
 float AoOutput_GetCurrent_mA(void);
 /**

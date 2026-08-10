@@ -27,7 +27,7 @@
 
 | 主题 | 当前结论 | 依据 |
 | --- | --- | --- |
-| 共享协议版本 | 最新正式协议为32，CPU2/CPU3必须严格相等；协议32新增`MULTIPARAM_V4_SENSOR=15`共享语义，协议31的`0x0116~0x0117` Newhall扭力温度语义继续沿用，不改变参数存储布局 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`、`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h`、`CPU2_CPU3协议变更记录.md` |
+| 共享协议版本 | 本次正式协议为33，组合为CPU2 V1.39.0.0 / CPU3 V1.38.0.0，双端必须严格相等。协议33保持地址和参数结构不变，把AO修正及最终目标/实发值提升为x1000 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`、`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h`、`CPU2_CPU3协议变更记录.md` |
 | CPU3 外部 COM 快速发现 | 已完成 `0xF8/0x47` V3 简化方案设计，限定为三路外部 COM 只读发现；CPU3 固件、上位机和真实 RS485 台架均尚未实施，不改变当前版本及共享协议 | `CPU3外部COM安全快速设备发现协议设计.md` |
 | LTD 对外协议 | 只维护一套标准Modbus协议，沿用地址宏/枚举和`HoldingRegisterArray[]`、`InputRegisterArray[]`直映射格式；CPU3读已确认快照，FC10等待CPU2合法ACK，七个命令前置参数以ACK确认本次值并后台刷新完整快照；协议32沿用协议31故障表和扭力模块温度只读项，并新增多参数V4传感器类型显示，历史记录按CPU2程序版本选故障表 | `LTD共享Modbus协议/LTD共享Modbus协议卷.md` |
 | CPU2 参数存储 | `DEVICE_PARAM_VERSION = 3`，当前版本头为`V1.37.0.0`；协议32只扩展既有`sensorType`取值，不改变`DeviceParameters`结构、CRC范围或参数FRAM A/B槽，也不清现场参数。协议28命令快照和既有协议13、14、20、23～26迁移规则继续生效 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.c`、`../00_构建与版本/CPU2参数存储升级清单.md` |

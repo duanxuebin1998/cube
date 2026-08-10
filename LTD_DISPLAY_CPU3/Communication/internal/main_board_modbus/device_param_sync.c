@@ -376,8 +376,8 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
         return &g_deviceParams.ao_output.current_mode;
     case COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE:
         return &g_deviceParams.ao_output.output_source;
-    case COM_NUM_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X100:
-        return (volatile uint32_t *)&g_deviceParams.ao_output.current_correction_mA_x100;
+    case COM_NUM_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X1000:
+        return (volatile uint32_t *)&g_deviceParams.ao_output.current_correction_mA_x1000;
     case COM_NUM_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100:
         return &g_deviceParams.ao_output.fixed_current_mA_x100;
     case COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM:

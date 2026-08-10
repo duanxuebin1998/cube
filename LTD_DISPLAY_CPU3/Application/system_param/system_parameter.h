@@ -30,7 +30,7 @@
 /* 历史有线温度无效哨兵值 0；保留用于旧接口兼容，不能与无线温度无效值 UNVALID_TEMPERATURE_WIRELESS 混用。 */
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
-#define DEVICE_PROTOCOL_VERSION 32u /* CPU2/CPU3共享协议版本；协议32新增MULTIPARAM_V4_SENSOR=15共享语义，协议31扭力温度槽继续沿用。 */
+#define DEVICE_PROTOCOL_VERSION 33u /* CPU2/CPU3共享协议版本；协议33将AO电流修正及最终目标/实发电流倍率提升为x1000。 */
 /* 故障自动恢复的默认重试次数 3；仅在参数缺省、越界或旧版本迁移时作为归一化值。 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 /* 故障自动恢复重试次数的配置硬上限 10；CPU3 菜单和参数校验不得允许写入超过该值的重试次数。 */
@@ -58,10 +58,10 @@
 #define AO_SIMULATION_CURRENT_MIN_MA_X100  340U
 /* AO 调试模拟输出允许的最大电流 23.00 mA，线值单位为 0.01 mA；模拟模式仍不能越过硬件保护范围。 */
 #define AO_SIMULATION_CURRENT_MAX_MA_X100  2300U
-/* AO 电流校正量允许下限 -1.00 mA，线值单位为 0.01 mA；该值是有符号修正量，不是绝对输出电流。 */
-#define AO_CURRENT_CORRECTION_MIN_MA_X100  (-100)
-/* AO 电流校正量允许上限 +1.00 mA，线值单位为 0.01 mA；校正后结果仍需经过硬件电流限幅。 */
-#define AO_CURRENT_CORRECTION_MAX_MA_X100  100
+/* AO 电流校正量允许下限 -1.000 mA，线值单位为 0.001 mA；该值是有符号修正量，不是绝对输出电流。 */
+#define AO_CURRENT_CORRECTION_MIN_MA_X1000  (-1000)
+/* AO 电流校正量允许上限 +1.000 mA，线值单位为 0.001 mA；校正后结果仍需经过硬件电流限幅。 */
+#define AO_CURRENT_CORRECTION_MAX_MA_X1000  1000
 /* AO 阻尼时间允许上限 999.9 s，线值单位为 0.1 s；用于限制持久化参数和菜单输入，防止时间换算溢出。 */
 #define AO_DAMPING_MAX_X10_S               9999U
 
@@ -225,7 +225,7 @@ typedef struct {
     uint32_t work_mode; /* AO 工作模式，取值遵循 AoWorkMode。 */
     uint32_t current_mode; /* AO 电流制式或固定输出模式，取值遵循 AoCurrentMode。 */
     uint32_t output_source; /* AO 过程量来源，决定量程换算使用油位、位置或水位。 */
-    int32_t current_correction_mA_x100;     /* 电流修正值，单位0.01mA，复用原SIL/WHG预留槽 */
+    int32_t current_correction_mA_x1000;     /* 电流修正值，单位0.001mA，复用原SIL/WHG预留槽 */
     uint32_t fixed_current_mA_x100; /* AO 固定电流模式的目标值，单位为 0.01 mA。 */
     int32_t range_0_01mm; /* AO 过程量量程的 0% 端点，单位为 0.1 mm。 */
     int32_t range_100_01mm; /* AO 过程量量程的 100% 端点，单位为 0.1 mm。 */
@@ -797,8 +797,8 @@ typedef struct {
 } WirelessPairingStatus;
 
 typedef struct {
-    uint32_t target_mA_x100;                 /* AO目标电流，单位0.01mA */
-    uint32_t last_sent_mA_x100;              /* AO最近一次成功写入电流，单位0.01mA */
+    uint32_t target_mA_x1000;                /* AO目标电流，单位0.001mA */
+    uint32_t last_sent_mA_x1000;             /* AO最近一次成功写入电流，单位0.001mA */
     uint32_t source;                         /* AO输出来源，参考CPU2 AoOutputSource */
     uint32_t driver_fault_flags;             /* AD5421驱动故障标志 */
     uint32_t driver_fault_register;          /* AD5421 READFAULT原始值 */

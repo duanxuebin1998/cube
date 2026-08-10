@@ -19,7 +19,9 @@ description: Repository-scoped workflow for every D:\CUBE engineering task, incl
 - `docs/00_程序流程导航/` 与 `tools/` 在本机同步但不纳入 Git，不得 `git add -f`。
 - 修改已有文件前确认编码和换行。CPU2/CPU3 旧源码可能是 GBK/936；文档、skill 和工具脚本使用 UTF-8。
 - C/C++ 新增或修改注释统一使用 `/* ... */`，不得新增 `//`。
-- 修改 Markdown、Word、HTML 或其它源文档时默认不生成、刷新或配套新增 PDF；只有用户当前任务明确要求 PDF 交付物时才生成并验证。
+- CPU2/CPU3 板间共享契约与 CPU3 对外 LTD 标准 Modbus 的共享区使用同一组地址、字段和命令语义；修改任一侧时同步更新两端实现、LTD 对外暴露、协议版本、正式协议资料和契约测试。
+- 修改 Markdown、Word、HTML 或其它源文档时默认不自动生成、刷新或配套新增 PDF；只有用户当前任务明确要求 PDF 交付物时才由 Codex 生成或更新并验证。
+- 已由用户人工维护、或任务开始时已有改动的 PDF 是正常项目资料，不得仅因存在同名 Markdown 自动排除、拒绝暂存或拒绝提交；需要检查或交付时按用户范围使用 PDF skill。
 - 固件、硬件、台架、现场和 SIL 证据必须分层描述；构建或静态检查不等于真实设备验证。
 
 ## 开始和结束门禁

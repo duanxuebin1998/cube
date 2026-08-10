@@ -901,7 +901,7 @@ static void ao_load_default_config(const DeviceParameters *params, AoOutputConfi
     config->work_mode = AO_WORK_MODE_DISABLED;
     config->current_mode = AO_CURRENT_MODE_NE;
     config->output_source = AO_PROCESS_SOURCE_TANK_LEVEL;
-    config->current_correction_mA_x100 = 0;
+    config->current_correction_mA_x1000 = 0;
     config->fixed_current_mA_x100 = 400U;
     ao_load_default_range(params, config);
     config->damping_x10_s = 0U;
@@ -929,8 +929,8 @@ static int ao_config_is_valid(const DeviceParameters *params, const AoOutputConf
     if ((config->work_mode > AO_WORK_MODE_HART_SLAVE_OUTPUT) ||
         (config->current_mode > AO_CURRENT_MODE_FIXED) ||
         (config->output_source > AO_PROCESS_SOURCE_WATER_LEVEL) ||
-        (config->current_correction_mA_x100 < AO_CURRENT_CORRECTION_MIN_MA_X100) ||
-        (config->current_correction_mA_x100 > AO_CURRENT_CORRECTION_MAX_MA_X100) ||
+        (config->current_correction_mA_x1000 < AO_CURRENT_CORRECTION_MIN_MA_X1000) ||
+        (config->current_correction_mA_x1000 > AO_CURRENT_CORRECTION_MAX_MA_X1000) ||
         (config->fault_mode > AO_FAULT_ACTION_HOLD_LAST_VALID) ||
         (config->error_level != 0U)) {
         return 0;
@@ -1098,6 +1098,32 @@ static int migrate_ao_fault_action_runtime(void)
 }
 
 /**
+ * @brief 把协议26至32的AO电流修正倍率从x100迁移为协议33的x1000。
+ *
+ * @details 调用场景：旧AO布局和故障动作迁移完成后、AO严格归一化之前调用。
+ * @note 关键约束：只改变第4个32位槽的数值倍率，不改变参数结构尺寸、字段偏移或CRC范围。
+ *
+ * @return 1 表示旧倍率、旧预留或未知新版本值已转换或归零；当前协议值无需修改时返回0。
+ */
+static int migrate_ao_current_correction_scale_runtime(void)
+{
+    AoOutputConfig *config = (AoOutputConfig *)&g_deviceParams.ao_output;
+    int32_t old_value = config->current_correction_mA_x1000;
+    uint32_t old_protocol = g_deviceParams.protocolVersion;
+
+    if (old_protocol == DEVICE_PROTOCOL_VERSION) {
+        return 0;
+    }
+    if ((old_protocol >= 26U) && (old_protocol <= 32U) &&
+        (old_value >= -100) && (old_value <= 100)) {
+        config->current_correction_mA_x1000 = old_value * 10;
+    } else {
+        /* 协议25及更早为预留槽，未知新版本也不得猜测倍率。 */
+        config->current_correction_mA_x1000 = 0;
+    }
+    return (config->current_correction_mA_x1000 != old_value) ? 1 : 0;
+}
+/**
  * @brief 启动加载时归一化AO配置；用户写参走严格拒绝路径，不调用本函数兜底。
  *
  * @return 1 表示启动加载时至少一个 AO 非法旧值已归一化；配置原本合法时返回 0。
@@ -1118,12 +1144,10 @@ static int normalize_ao_params_runtime(void)
     if (normalized.output_source > AO_PROCESS_SOURCE_WATER_LEVEL) {
         normalized.output_source = defaults.output_source;
     }
-    if ((g_deviceParams.protocolVersion < 26U) ||
-        (g_deviceParams.protocolVersion > DEVICE_PROTOCOL_VERSION) ||
-        (normalized.current_correction_mA_x100 < AO_CURRENT_CORRECTION_MIN_MA_X100) ||
-        (normalized.current_correction_mA_x100 > AO_CURRENT_CORRECTION_MAX_MA_X100)) {
-        /* 协议25及更早版本中该槽位为隐藏预留，升级时必须从零修正开始。 */
-        normalized.current_correction_mA_x100 = defaults.current_correction_mA_x100;
+    if ((normalized.current_correction_mA_x1000 < AO_CURRENT_CORRECTION_MIN_MA_X1000) ||
+        (normalized.current_correction_mA_x1000 > AO_CURRENT_CORRECTION_MAX_MA_X1000)) {
+        /* 协议语义迁移已经处理旧倍率和未知版本；此处只收敛越界的当前倍率值。 */
+        normalized.current_correction_mA_x1000 = defaults.current_correction_mA_x1000;
     }
     if ((normalized.fixed_current_mA_x100 < AO_FIXED_CURRENT_MIN_MA_X100) ||
         (normalized.fixed_current_mA_x100 > AO_FIXED_CURRENT_MAX_MA_X100)) {
@@ -1904,6 +1928,7 @@ int load_device_params(void)
     params_normalized = migrate_density_params_runtime();
     params_normalized |= migrate_ao_params_runtime();
     params_normalized |= migrate_ao_fault_action_runtime();
+    params_normalized |= migrate_ao_current_correction_scale_runtime();
     params_normalized |= normalize_device_params_runtime();
     params_normalized |= apply_firmware_version_runtime();
     params_normalized |= apply_protocol_version_runtime();
@@ -2291,7 +2316,7 @@ static const ParamPrintItem g_device_param_print_table[] = {
     DEVICE_PARAM_ITEM("4-20mA/AO参数", "工作模式", ao_output.work_mode, PARAM_PRINT_TYPE_U32, NULL),
     DEVICE_PARAM_ITEM("4-20mA/AO参数", "电流模式", ao_output.current_mode, PARAM_PRINT_TYPE_U32, NULL),
     DEVICE_PARAM_ITEM("4-20mA/AO参数", "输出源", ao_output.output_source, PARAM_PRINT_TYPE_U32, NULL),
-    DEVICE_PARAM_ITEM("4-20mA/AO参数", "电流修正", ao_output.current_correction_mA_x100, PARAM_PRINT_TYPE_I32_UNIT, "0.01mA"),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "电流修正", ao_output.current_correction_mA_x1000, PARAM_PRINT_TYPE_I32_UNIT, "0.001mA"),
     DEVICE_PARAM_ITEM("4-20mA/AO参数", "固定电流", ao_output.fixed_current_mA_x100, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
     DEVICE_PARAM_ITEM("4-20mA/AO参数", "0%量程", ao_output.range_0_01mm, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
     DEVICE_PARAM_ITEM("4-20mA/AO参数", "100%量程", ao_output.range_100_01mm, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),

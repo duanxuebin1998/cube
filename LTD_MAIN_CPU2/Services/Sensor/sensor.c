@@ -764,13 +764,10 @@ uint32_t EnableLevelMode(void) {
 /*
  * 函数用途：按当前传感器类型读取一次液位模式频率，不执行运动或模式恢复。
  * 调用场景：液位静态读取、运动中状态判断和主动快照消费。
- * 关键约束：多参数V4主动方式只读快照，交互方式只读R04，未知类型明确拒绝。
+ * 关键约束：多参数V4由统一测量适配层按主动或交互方式读取，并在解释R04前核对R02模式。
  */
 uint32_t Sensor_ReadLevelFrequency(uint32_t *frequency_out)
 {
-    int32_t frequency_value;
-    uint32_t result;
-
     if (frequency_out == NULL) {
         return SYSTEM_CALL_CONDITION_ERROR;
     }
@@ -786,22 +783,7 @@ uint32_t Sensor_ReadLevelFrequency(uint32_t *frequency_out)
     if (g_deviceParams.sensorType != MULTIPARAM_V4_SENSOR) {
         return SENSOR_CAPABILITY_UNSUPPORTED;
     }
-
-    if (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_ACTIVE) {
-        return MULTIPARAM_V4_MeasurementReadLevelFrequency(frequency_out);
-    }
-    if (MULTIPARAM_V4_GetCommunicationMode() != MULTIPARAM_V4_COMMUNICATION_INTERACTIVE) {
-        return SENSOR_STREAM_STATE_ERROR;
-    }
-    result = MULTIPARAM_V4_ReadIntParam(4U, &frequency_value);
-    if (result != NO_ERROR) {
-        return result;
-    }
-    if ((frequency_value < 0) || (frequency_value > 6600)) {
-        return SONIC_FREQ_ABNORMAL;
-    }
-    *frequency_out = (uint32_t)frequency_value;
-    return NO_ERROR;
+    return MULTIPARAM_V4_MeasurementReadLevelFrequency(frequency_out);
 }
 
 /* 读取一次并以整数 Hz 返回。 */
@@ -1045,7 +1027,6 @@ static void Apply_Fixed_DensityTemp_Correction(float *density, float *temp)
 uint32_t Read_Density(float *frequency, float *density, float *temp) {
     float hz_45 = 0.0f;
     float hz_225 = 0.0f;
-    int32_t v4_frequency = 0;
     uint32_t ret = NO_ERROR;
 
     if ((frequency == NULL) || (temp == NULL) || (density == NULL)) {
@@ -1069,24 +1050,9 @@ uint32_t Read_Density(float *frequency, float *density, float *temp) {
             return Sensor_DiagnoseCommTimeout(ret, "读取LTD频率");
         }
     } else if (g_deviceParams.sensorType == MULTIPARAM_V4_SENSOR) {
-        if (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_ACTIVE) {
-            ret = MULTIPARAM_V4_MeasurementReadDensity(frequency, density, temp);
-        } else if (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_INTERACTIVE) {
-            ret = MULTIPARAM_V4_ReadIntParam(4U, &v4_frequency);
-            if (ret == NO_ERROR) {
-                ret = MULTIPARAM_V4_ReadFloatParam(7U, density);
-            }
-            if (ret == NO_ERROR) {
-                ret = MULTIPARAM_V4_ReadFloatParam(6U, temp);
-            }
-            if (ret == NO_ERROR) {
-                *frequency = (float)v4_frequency;
-            }
-        } else {
-            ret = SENSOR_STREAM_STATE_ERROR;
-        }
+        ret = MULTIPARAM_V4_MeasurementReadDensity(frequency, density, temp);
         if ((ret == NO_ERROR) &&
-            ((v4_frequency < 0) || (*frequency < 0.0f) || (*frequency > 6600.0f) ||
+            ((*frequency < 0.0f) || (*frequency > 6600.0f) ||
              (*density < 0.0f) || (*density > 3000.0f) ||
              (*temp < -200.0f) || (*temp > 300.0f))) {
             ret = SENSOR_RESP_FORMAT_ERROR;
@@ -1133,10 +1099,8 @@ uint32_t Sensor_ReadWaterCapacitance(float *cap_out)
         ret = SensorSafeAdapter_ReadWaterCapacitance(cap_out);
     } else if (g_deviceParams.sensorType == DSM_SENSOR) {
         ret = Read_Water_Capacitance(cap_out);
-    } else if (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_ACTIVE) {
+    } else if (g_deviceParams.sensorType == MULTIPARAM_V4_SENSOR) {
         ret = MULTIPARAM_V4_MeasurementReadWaterCapacitance(cap_out);
-    } else if (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_INTERACTIVE) {
-        ret = MULTIPARAM_V4_ReadFloatParam(5U, cap_out);
     } else {
         ret = SENSOR_STREAM_STATE_ERROR;
     }
@@ -1167,13 +1131,8 @@ uint32_t Sensor_ReadGyroAngle(float *angle_x_deg, float *angle_y_deg)
         ret = SensorSafeAdapter_ReadGyroAngle(angle_x_deg, angle_y_deg);
     } else if (g_deviceParams.sensorType == DSM_SENSOR) {
         ret = Read_Gyro_Angle(angle_x_deg, angle_y_deg);
-    } else if (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_ACTIVE) {
+    } else if (g_deviceParams.sensorType == MULTIPARAM_V4_SENSOR) {
         ret = MULTIPARAM_V4_MeasurementReadGyro(angle_x_deg, angle_y_deg);
-    } else if (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_INTERACTIVE) {
-        ret = MULTIPARAM_V4_ReadFloatParam(11U, angle_x_deg);
-        if (ret == NO_ERROR) {
-            ret = MULTIPARAM_V4_ReadFloatParam(12U, angle_y_deg);
-        }
     } else {
         ret = SENSOR_STREAM_STATE_ERROR;
     }

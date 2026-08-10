@@ -95,6 +95,34 @@ def main() -> int:
 
     validate_agent_yaml(skill_root / "agents" / "openai.yaml")
 
+    required_policy_fragments = {
+        skill_path: (
+            "CPU2/CPU3 板间共享契约与 CPU3 对外 LTD 标准 Modbus 的共享区",
+            "默认不自动生成、刷新或配套新增 PDF",
+            "不得仅因存在同名 Markdown 自动排除",
+        ),
+        skill_root / "references" / "internal-protocol-and-storage.md": (
+            "CPU3 对外 LTD 标准 Modbus 的共享区是同一份契约",
+        ),
+        skill_root / "references" / "external-protocols.md": (
+            "不得只改板间或对外一侧",
+            "CPU3 本机 `0x7000` 高地址段不属于 CPU2/CPU3 共享区",
+        ),
+        skill_root / "references" / "docs-git-validation.md": (
+            "现有或用户人工维护的 PDF",
+            "不自动生成、刷新或新增 PDF",
+            "不得仅因 PDF 存在同名 Markdown 就自动排除",
+        ),
+        skill_root / "references" / "version-build-release.md": (
+            "CPU3 对外 LTD 标准 Modbus 的共享区直接使用同一契约",
+        ),
+    }
+    for policy_path, fragments in required_policy_fragments.items():
+        policy_text = read_utf8(policy_path)
+        for fragment in fragments:
+            if fragment not in policy_text:
+                fail(f"Required CUBE policy fragment is missing from {policy_path}: {fragment}")
+
     reference_files = sorted((skill_root / "references").glob("*.md"))
     text_files = [skill_path, skill_root / "agents" / "openai.yaml"]
     text_files.extend(reference_files)
