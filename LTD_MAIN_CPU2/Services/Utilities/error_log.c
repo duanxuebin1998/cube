@@ -499,13 +499,13 @@ const char *ErrorLog_GetCodeName(uint32_t code)
     case MOTOR_TMC_COMM_ERROR:
         return "TMC5130通信异常";
     case MOTOR_DISABLED:
-        return "电机驱动未使能";
+        return "电机驱动电流未建立";
     case MOTOR_UNKNOWN_FEEDBACK:
-        return "电机反馈未知";
+        return "电机驱动故障类型未知";
     case MOTOR_STEP_ERROR:
         return "电机无有效位移";
     case MOTOR_CHARGE_PUMP_UNDER_VOLTAGE:
-        return "电荷泵欠压";
+        return "电机驱动内部升压不足";
     case MOTOR_OVERTEMPERATURE:
         return "电机驱动过温关断";
     case MOTOR_RUN_TIMEOUT:
@@ -523,25 +523,25 @@ const char *ErrorLog_GetCodeName(uint32_t code)
     case MOTOR_DRIVER_NOT_INITIALIZED:
         return "电机驱动未初始化";
     case MOTOR_STOP_WAIT_TIMEOUT:
-        return "电机停止等待超时";
+        return "电机未按时停下";
     case MOTOR_ARRIVAL_WAIT_TIMEOUT:
-        return "电机到位等待超时";
+        return "电机未按时到位";
     case ENCODER_TIMEOUT:
-        return "编码器采集接口异常";
+        return "编码器没有有效位置数据";
     case ENCODER_PARITY_ERROR:
-        return "编码器校验失败";
+        return "编码器数据校验失败";
     case ENCODER_LOST_STEP:
-        return "编码器检测到丢步";
+        return "编码器记录位移不足";
     case ENCODER_POWERON_FAIL:
-        return "编码器上电初始化失败";
+        return "编码器位置记录不可用";
     case ENCODER_POWERON_CHANGE:
-        return "编码器上电值变化";
+        return "编码器上电位置跳变（保留码）";
     case ENCODER_DIFF_EXCESS:
-        return "编码器相邻差值过大";
+        return "编码轮周长标定值过大";
     case ENCODER_CORDIC_OVERFLOW:
-        return "编码器角度运算溢出";
+        return "编码器角度计算超限";
     case ENCODER_LINEARITY_WARNING:
-        return "编码器线性度报警";
+        return "编码器角度线性异常（保留码）";
     case ENCODER_OCF_INCOMPLETE:
         return "编码器角度计算未完成";
     case ENCODER_FIRST_SAMPLE_TIMEOUT:
@@ -551,7 +551,7 @@ const char *ErrorLog_GetCodeName(uint32_t code)
     case SENSOR_BCC_ERROR:
         return "传感器校验错误";
     case SONIC_FREQ_ABNORMAL:
-        return "震动管频率异常";
+        return "振动管频率异常";
     case SENSOR_DEVICE_COMM_TIMEOUT:
         return "传感器通信超时";
     case SENSOR_INTERNAL_CPU_COMM_TIMEOUT:
@@ -559,11 +559,11 @@ const char *ErrorLog_GetCodeName(uint32_t code)
     case SENSOR_GYRO_ANGLE_ERROR:
         return "传感器姿态角异常";
     case SENSOR_INTERNAL_COMM_CHECK_ERROR:
-        return "传感器内部校验异常";
+        return "传感器内部通信校验失败";
     case SENSOR_NO_RESONANCE:
         return "传感器无谐振";
     case DENSITY_INVALID:
-        return "密度值异常";
+        return "密度值超出有效范围";
     case SENSOR_RESP_FORMAT_ERROR:
         return "传感器响应格式异常";
     case SENSOR_POWER_SUPPLY_ERROR:
@@ -579,7 +579,7 @@ const char *ErrorLog_GetCodeName(uint32_t code)
     case SENSOR_MODE_NOT_READY:
         return "传感器模式未就绪";
     case SENSOR_CONFIG_EPOCH_MISMATCH:
-        return "传感器配置代次不一致";
+        return "传感器配置批次不一致";
     case SENSOR_STREAM_STATE_ERROR:
         return "传感器上报状态不一致";
     case SENSOR_DATA_STALE:
@@ -591,53 +591,53 @@ const char *ErrorLog_GetCodeName(uint32_t code)
     case SENSOR_ADDRESS_MISMATCH:
         return "传感器地址不匹配";
     case SENSOR_SESSION_INVALID:
-        return "传感器会话失效";
+        return "传感器连接状态失效";
     case SENSOR_SEQUENCE_ERROR:
-        return "传感器报文序号异常";
+        return "传感器应答序号不一致";
     case SENSOR_HANDSHAKE_REQUIRED:
-        return "传感器需要重新握手";
+        return "传感器需要重新确认连接";
     case SENSOR_REPLAY_DETECTED:
-        return "传感器重复报文";
+        return "收到重复的传感器数据";
     case SENSOR_CAPABILITY_UNSUPPORTED:
-        return "传感器能力不支持";
+        return "传感器不支持所需功能";
     case SENSOR_COMMAND_UNSUPPORTED:
         return "传感器命令不支持";
     case SENSOR_ARGUMENT_REJECTED:
-        return "传感器命令参数被拒绝";
+        return "传感器不接受当前参数";
     case SENSOR_MODE_MISMATCH:
         return "传感器模式不一致";
     case SENSOR_MODE_NOT_ALLOWED:
-        return "传感器模式不允许";
+        return "传感器当前模式不允许操作";
     case SENSOR_TRANSACTION_PENDING:
-        return "传感器通信未完成";
+        return "上一次传感器操作尚未完成";
     case SENSOR_DEVICE_BUSY:
         return "传感器设备忙";
     case SENSOR_PARAM_CRC_ERROR:
         return "传感器参数校验失败";
     case SENSOR_SAMPLE_COUNTER_ERROR:
-        return "传感器采样计数异常";
+        return "传感器采样序号异常";
     case SENSOR_STREAM_STOPPED:
         return "传感器周期上报停止";
     case SENSOR_STREAM_NOT_ACTIVE:
         return "传感器周期上报未启动";
     case SENSOR_STREAM_ALREADY_ACTIVE:
-        return "传感器周期上报已启动";
+        return "传感器周期上报重复启动";
     case SENSOR_STREAM_EXIT_FAILED:
         return "传感器周期上报退出失败";
     case MEASUREMENT_ZERO_OUT_OF_RANGE:
-        return "零点超限";
+        return "零点位置超出允许范围";
     case MEASUREMENT_ZERO_REPEAT_FAIL:
-        return "零点重复性差";
+        return "陀螺仪基准不稳定";
     case POSITION_DATA_INVALID:
         return "位置数据无效";
     case POSITION_TARGET_OVERRUN:
         return "运动越过目标";
     case POSITION_ARRIVAL_DEVIATION:
-        return "到位偏差过大";
+        return "电机到位偏差过大";
     case POSITION_MOTOR_NOT_STOPPED:
         return "电机未停止";
     case MEASUREMENT_OILLEVEL_HIGH:
-        return "液位超过罐高";
+        return "上行找液位到达位置上限";
     case MEASUREMENT_OVERSPEED:
         return "液位变化过快";
     case MEASUREMENT_HEIGHT_DEVIATION:
@@ -647,9 +647,9 @@ const char *ErrorLog_GetCodeName(uint32_t code)
     case MEASUREMENT_OILLEVEL_NOTFOUND:
         return "上行未找到液位";
     case MEASUREMENT_WEIGHT_DOWN_FAIL:
-        return "下行寻重失败";
+        return "下行未找到罐底";
     case MEASUREMENT_WEIGHT_UP_FAIL:
-        return "上行寻重失败";
+        return "上行未找到零点";
     case MEASUREMENT_WATERLEVEL_LOW:
         return "下行未找到水位";
     case MEASUREMENT_DENSITY_NO_VALID_POINT:
@@ -661,7 +661,7 @@ const char *ErrorLog_GetCodeName(uint32_t code)
     case MEASUREMENT_FREQUENCY_LEVEL_TIMEOUT:
         return "频率找液位超时";
     case MEASUREMENT_BOTTOM_RELEASE_FAIL:
-        return "探底前离底失败";
+        return "探底前未能离开罐底";
     case MEASUREMENT_TANK_HEIGHT_NOT_CONFIGURED:
         return "未设置罐高标定值";
     case MEASUREMENT_WATER_CALIBRATION_NOT_CONFIGURED:
@@ -681,7 +681,7 @@ const char *ErrorLog_GetCodeName(uint32_t code)
     case PARAM_CRC_ERROR:
         return "参数完整性校验失败";
     case PARAM_CONFIG_MISSING:
-        return "必需配置缺失";
+        return "关键参数未设置";
     case PARAM_COMBINATION_CONFLICT:
         return "参数组合冲突";
     case PARAM_FEATURE_UNSUPPORTED:
@@ -705,7 +705,7 @@ const char *ErrorLog_GetCodeName(uint32_t code)
     case AD5421_LOOP_VOLTAGE_LOW:
         return "模拟输出环路电压低";
     case AD5421_SPI_TRANSFER_ERROR:
-        return "模拟输出通信失败";
+        return "主控与模拟量输出模块通信失败";
     case AD5421_ACCESS_BUSY:
         return "模拟输出访问冲突";
     case AD5421_OVERTEMP_SHUTDOWN:
@@ -715,9 +715,9 @@ const char *ErrorLog_GetCodeName(uint32_t code)
     case COMM_UART_TRANSFER_ERROR:
         return "串口传输异常";
     case SLIPRING_COMM_FAIL:
-        return "滑环通信失败";
+        return "无线滑环通信失败";
     case SLIPRING_SIGNAL_WEAK:
-        return "滑环信号弱";
+        return "无线配对信号不达标";
     case WIRELESS_HOST_COMM_TIMEOUT:
         return "蓝牙主机通信超时";
     case WIRELESS_SLAVE_COMM_TIMEOUT:
@@ -725,7 +725,7 @@ const char *ErrorLog_GetCodeName(uint32_t code)
     case WIRELESS_RESP_FORMAT_ERROR:
         return "无线响应格式异常";
     case WIRELESS_SCAN_NO_DEVICE:
-        return "无线扫描无设备";
+        return "无线扫描未发现设备";
     case WIRELESS_NAME_NOT_UNIQUE:
         return "无线名称重复";
     case WIRELESS_NAME_NOT_FOUND:
@@ -735,19 +735,19 @@ const char *ErrorLog_GetCodeName(uint32_t code)
     case WIRELESS_NOT_HOST_MODE:
         return "无线非主机模式";
     case WEIGHT_OUT_OF_RANGE:
-        return "扭力超上限";
+        return "满载标定扭力超过上限";
     case WEIGHT_UNDER_RANGE:
-        return "扭力超下限";
+        return "满载标定扭力低于下限";
     case WEIGHT_COLLISION_DETECTED:
-        return "检测到碰撞";
+        return "扭力变化超过保护值";
     case WEIGHT_DRIFT_ERROR:
-        return "扭力漂移异常";
+        return "空载标定扭力偏离零点";
     case WEIGHT_SENSOR_SATURATION:
         return "扭力传感器饱和";
     case WEIGHT_COMM_TIMEOUT:
         return "扭力通信超时";
     case SYSTEM_BUFFER_CAPACITY_ERROR:
-        return "系统容量不足";
+        return "内部数据空间不足";
     case SYSTEM_CALL_CONDITION_ERROR:
         return "系统调用条件异常";
     case SYSTEM_CALCULATION_ERROR:
@@ -755,13 +755,13 @@ const char *ErrorLog_GetCodeName(uint32_t code)
     case POWER_SUPPLY_24V_UNDERVOLTAGE:
         return "整机24V欠压";
     case POWER_MONITOR_ADC_OVERRUN:
-        return "电源监控ADC溢出";
+        return "电源采样数据处理不及时";
     case POWER_MONITOR_DMA_STOPPED:
-        return "电源监控DMA停止";
+        return "电源采样传输意外停止";
     case POWER_MONITOR_INIT_FAILED:
-        return "电源监控启动失败";
+        return "电源采样启动失败";
     case POWER_MONITOR_RECOVERY_FAILED:
-        return "电源监控恢复失败";
+        return "电源采样连续恢复失败";
     case POWER_LOSS_POSITION_SAVE_FAILED:
         return "掉电位置保存失败";
     default:

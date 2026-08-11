@@ -245,10 +245,10 @@ typedef enum {
 
     /* ==================== 11 电机驱动故障 (0x000B0000 - 0x000BFFFF) ==================== */
     MOTOR_TMC_COMM_ERROR = 0x000B0002,            /* 电机驱动寄存器通信异常 */
-    MOTOR_DISABLED = 0x000B0004,                  /* 电机驱动输出未使能 */
-    MOTOR_UNKNOWN_FEEDBACK = 0x000B0005,          /* 电机反馈状态未知 */
+    MOTOR_DISABLED = 0x000B0004,                  /*电机驱动电流未建立*/
+    MOTOR_UNKNOWN_FEEDBACK = 0x000B0005,          /*电机驱动故障类型未知*/
     MOTOR_STEP_ERROR = 0x000B000A,                /* 电机运动无有效位移 */
-    MOTOR_CHARGE_PUMP_UNDER_VOLTAGE = 0x000B0010, /* 电机驱动电荷泵欠压 */
+    MOTOR_CHARGE_PUMP_UNDER_VOLTAGE = 0x000B0010, /*电机驱动内部升压不足*/
     MOTOR_OVERTEMPERATURE = 0x000B0011,           /* 电机驱动过温关断 */
     MOTOR_RUN_TIMEOUT = 0x000B0012,               /* 电机整段运行超时 */
     MOTOR_TMC_CONFIG_LOST = 0x000B0003,           /* 电机驱动运行期复位或关键配置丢失 */
@@ -257,31 +257,31 @@ typedef enum {
     MOTOR_PHASE_OPEN_ERROR = 0x000B0014,          /* 电机相线断路 */
     MOTOR_DRIVER_OVERTEMP_WARNING = 0x000B0015,   /* 电机驱动过温预警 */
     MOTOR_DRIVER_NOT_INITIALIZED = 0x000B0016,    /* 电机驱动未初始化 */
-    MOTOR_STOP_WAIT_TIMEOUT = 0x000B0017,         /* 电机停止等待超时 */
-    MOTOR_ARRIVAL_WAIT_TIMEOUT = 0x000B0018,      /* 电机等待到达目标位置超时 */
+    MOTOR_STOP_WAIT_TIMEOUT = 0x000B0017,         /*电机未按时停下*/
+    MOTOR_ARRIVAL_WAIT_TIMEOUT = 0x000B0018,      /*电机未按时到位*/
 
     /* ==================== 12 编码器故障 (0x000C0000 - 0x000CFFFF) ==================== */
-    ENCODER_TIMEOUT = 0x000C0001,                 /* 编码器SPI或DMA采集接口异常 */
-    ENCODER_PARITY_ERROR = 0x000C0002,            /* 编码器校验失败 */
-    ENCODER_LOST_STEP = 0x000C0003,               /* 编码器检测到丢步 */
-    ENCODER_POWERON_FAIL = 0x000C0005,            /* 编码器上电初始化失败 */
-    ENCODER_POWERON_CHANGE = 0x000C0006,          /* 编码器上电值变化，保留 */
-    ENCODER_DIFF_EXCESS = 0x000C000A,             /* 编码器相邻差值过大 */
-    ENCODER_CORDIC_OVERFLOW = 0x000C000C,         /* 编码器内部运算溢出 */
-    ENCODER_LINEARITY_WARNING = 0x000C000D,       /* 编码器线性度报警 */
-    ENCODER_OCF_INCOMPLETE = 0x000C000E,          /* 编码器角度计算未完成 */
+    ENCODER_TIMEOUT = 0x000C0001,                 /*编码器没有有效位置数据*/
+    ENCODER_PARITY_ERROR = 0x000C0002,            /*编码器数据校验失败*/
+    ENCODER_LOST_STEP = 0x000C0003,               /*编码器记录位移不足*/
+    ENCODER_POWERON_FAIL = 0x000C0005,            /*编码器位置记录不可用*/
+    ENCODER_POWERON_CHANGE = 0x000C0006,          /*编码器上电位置跳变（保留码）*/
+    ENCODER_DIFF_EXCESS = 0x000C000A,             /*编码轮周长标定值过大*/
+    ENCODER_CORDIC_OVERFLOW = 0x000C000C,         /*编码器角度计算超限*/
+    ENCODER_LINEARITY_WARNING = 0x000C000D,       /*编码器角度线性异常（保留码）*/
+    ENCODER_OCF_INCOMPLETE = 0x000C000E,          /*编码器角度计算未完成*/
     ENCODER_FIRST_SAMPLE_TIMEOUT = 0x000C000F,    /* 启动后首个有效位置等待超时 */
     ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR = 0x000C0010, /* 编码轮周长标定异常 */
 
     /* ==================== 13 传感器与密度故障 (0x000D0000 - 0x000DFFFF) ==================== */
     SENSOR_BCC_ERROR = 0x000D0001,                /* 传感器数据校验失败 */
-    SONIC_FREQ_ABNORMAL = 0x000D0002,             /* 震动管频率异常 */
+    SONIC_FREQ_ABNORMAL = 0x000D0002,             /*振动管频率异常*/
     SENSOR_DEVICE_COMM_TIMEOUT = 0x000D0003,      /* 传感器设备通信超时 */
     SENSOR_INTERNAL_CPU_COMM_TIMEOUT = 0x000D0005, /* 传感器内部处理单元通信超时 */
     SENSOR_GYRO_ANGLE_ERROR = 0x000D000E,         /* 传感器姿态角异常 */
-    SENSOR_INTERNAL_COMM_CHECK_ERROR = 0x000D0010, /* 传感器内部通信校验异常 */
+    SENSOR_INTERNAL_COMM_CHECK_ERROR = 0x000D0010, /*传感器内部通信校验失败*/
     SENSOR_NO_RESONANCE = 0x000D0015,             /* 传感器无谐振 */
-    DENSITY_INVALID = 0x000D001A,                 /* 密度值超出有效范围 */
+    DENSITY_INVALID = 0x000D001A,                 /*密度值超出有效范围*/
     SENSOR_RESP_FORMAT_ERROR = 0x000D001B,        /* 传感器响应格式异常 */
     SENSOR_POWER_SUPPLY_ERROR = 0x000D001C,       /* 传感器供电异常 */
     SENSOR_GYRO_COMM_TIMEOUT = 0x000D001D,        /* 传感器姿态模块通信超时 */
@@ -289,52 +289,52 @@ typedef enum {
     SENSOR_IDENTITY_MISMATCH = 0x000D001F,        /* 传感器身份不匹配 */
     SENSOR_PROTOCOL_VERSION_INCOMPATIBLE = 0x000D0020, /* 传感器协议版本不兼容 */
     SENSOR_MODE_NOT_READY = 0x000D0021,           /* 传感器模式未就绪 */
-    SENSOR_CONFIG_EPOCH_MISMATCH = 0x000D0022,    /* 传感器配置代次不一致 */
+    SENSOR_CONFIG_EPOCH_MISMATCH = 0x000D0022,    /*传感器配置批次不一致*/
     SENSOR_STREAM_STATE_ERROR = 0x000D0023,       /* 传感器周期上报状态不一致 */
     SENSOR_DATA_STALE = 0x000D0024,               /* 传感器数据已过期 */
     SENSOR_TEMPERATURE_RANGE_ERROR = 0x000D0025,  /* 传感器温度超出工作范围 */
     SENSOR_REMOTE_INTERNAL_ERROR = 0x000D0026,    /* 传感器远端内部故障 */
     SENSOR_ADDRESS_MISMATCH = 0x000D0027,         /* 传感器通信地址不匹配 */
-    SENSOR_SESSION_INVALID = 0x000D0028,          /* 传感器会话失效 */
-    SENSOR_SEQUENCE_ERROR = 0x000D0029,           /* 传感器报文序号异常 */
-    SENSOR_HANDSHAKE_REQUIRED = 0x000D002A,       /* 传感器需要重新握手 */
-    SENSOR_REPLAY_DETECTED = 0x000D002B,          /* 检测到传感器重复报文 */
-    SENSOR_CAPABILITY_UNSUPPORTED = 0x000D002C,   /* 传感器能力不支持 */
+    SENSOR_SESSION_INVALID = 0x000D0028,          /*传感器连接状态失效*/
+    SENSOR_SEQUENCE_ERROR = 0x000D0029,           /*传感器应答序号不一致*/
+    SENSOR_HANDSHAKE_REQUIRED = 0x000D002A,       /*传感器需要重新确认连接*/
+    SENSOR_REPLAY_DETECTED = 0x000D002B,          /*收到重复的传感器数据*/
+    SENSOR_CAPABILITY_UNSUPPORTED = 0x000D002C,   /*传感器不支持所需功能*/
     SENSOR_COMMAND_UNSUPPORTED = 0x000D002D,      /* 传感器命令不支持 */
-    SENSOR_ARGUMENT_REJECTED = 0x000D002E,        /* 传感器拒绝命令参数 */
+    SENSOR_ARGUMENT_REJECTED = 0x000D002E,        /*传感器不接受当前参数*/
     SENSOR_MODE_MISMATCH = 0x000D002F,            /* 传感器测量模式不一致 */
-    SENSOR_MODE_NOT_ALLOWED = 0x000D0030,         /* 传感器当前模式不允许该操作 */
-    SENSOR_TRANSACTION_PENDING = 0x000D0031,      /* 传感器通信事务尚未完成 */
+    SENSOR_MODE_NOT_ALLOWED = 0x000D0030,         /*传感器当前模式不允许操作*/
+    SENSOR_TRANSACTION_PENDING = 0x000D0031,      /*上一次传感器操作尚未完成*/
     SENSOR_DEVICE_BUSY = 0x000D0032,              /* 传感器设备忙 */
     SENSOR_PARAM_CRC_ERROR = 0x000D0033,          /* 传感器参数校验失败 */
-    SENSOR_SAMPLE_COUNTER_ERROR = 0x000D0034,     /* 传感器采样计数异常 */
+    SENSOR_SAMPLE_COUNTER_ERROR = 0x000D0034,     /*传感器采样序号异常*/
     SENSOR_STREAM_STOPPED = 0x000D0035,           /* 传感器周期上报意外停止 */
     SENSOR_STREAM_NOT_ACTIVE = 0x000D0036,        /* 传感器周期上报未启动 */
-    SENSOR_STREAM_ALREADY_ACTIVE = 0x000D0037,    /* 传感器周期上报重复启动 */
+    SENSOR_STREAM_ALREADY_ACTIVE = 0x000D0037,    /*传感器周期上报重复启动*/
     SENSOR_STREAM_EXIT_FAILED = 0x000D0038,       /* 传感器周期上报退出失败 */
 
     /* ==================== 14 零点与位置检测故障 (0x000E0000 - 0x000EFFFF) ==================== */
-    MEASUREMENT_ZERO_OUT_OF_RANGE = 0x000E0009,   /* 零点位置超出允许范围 */
-    MEASUREMENT_ZERO_REPEAT_FAIL = 0x000E000B,    /* 零点重复性不符合要求 */
+    MEASUREMENT_ZERO_OUT_OF_RANGE = 0x000E0009,   /*零点位置超出允许范围*/
+    MEASUREMENT_ZERO_REPEAT_FAIL = 0x000E000B,    /*陀螺仪基准不稳定*/
     POSITION_DATA_INVALID = 0x000E000C,           /* 当前位置数据无效 */
     POSITION_TARGET_OVERRUN = 0x000E000D,         /* 运动越过目标位置 */
-    POSITION_ARRIVAL_DEVIATION = 0x000E000E,      /* 停稳后到位偏差过大 */
+    POSITION_ARRIVAL_DEVIATION = 0x000E000E,      /*电机到位偏差过大*/
     POSITION_MOTOR_NOT_STOPPED = 0x000E000F,      /* 结果提交时电机仍未停止 */
 
     /* ==================== 15 测量过程故障 (0x000F0000 - 0x000FFFFF) ==================== */
-    MEASUREMENT_OILLEVEL_HIGH = 0x000F0006,       /* 液位搜索超过罐高 */
+    MEASUREMENT_OILLEVEL_HIGH = 0x000F0006,       /*上行找液位到达位置上限*/
     MEASUREMENT_OVERSPEED = 0x000F000F,           /* 液位变化速度异常 */
     MEASUREMENT_HEIGHT_DEVIATION = 0x000F0010,    /* 实高偏差过大，保留 */
     MEASUREMENT_OILLEVEL_LOW = 0x000F0012,        /* 下行未找到液位 */
     MEASUREMENT_OILLEVEL_NOTFOUND = 0x000F0013,   /* 上行未找到液位 */
-    MEASUREMENT_WEIGHT_DOWN_FAIL = 0x000F0014,    /* 下行寻重失败 */
-    MEASUREMENT_WEIGHT_UP_FAIL = 0x000F0015,      /* 上行寻重失败 */
+    MEASUREMENT_WEIGHT_DOWN_FAIL = 0x000F0014,    /*下行未找到罐底*/
+    MEASUREMENT_WEIGHT_UP_FAIL = 0x000F0015,      /*上行未找到零点*/
     MEASUREMENT_WATERLEVEL_LOW = 0x000F0016,      /* 下行未找到水位 */
     MEASUREMENT_DENSITY_NO_VALID_POINT = 0x000F0017, /* 密度测量无有效测点 */
     MEASUREMENT_DENSITY_SURFACE_NOTFOUND = 0x000F0018, /* 密度测量未找到油面 */
     MEASUREMENT_DENSITY_LEVEL_TIMEOUT = 0x000F0011, /* 密度闭环找液位超时 */
     MEASUREMENT_FREQUENCY_LEVEL_TIMEOUT = 0x000F0019, /* 频率闭环找液位超时 */
-    MEASUREMENT_BOTTOM_RELEASE_FAIL = 0x000F001A, /* 粗找罐底前离底失败 */
+    MEASUREMENT_BOTTOM_RELEASE_FAIL = 0x000F001A, /*探底前未能离开罐底*/
     MEASUREMENT_TANK_HEIGHT_NOT_CONFIGURED = 0x000F001B, /* 未设置罐高标定值 */
     MEASUREMENT_WATER_CALIBRATION_NOT_CONFIGURED = 0x000F001C, /* 未设置水位标定值 */
     MEASUREMENT_DENSITY_PLAN_INVALID = 0x000F001D, /* 密度测点规划失败 */
@@ -346,7 +346,7 @@ typedef enum {
     PARAM_UNINITIALIZED = 0x00110002,             /* 参数存储未初始化 */
     PARAM_RANGE_ERROR = 0x00110005,               /* 单个参数值超出允许范围 */
     PARAM_CRC_ERROR = 0x00110006,                 /* 参数完整性校验失败 */
-    PARAM_CONFIG_MISSING = 0x00110007,            /* 必需配置缺失 */
+    PARAM_CONFIG_MISSING = 0x00110007,            /*关键参数未设置*/
     PARAM_COMBINATION_CONFLICT = 0x00110008,      /* 参数组合互相冲突 */
     PARAM_FEATURE_UNSUPPORTED = 0x00110009,       /* 当前配置不支持所选功能 */
     PARAM_STORAGE_SIZE_MISMATCH = 0x0011000A,     /* 参数存储结构大小不匹配 */
@@ -354,21 +354,21 @@ typedef enum {
     PARAM_STORAGE_WRITE_VERIFY_FAILED = 0x0011000C, /* 参数写入后校验失败 */
 
     /* ==================== 18 扭力检测故障 (0x00120000 - 0x0012FFFF) ==================== */
-    WEIGHT_OUT_OF_RANGE = 0x00120001,             /* 扭力超过上限 */
-    WEIGHT_UNDER_RANGE = 0x00120002,              /* 扭力低于下限 */
-    WEIGHT_COLLISION_DETECTED = 0x00120003,       /* 检测到碰撞 */
-    WEIGHT_DRIFT_ERROR = 0x00120004,              /* 扭力漂移异常 */
+    WEIGHT_OUT_OF_RANGE = 0x00120001,             /*满载标定扭力超过上限*/
+    WEIGHT_UNDER_RANGE = 0x00120002,              /*满载标定扭力低于下限*/
+    WEIGHT_COLLISION_DETECTED = 0x00120003,       /*扭力变化超过保护值*/
+    WEIGHT_DRIFT_ERROR = 0x00120004,              /*空载标定扭力偏离零点*/
     WEIGHT_SENSOR_SATURATION = 0x00120005,        /* 扭力传感器饱和，保留 */
     WEIGHT_COMM_TIMEOUT = 0x00120006,             /* 扭力通信超时 */
 
     /* ==================== 20 设备通信链路故障 (0x00140000 - 0x0014FFFF) ==================== */
     COMM_UART_TRANSFER_ERROR = 0x00140001,        /* 串口或DMA传输异常 */
-    SLIPRING_COMM_FAIL = 0x00140002,              /* 无线滑环通信失败 */
-    SLIPRING_SIGNAL_WEAK = 0x00140003,            /* 无线滑环信号强度不足 */
+    SLIPRING_COMM_FAIL = 0x00140002,              /*无线滑环通信失败*/
+    SLIPRING_SIGNAL_WEAK = 0x00140003,            /*无线配对信号不达标*/
     WIRELESS_HOST_COMM_TIMEOUT = 0x00140004,      /* 无线主机通信超时 */
     WIRELESS_SLAVE_COMM_TIMEOUT = 0x00140005,     /* 无线从机未连接或无响应 */
     WIRELESS_RESP_FORMAT_ERROR = 0x00140006,      /* 无线模块响应格式异常 */
-    WIRELESS_SCAN_NO_DEVICE = 0x00140008,         /* 无线扫描未发现设备 */
+    WIRELESS_SCAN_NO_DEVICE = 0x00140008,         /*无线扫描未发现设备*/
     WIRELESS_NAME_NOT_UNIQUE = 0x00140009,        /* 无线名称重复 */
     WIRELESS_NAME_INVALID = 0x0014000A,           /* 无线名称参数无效 */
     WIRELESS_NOT_HOST_MODE = 0x0014000B,          /* 无线模块未处于主机模式 */
@@ -381,22 +381,22 @@ typedef enum {
     AD5421_LOOP_CURRENT_HIGH = 0x0015000A,        /* 模拟输出环路电流过高 */
     AD5421_LOOP_CURRENT_LOW = 0x0015000B,         /* 模拟输出环路电流过低或断环 */
     AD5421_LOOP_VOLTAGE_LOW = 0x0015000C,         /* 模拟输出环路供电电压不足 */
-    AD5421_SPI_TRANSFER_ERROR = 0x0015000D,       /* 模拟输出SPI传输失败 */
+    AD5421_SPI_TRANSFER_ERROR = 0x0015000D,       /*主控与模拟量输出模块通信失败*/
     AD5421_ACCESS_BUSY = 0x0015000E,              /* 模拟输出访问冲突 */
     AD5421_OVERTEMP_SHUTDOWN = 0x0015000F,        /* 模拟输出芯片过温关断 */
     AD5421_OVERTEMP_WARNING = 0x00150010,         /* 模拟输出芯片过温预警 */
 
     /* ==================== 22 系统与软件故障 (0x00160000 - 0x0016FFFF) ==================== */
-    SYSTEM_BUFFER_CAPACITY_ERROR = 0x00160001,    /* 内部缓冲区或存储分区容量不足 */
+    SYSTEM_BUFFER_CAPACITY_ERROR = 0x00160001,    /*内部数据空间不足*/
     SYSTEM_CALL_CONDITION_ERROR = 0x00160002,     /* 内部调用参数或前置条件异常 */
     SYSTEM_CALCULATION_ERROR = 0x00160003,        /* 内部计算无法得到有效结果 */
 
     /* ==================== 23 整机供电与电源监控故障 (0x00170000 - 0x0017FFFF) ==================== */
     POWER_SUPPLY_24V_UNDERVOLTAGE = 0x00170001,   /* 整机24V供电低于安全阈值 */
-    POWER_MONITOR_ADC_OVERRUN = 0x00170002,       /* 24V监控ADC发生数据溢出 */
-    POWER_MONITOR_DMA_STOPPED = 0x00170003,       /* 24V监控DMA意外停止 */
-    POWER_MONITOR_INIT_FAILED = 0x00170004,       /* 24V电源监控启动失败 */
-    POWER_MONITOR_RECOVERY_FAILED = 0x00170005,   /* 24V电源监控连续三次恢复失败 */
+    POWER_MONITOR_ADC_OVERRUN = 0x00170002,       /*电源采样数据处理不及时*/
+    POWER_MONITOR_DMA_STOPPED = 0x00170003,       /*电源采样传输意外停止*/
+    POWER_MONITOR_INIT_FAILED = 0x00170004,       /*电源采样启动失败*/
+    POWER_MONITOR_RECOVERY_FAILED = 0x00170005,   /*电源采样连续恢复失败*/
     POWER_LOSS_POSITION_SAVE_FAILED = 0x00170006  /* 低压紧急位置保存未完成 */
 
 } ErrorCode;

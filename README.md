@@ -1,27 +1,65 @@
 # CUBE
 
-> CUBE 是二代计量仪的嵌入式固件与工程资料仓库。仓库以 CPU2 主控固件和 CPU3 显示通信固件为核心，同时维护两块板之间的共享协议、构建配置、版本记录和项目文档。
+> CUBE 是二代计量仪的 CPU2/CPU3 集成仓库，直接维护主控固件、显示通信固件、两板共享协议、构建配置、版本记录和正式项目文档。完整的整机工程分布在多个 Git 仓库中，`D:\CUBE` 不是全部工程的集合。
 
-## 项目组成
+## 整机关联工程（跨仓库）
+
+以下项目共同组成当前已登记的二代计量仪整机工程。“库外”只表示不在 `D:\CUBE` 这个 Git 根目录中，不表示工程次要或可忽略。
+
+| 工程 | Git 根或源码入口 | 整机职责 |
+| --- | --- | --- |
+| CUBE CPU2/CPU3 集成工程 | `D:\CUBE` | CPU2 测量与控制主控、CPU3 显示与外部协议网关，以及两板共享协议、构建、版本和正式项目文档 |
+| DSM CPU1 SIL 工程 | `D:\keil_workspace\DSM_CPU1_SIL` | DSM CPU1 固件和对外通信协议的当前源码入口 |
+| DSM 计量仪工程 | `D:\keil_workspace\DSM计量仪` | DSM CPU1、维护线工程、传感器端行为和历史 Modbus 协议来源 |
+| CPUW 扭力处理器工程 | Git 根：`D:\CSS_workspace`；源码入口：`D:\CSS_workspace\newhall` | 每台设备必装的扭力采集与处理单元，主动向 CPU2 推送数据 |
+| LTDDeviceDebugTool | `D:\CUBE_TOOLS\LTDDeviceDebugTool` | 面向本设备的上位机调试、参数操作、协议验证和测试支持工具 |
+
+这些工程在产品关系上属于同一台设备，在 Git 和修改授权上仍保持独立边界：跨仓库修改时分别核对分支、HEAD 和工作区状态，并单独确认修改、提交与发布范围。当前尚未登记 LTD/DM4 CPU1 的独立源码仓库，也没有 CPU4 工程路径；不能根据历史目录名或 CPU 连续编号自行推断。
+
+## 本仓库维护范围
 
 | 工程 | 主要职责 |
 | --- | --- |
 | `LTD_MAIN_CPU2/` | 测量流程、运动控制、传感器接入、参数与 FRAM 持久化、故障处理、输出控制，以及 CPU2/CPU3 共享数据的权威实现 |
 | `LTD_DISPLAY_CPU3/` | OLED 显示、菜单与按键、CPU2 数据轮询和参数同步，以及 DSM、Wärtsilä、LTD、LH、SI 等外部协议适配 |
 
-两块板的主要关系如下：
+## 整机一级架构
 
-```text
-上位机 / PLC / 外部系统
-          ↕
-CPU3 显示与通信板
-          ↕  UART5 + RS485（共享 Modbus）
-CPU2 主控测量板
-          ↕
-传感器 / 电机 / 编码器 / 称重 / AO / HART 等外设
+```mermaid
+flowchart TB
+    Host["上位机 / PLC / 外部系统"]
+    DebugTool["LTDDeviceDebugTool<br/>设备调试与协议工具"]
+
+    subgraph Device["二代计量仪整机"]
+        direction TB
+        CPU4["CPU4（未来扩展，尚未设计）<br/>外部实时温度采集"]
+        CPU1["CPU1 传感器端处理单元<br/>DSM / LTD / DM4 三选一"]
+        CPUW["CPUW 扭力处理器<br/>每台必装"]
+        subgraph Repo["D:/CUBE CPU2/CPU3 集成仓库"]
+            direction TB
+            CPU3["CPU3 显示与外部协议网关<br/>LTD_DISPLAY_CPU3"]
+            CPU2["CPU2 测量与控制主控<br/>LTD_MAIN_CPU2"]
+        end
+        Outputs["AO / HART / 继电器 / 电机"]
+    end
+
+    Host <--> CPU3
+    DebugTool <--> CPU3
+    CPU4 -.-> CPU3
+    CPU3 <-->|"UART5 + RS485，共享 Modbus"| CPU2
+    CPU1 <-->|"原始数据、计算结果与控制命令"| CPU2
+    CPUW -->|"当前有效方向：主动推送"| CPU2
+    CPU2 --> Outputs
 ```
 
-CPU2 负责核心测量与设备控制，CPU3 负责人机界面和外部通信适配。涉及共享参数、测量结果、命令或故障语义的改动，需要同时核对 CPU2、CPU3、共享寄存器映射和协议版本。
+- CPU1 是传感器端处理单元，整机在 DSM、LTD、DM4 三种传感器中三选一；蓝牙主机和从机只作为透明传输链路，不作为独立 CPU。
+- CPU2 是测量、运动、参数、故障和安全动作的业务权威端，并直接承担 AO/HART、继电器和电机控制。
+- CPU3 负责显示、按键、CPU2 数据同步和全部外部数字协议网关。
+- CPUW 是每台设备必装的扭力处理器；当前有效运行方向是 CPUW 主动向 CPU2 推送数据。
+- CPU4 仅为未来非安全扩展预留，规划路径为“外部实时温度计 → CPU4 → CPU3 → 上位机”，当前没有实现工程。
+- 只有采用 DM4 安全协议的配置才把 CPU1（DM4）与 CPU2 之间定义为安全通信链路；CPUW、CPU2/CPU3、CPU4 和 CPU3 对外接口不属于该链路。
+
+涉及共享参数、测量结果、命令或故障语义的改动，需要同时核对 CPU2、CPU3、共享寄存器映射和协议版本。详细的处理器责任、安全边界和实现状态以[处理器与传感器架构确认基线](docs/06_SIL功能安全认证/02_软件架构/ER02软件架构设计编制工作包/02_编制依据与差异分析/处理器与传感器架构确认基线.md)为准。
 
 ## 仓库目录
 
@@ -49,6 +87,34 @@ CPU2 负责核心测量与设备控制，CPU3 负责人机界面和外部通信�
 | `docs-site/` | 从 `docs/` 同步生成的本机文档预览站点 |
 | `tmp/` | 可清理的任务临时产物 |
 | `outputs/` | 需要在本机长期保留、但默认不提交的验证证据 |
+
+## 库外参考文档
+
+下列资料来自历史设计、协议、硬件和移植工作，全部位于 `D:\CUBE` 之外。地址是当前开发机于 2026-08-10 核对存在的本地绝对路径；换机或重新克隆后需要重新映射。它们是整机设计和追溯输入，不等同于当前实现；如有冲突，以用户最新确认、当前生产源码和已批准资料为准。
+
+### 功能安全与文档模板
+
+WPS 参考目录：`C:\Users\admin\WPSDrive\1204142814\WPS云盘\共享文件夹 \团队11.II代计量仪SIL认证\A00.I代认证资料\00.认证文档\`
+
+| 资料 | 文件地址 | 历史用途 |
+| --- | --- | --- |
+| CG01 系统架构设计 | `C:\Users\admin\WPSDrive\1204142814\WPS云盘\共享文件夹 \团队11.II代计量仪SIL认证\A00.I代认证资料\00.认证文档\CG01.系统架构设计-V1.2.docx` | 整机系统架构、状态和安全边界的历史参考 |
+| ER02 软件架构设计 | `C:\Users\admin\WPSDrive\1204142814\WPS云盘\共享文件夹 \团队11.II代计量仪SIL认证\A00.I代认证资料\00.认证文档\ER02.软件架构设计V1.1.docx` | 软件架构文档的结构、章节和版式参考 |
+| FX01 软件详细设计 | `C:\Users\admin\WPSDrive\1204142814\WPS云盘\共享文件夹 \团队11.II代计量仪SIL认证\A00.I代认证资料\00.认证文档\FX01.软件详细设计V1.1.docx` | CPU2 软件详细设计的组织和版式参考 |
+| GB 20438 资料包 | `C:\Users\admin\Downloads\GB20438.zip` | 功能安全标准资料参考 |
+
+### 协议、硬件与平台资料
+
+| 资料 | 文件地址 | 历史用途 |
+| --- | --- | --- |
+| DSM CPU1 对外通信协议 | `D:\keil_workspace\DSM_CPU1_SIL\docs\01_协议与接口\DSM_CPU1对外通信协议.md` | DSM CPU1 协议定义和 CUBE 适配依据 |
+| 在线一体机对外 Modbus 协议 V1.228 | `D:\keil_workspace\DSM计量仪\docs\10_CPU2_主控\02_协议与参数\在线一体机对外Modbus协议V1.228.xlsx` | 一代设备和维护线 Modbus 历史基线 |
+| DM4 电源板原理图 | `C:\Users\admin\Downloads\VMP多参数传感器，DM4四代数字驱动\DM4电源板V6.0.SchDoc` | DM4 电源板硬件分析原始文件 |
+| DM4 驱动板原理图 | `C:\Users\admin\Downloads\VMP多参数传感器，DM4四代数字驱动\DM4驱动板V6.0.SchDoc` | DM4 驱动板硬件分析原始文件 |
+| DM4 采集板原理图 | `C:\Users\admin\Downloads\VMP多参数传感器，DM4四代数字驱动\DM4采集板V6.0.SchDoc` | DM4 采集板硬件分析原始文件 |
+| DM4 测水连接板原理图 | `C:\Users\admin\Downloads\VMP多参数传感器，DM4四代数字驱动\DM4测水连接板V6.0.SchDoc` | DM4 测水连接板硬件分析原始文件 |
+| N81 操作手册 | `D:\程序存档\N81 - 操作手册.pdf` | 相关设备操作和接口行为参考 |
+| STM32F4xx 到 GD32F4xx 移植指南 V2.0 | `C:\Users\admin\Downloads\从STM32F4xx系列移植到GD32F4xx系列_V2.0(2).pdf` | MCU 平台迁移和兼容性参考 |
 
 ## 快速构建
 

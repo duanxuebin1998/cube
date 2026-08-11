@@ -170,6 +170,13 @@ uint32_t MULTIPARAM_V4_ValidateReply(const uint8_t request[MULTIPARAM_V4_INTERAC
 uint32_t MULTIPARAM_V4_ReadParamRaw(uint8_t parameter, uint32_t *raw_value);
 uint32_t MULTIPARAM_V4_ReadIntParam(uint8_t parameter, int32_t *value);
 uint32_t MULTIPARAM_V4_ReadFloatParam(uint8_t parameter, float *value);
+
+/*
+ * 函数用途：读取 V4 协议 R67 传感器号。
+ * 调用场景：协议版本识别完成且通信已进入交互模式后调用。
+ * 关键约束：成功时只返回正整数编号，V4 不得使用 R22 读取编号。
+ */
+uint32_t MULTIPARAM_V4_ReadSensorID(uint32_t *sensor_id);
 /*
  * 函数用途：以单次、短超时事务读取一个浮点参数。
  * 调用场景：交互测量完成后的附加调试量刷新。

@@ -32,6 +32,7 @@
 #define MULTIPARAM_V4_PARAM_PROTOCOL_VERSION          0x01U
 #define MULTIPARAM_V4_PARAM_STATUS                    0x02U
 #define MULTIPARAM_V4_PARAM_COMMUNICATION_MODE        0x41U
+#define MULTIPARAM_V4_PARAM_SENSOR_ID                 0x43U
 #define MULTIPARAM_V4_PARAM_MAX                       0x9FU
 #define MULTIPARAM_V4_FUNCTION_READ                   ((uint8_t)'R')
 #define MULTIPARAM_V4_FUNCTION_WRITE                  ((uint8_t)'W')
@@ -1140,6 +1141,30 @@ uint32_t MULTIPARAM_V4_ReadIntParam(uint8_t parameter, int32_t *value)
         *value = (int32_t)raw;
     }
     return result;
+}
+
+/*
+ * 函数用途：读取多参数传感器通信协议 V4.0 的 R67 传感器号。
+ * 调用场景：CPU2 已确认 V4 协议并处于交互通信后读取物理传感器编号。
+ * 关键约束：V4 的 R22 是密度扫频原始量，不能沿用 V3.0 的 R22 编号语义；编号必须为正整数。
+ */
+uint32_t MULTIPARAM_V4_ReadSensorID(uint32_t *sensor_id)
+{
+    int32_t value;
+    uint32_t result;
+
+    if (sensor_id == NULL) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
+    result = MULTIPARAM_V4_ReadIntParam(MULTIPARAM_V4_PARAM_SENSOR_ID, &value);
+    if (result != NO_ERROR) {
+        return result;
+    }
+    if (value <= 0) {
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+    *sensor_id = (uint32_t)value;
+    return NO_ERROR;
 }
 
 uint32_t MULTIPARAM_V4_ReadFloatParam(uint8_t parameter, float *value)

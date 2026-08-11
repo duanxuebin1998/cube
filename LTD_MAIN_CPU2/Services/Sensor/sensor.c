@@ -75,18 +75,21 @@ uint32_t Sensor_GetDetectionResult(void)
 /**
  * @brief 在各候选协议探测结果中选择最终识别错误。
  *
- * @param safe_ret 安全传感器探测结果。
- * @param v4_ret 多参数V4交互探测结果。
- * @param v3_ret 多参数V3.0探测结果。
- * @param dsm_ret DSM一代探测结果。
+ * @param active_v4_before_ret 蓝牙查询前的 V4 主动帧监听结果。
+ * @param active_v4_after_ret 蓝牙恢复透传后的 V4 主动帧监听结果。
+ * @param version_ret 公共 R01 协议版本读取结果。
+ * @param dsm_ret DSM 一代的 CN 传感器编号读取结果。
  * @return 优先保留具体协议错误；全部无响应时返回传感器通信超时。
  */
-static uint32_t Sensor_SelectProbeError(uint32_t safe_ret,
-                                        uint32_t v4_ret,
-                                        uint32_t v3_ret,
+static uint32_t Sensor_SelectProbeError(uint32_t active_v4_before_ret,
+                                        uint32_t active_v4_after_ret,
+                                        uint32_t version_ret,
                                         uint32_t dsm_ret)
 {
-    const uint32_t results[] = {safe_ret, v4_ret, v3_ret, dsm_ret};
+    const uint32_t results[] = {active_v4_before_ret,
+                                active_v4_after_ret,
+                                version_ret,
+                                dsm_ret};
 
     for (uint32_t index = 0U; index < (sizeof(results) / sizeof(results[0])); index++) {
         if ((results[index] != NO_ERROR) &&
@@ -116,6 +119,27 @@ static void Sensor_SetCommDetectError(uint32_t err)
     if ((err != NO_ERROR) && (err != STATE_SWITCH)) {
         g_measurement.device_status.error_code = err;
     }
+}
+
+
+/*
+ * 函数用途：统一收口传感器自动识别的最终失败状态和现场警告。
+ * 调用场景：协议版本或传感器类型已经确定，但编号、通信方式恢复或全部候选探测最终失败时调用。
+ * 关键约束：STATE_SWITCH 不作为故障记录；调用方通过 detail 保留失败阶段和多错误上下文。
+ */
+static uint32_t Sensor_RecordDetectionFailure(uint32_t err, const char *detail)
+{
+    s_sensor_detection_result = err;
+    Sensor_SetCommDetectError(err);
+    if ((err != NO_ERROR) && (err != STATE_SWITCH)) {
+        /* 错误报警：传感器识别最终失败，继续保留维护和恢复类命令。 */
+        ErrorLog_WarnDetail(ERROR_LOG_MODULE_SENSOR,
+                            "传感器识别",
+                            ErrorLog_GetReasonByCode(err),
+                            ERROR_LOG_ACTION_CONTINUE,
+                            detail);
+    }
+    return err;
 }
 
 
@@ -248,7 +272,7 @@ static uint32_t Sensor_ParseDsmTextId(const char *id_text, uint32_t *sensor_id_o
         id_text++;
     }
 
-    if (has_digit == 0U) {
+    if ((has_digit == 0U) || (value == 0U)) {
         return SENSOR_RESP_FORMAT_ERROR;
     }
 
@@ -418,13 +442,13 @@ static uint32_t Sensor_ProbeV4Active(uint8_t *address_out, uint32_t timeout_ms)
 }
 
 /*
- * 函数用途：通过地址0读取R01并识别多参数V4交互通信。
- * 调用场景：主动帧监听未命中且安全协议未命中后。
- * 关键约束：R01只识别协议版本；V4物理编号仍按未提供处理。
+ * 函数用途：通过公共 R01 读取多参数传感器协议版本。
+ * 调用场景：未收到 V4 主动帧时，用同一条读取指令区分当前 V3.0 和 V4.0 协议。
+ * 关键约束：R01 只负责版本分流；识别版本后必须再按对应地址读取传感器编号。
  */
-static uint32_t Sensor_ProbeV4Interactive(float *protocol_version_out)
+static uint32_t Sensor_ProbeMultiparamVersion(float *protocol_version_out)
 {
-    float protocol_version = 0.0f;
+    float protocol_version = NAN;
     uint32_t result;
 
     MULTIPARAM_V4_Init(0U);
@@ -437,6 +461,87 @@ static uint32_t Sensor_ProbeV4Interactive(float *protocol_version_out)
         MULTIPARAM_V4_Deinit();
     }
     return result;
+}
+
+
+/*
+ * 函数用途：读取 V4 传感器编号并保持识别前的主动或交互通信方式。
+ * 调用场景：V4 主动帧或 R01=4.0 已确认后、提交传感器身份前调用。
+ * 关键约束：主动上报时先按既有 20 ms 窗口切到交互模式读取 R67，读取结束后必须恢复主动上报。
+ */
+static uint32_t Sensor_ReadV4SensorIdPreservingMode(uint32_t *sensor_id_out,
+                                                    char *detail,
+                                                    size_t detail_size)
+{
+    multiparam_v4_communication_mode_t original_mode;
+    uint32_t result;
+    uint32_t restore_result = NO_ERROR;
+
+    if ((sensor_id_out == NULL) || (detail == NULL) || (detail_size == 0U)) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
+    detail[0] = '\0';
+
+    original_mode = MULTIPARAM_V4_GetCommunicationMode();
+    if (original_mode == MULTIPARAM_V4_COMMUNICATION_ACTIVE) {
+        result = MULTIPARAM_V4_EnterInteractive();
+        if (result != NO_ERROR) {
+            (void)snprintf(detail, detail_size,
+                           "阶段=进入交互模式,结果=0x%08lX",
+                           (unsigned long)result);
+            return result;
+        }
+    } else if (original_mode != MULTIPARAM_V4_COMMUNICATION_INTERACTIVE) {
+        (void)snprintf(detail, detail_size, "阶段=检查V4通信方式,状态=%u",
+                       (unsigned int)original_mode);
+        return SENSOR_STREAM_STATE_ERROR;
+    }
+
+    result = MULTIPARAM_V4_ReadSensorID(sensor_id_out);
+    if (original_mode == MULTIPARAM_V4_COMMUNICATION_ACTIVE) {
+        restore_result = MULTIPARAM_V4_EnterActive();
+        (void)snprintf(detail, detail_size,
+                       "R67读取=0x%08lX,主动恢复=0x%08lX",
+                       (unsigned long)result,
+                       (unsigned long)restore_result);
+        /* 恢复失败意味着传感器持久化通信方式未闭环，其优先级高于本次编号读取错误。 */
+        if (restore_result != NO_ERROR) {
+            return restore_result;
+        }
+    } else {
+        (void)snprintf(detail, detail_size, "R67读取=0x%08lX",
+                       (unsigned long)result);
+    }
+    return result;
+}
+
+
+/*
+ * 函数用途：完成 V4 协议识别后的编号读取和身份提交。
+ * 调用场景：主动帧或公共 R01 已经确认 V4.0 后调用。
+ * 关键约束：R67 编号读取失败时不得用编号 0 提交伪身份，并释放 V4 对 UART6 的占用。
+ */
+static uint32_t Sensor_CompleteV4Detection(const char *communication,
+                                           uint8_t sensor_address)
+{
+    char detail[96] = {0};
+    uint32_t sensor_id = 0U;
+    uint32_t result = Sensor_ReadV4SensorIdPreservingMode(&sensor_id,
+                                                          detail,
+                                                          sizeof(detail));
+
+    if (result != NO_ERROR) {
+        MULTIPARAM_V4_Deinit();
+        return Sensor_RecordDetectionFailure(result, detail);
+    }
+
+    Sensor_CommitDetectedIdentity(MULTIPARAM_V4_SENSOR, sensor_id);
+    printf("识别成功：多参数V4传感器 | 通信=%s | 地址=%u | 编号=%lu\r\n",
+           (communication != NULL) ? communication : "未知",
+           (unsigned int)sensor_address,
+           (unsigned long)sensor_id);
+    printf("====================================\r\n");
+    return NO_ERROR;
 }
 
 /*
@@ -544,17 +649,15 @@ int Sensor_SupportsGyroChannel(void)
 }
 
 /**
- * @brief 自动识别传感器类型（多参数V4主动/交互、安全协议、多参数V3.0、DSM一代）
+ * @brief 自动识别传感器类型，覆盖多参数V4主动/交互、多参数V3.0和DSM一代。
  *
- * @return uint32_t 错误码或 NO_ERROR
+ * @return uint32_t 识别成功返回 NO_ERROR，失败返回具体通信、协议、编号或状态切换错误。
  */
-
 uint32_t DetectSensorType(void) {
     uint32_t ret;
     uint32_t active_v4_before_link_ret;
     uint32_t active_v4_after_link_ret;
-    uint32_t safe_ret;
-    uint32_t interactive_v4_ret;
+    uint32_t version_ret;
     uint32_t v3_ret;
     uint32_t dsm_ret;
     uint32_t sensor_id = 0U;
@@ -562,108 +665,76 @@ uint32_t DetectSensorType(void) {
     float protocol_version = 0.0f;
     WirelessConnectionStatus bluetooth_status;
 
-    /* 本次探测完成前，FRAM 中的上次类型只能作为历史信息，不能授权新的测量流程。 */
+    /* 新探测开始前，FRAM 中的上次结果只作为历史信息，不能授权新的测量流程。 */
     s_sensor_detection_result = SENSOR_DEVICE_COMM_TIMEOUT;
 
     printf("========== 传感器识别开始 ==========\r\n");
-    printf("[1/7] 蓝牙检查前监听多参数V4主动帧\r\n");
+    printf("[1/6] 蓝牙查询前监听多参数V4主动帧\r\n");
     active_v4_before_link_ret = Sensor_ProbeV4Active(&sensor_address,
                                                      SENSOR_V4_ACTIVE_FAST_PROBE_MS);
     if (active_v4_before_link_ret == NO_ERROR) {
-        Sensor_CommitDetectedIdentity(MULTIPARAM_V4_SENSOR, 0U);
-        printf("识别成功：多参数V4传感器 | 通信=主动上报 | 地址=%u | 编号未提供\r\n",
-               (unsigned int)sensor_address);
-        printf("====================================\r\n");
-        return NO_ERROR;
+        return Sensor_CompleteV4Detection("主动上报", sensor_address);
     }
     if (active_v4_before_link_ret == STATE_SWITCH) {
         s_sensor_detection_result = STATE_SWITCH;
         return STATE_SWITCH;
     }
 
-    printf("[2/7] 检查蓝牙链路\r\n");
+    printf("[2/6] 检查蓝牙链路\r\n");
     ret = Sensor_ProbeWirelessLink(&bluetooth_status);
     if (ret != NO_ERROR) {
-        s_sensor_detection_result = ret;
-        Sensor_SetCommDetectError(ret);
-        return ret;
+        return Sensor_RecordDetectionFailure(ret, "阶段=蓝牙链路检查");
     }
     Sensor_PrintBluetoothLinkSnapshot(&bluetooth_status);
 
-    /* AT 查询结束并恢复透明传输后重新监听，覆盖上电初期尚未建链造成的主动帧空窗。 */
-    printf("[3/7] 蓝牙恢复透传后再次监听多参数V4主动帧\r\n");
+    /* AT 查询并恢复透传后再次监听，吸收链路恢复期间尚未处理完的主动帧。 */
+    printf("[3/6] 蓝牙恢复透传后再次监听多参数V4主动帧\r\n");
     active_v4_after_link_ret = Sensor_ProbeV4Active(&sensor_address,
                                                     MULTIPARAM_V4_ACTIVE_TIMEOUT_MS);
     if (active_v4_after_link_ret == NO_ERROR) {
-        Sensor_CommitDetectedIdentity(MULTIPARAM_V4_SENSOR, 0U);
-        printf("识别成功：多参数V4传感器 | 通信=主动上报 | 地址=%u | 编号未提供\r\n",
-               (unsigned int)sensor_address);
-        printf("====================================\r\n");
-        return NO_ERROR;
+        return Sensor_CompleteV4Detection("主动上报", sensor_address);
     }
     if (active_v4_after_link_ret == STATE_SWITCH) {
         s_sensor_detection_result = STATE_SWITCH;
         return STATE_SWITCH;
     }
 
-    printf("[4/7] 尝试安全协议\r\n");
-    safe_ret = SensorSafeAdapter_Probe(&sensor_id);
-    if (safe_ret == NO_ERROR) {
-        Sensor_CommitDetectedIdentity(SAFE_SENSOR, sensor_id);
-        printf("识别成功：安全协议传感器 | 编号=%lu\r\n", (unsigned long)sensor_id);
-        printf("====================================\r\n");
-        return NO_ERROR;
+    printf("[4/6] 读取R01区分多参数协议V3.0和V4.0\r\n");
+    version_ret = Sensor_ProbeMultiparamVersion(&protocol_version);
+    if (version_ret == NO_ERROR) {
+        return Sensor_CompleteV4Detection("交互", 0U);
     }
-    SensorSafeAdapter_Deactivate();
-    if (safe_ret == STATE_SWITCH) {
+    if (version_ret == STATE_SWITCH) {
         s_sensor_detection_result = STATE_SWITCH;
         return STATE_SWITCH;
     }
 
-    printf("[5/7] 读取R01探测多参数V4交互协议\r\n");
-    interactive_v4_ret = Sensor_ProbeV4Interactive(&protocol_version);
-    if (interactive_v4_ret == NO_ERROR) {
-        Sensor_CommitDetectedIdentity(MULTIPARAM_V4_SENSOR, 0U);
-        printf("识别成功：多参数V4传感器 | 通信=交互 | 地址=0 | 编号未提供\r\n");
-        printf("====================================\r\n");
-        return NO_ERROR;
-    }
-    if (interactive_v4_ret == STATE_SWITCH) {
-        s_sensor_detection_result = STATE_SWITCH;
-        return STATE_SWITCH;
-    }
-
-    printf("[6/7] 尝试多参数协议V3.0（当前LTD）\r\n");
-    if ((interactive_v4_ret == SENSOR_PROTOCOL_VERSION_INCOMPATIBLE) &&
+    if ((version_ret == SENSOR_PROTOCOL_VERSION_INCOMPATIBLE) &&
         isfinite(protocol_version) &&
-        (fabsf(protocol_version - 3.0f) > 0.01f)) {
-        /* R01 已返回明确的非3.0版本时不再发送R22，避免把未知版本误识别为当前LTD协议。 */
-        printf("R01协议版本=%.2f，不属于多参数V3.0，跳过R22探测\r\n",
+        (fabsf(protocol_version - 3.0f) <= 0.01f)) {
+        /* R01 已完成 V3.0 版本分流，R22 只用于读取该协议自己的传感器编号。 */
+        printf("[5/6] R01版本=%.2f，读取V3.0的R22传感器编号\r\n",
                protocol_version);
-        v3_ret = SENSOR_PROTOCOL_VERSION_INCOMPATIBLE;
-    } else {
-        if ((interactive_v4_ret == SENSOR_PROTOCOL_VERSION_INCOMPATIBLE) &&
-            isfinite(protocol_version)) {
-            printf("R01协议版本=%.2f，继续读取R22确认当前LTD传感器\r\n",
-                   protocol_version);
-        } else {
-            printf("R01未取得有效版本，保留R22兼容探测\r\n");
-        }
+        version_ret = NO_ERROR;
         v3_ret = Sensor_ProbeLtdSensor(&sensor_id);
-    }
-    if (v3_ret == NO_ERROR) {
-        Sensor_CommitDetectedIdentity(LTD_SENSOR, sensor_id);
-        printf("识别成功：LTD传感器 | 协议=多参数V3.0 | 编号=%lu\r\n",
-               (unsigned long)sensor_id);
-        printf("====================================\r\n");
-        return NO_ERROR;
-    }
-    if (v3_ret == STATE_SWITCH) {
-        s_sensor_detection_result = STATE_SWITCH;
-        return STATE_SWITCH;
+        if (v3_ret == NO_ERROR) {
+            Sensor_CommitDetectedIdentity(LTD_SENSOR, sensor_id);
+            printf("识别成功：LTD传感器 | 协议=多参数V3.0 | 编号=%lu\r\n",
+                   (unsigned long)sensor_id);
+            printf("====================================\r\n");
+            return NO_ERROR;
+        }
+        return Sensor_RecordDetectionFailure(v3_ret, "阶段=读取V3.0的R22传感器编号");
+    } else if ((version_ret == SENSOR_PROTOCOL_VERSION_INCOMPATIBLE) &&
+               isfinite(protocol_version)) {
+        printf("R01版本=%.2f，不属于当前支持的V3.0或V4.0\r\n",
+               protocol_version);
+        return Sensor_RecordDetectionFailure(version_ret, "阶段=检查R01协议版本");
+    } else {
+        printf("R01未取得有效协议版本，不使用R22猜测协议类型\r\n");
     }
 
-    printf("[7/7] 尝试DSM一代协议\r\n");
+    printf("[6/6] 尝试DSM一代协议并读取CN传感器编号\r\n");
     dsm_ret = Sensor_ProbeDsmSensor(&sensor_id);
     if (dsm_ret == NO_ERROR) {
         Sensor_CommitDetectedIdentity(DSM_SENSOR, sensor_id);
@@ -677,21 +748,16 @@ uint32_t DetectSensorType(void) {
         return STATE_SWITCH;
     }
 
-    ret = Sensor_SelectProbeError(safe_ret, interactive_v4_ret, v3_ret, dsm_ret);
-    printf("识别失败：未匹配支持的传感器 | V4主动前=%s | V4主动后=%s | 安全协议=%s | V4交互=%s | V3=%s | DSM=%s\r\n",
+    ret = Sensor_SelectProbeError(active_v4_before_link_ret,
+                                  active_v4_after_link_ret,
+                                  version_ret,
+                                  dsm_ret);
+    printf("识别失败：未匹配支持的传感器 | V4主动前=%s | V4主动后=%s | R01=%s | DSM=%s\r\n",
            ErrorLog_GetReasonByCode(active_v4_before_link_ret),
            ErrorLog_GetReasonByCode(active_v4_after_link_ret),
-           ErrorLog_GetReasonByCode(safe_ret),
-           ErrorLog_GetReasonByCode(interactive_v4_ret),
-           ErrorLog_GetReasonByCode(v3_ret),
+           ErrorLog_GetReasonByCode(version_ret),
            ErrorLog_GetReasonByCode(dsm_ret));
-    ErrorLog_Warn(ERROR_LOG_MODULE_SENSOR,
-                  "传感器识别",
-                  ErrorLog_GetReasonByCode(ret),
-                  ERROR_LOG_ACTION_CONTINUE);
-    s_sensor_detection_result = ret;
-    Sensor_SetCommDetectError(ret);
-    return ret;
+    return Sensor_RecordDetectionFailure(ret, "阶段=候选协议全部失败");
 }
 
 /**

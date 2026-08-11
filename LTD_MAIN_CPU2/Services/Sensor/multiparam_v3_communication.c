@@ -769,6 +769,9 @@ int MULTIPARAM_V3_Read_SensorID(uint32_t *sensor_id) {
 		return SYSTEM_CALL_CONDITION_ERROR;
 	int32_t v = 0;
 	int ret = MULTIPARAM_V3_Read_IntParam(0x16, &v); /* 22 */
+	/* 传感器编号采用年月流水号，零或负值表示未配置或响应内容无效。 */
+	if ((ret == NO_ERROR) && (v <= 0))
+		return SENSOR_RESP_FORMAT_ERROR;
 	if (ret == NO_ERROR)
 		*sensor_id = (uint32_t) v;
 	return ret;
@@ -789,6 +792,9 @@ int MULTIPARAM_V3_Probe_SensorID(uint32_t *sensor_id) {
 		return SYSTEM_CALL_CONDITION_ERROR;
 	int32_t v = 0;
 	int ret = MULTIPARAM_V3_Read_IntParamInternal(0x16, &v, 0U); /* 22 */
+	/* 识别成功必须同时满足通信有效和编号为正，禁止有符号负值转换成伪造的大编号。 */
+	if ((ret == NO_ERROR) && (v <= 0))
+		return SENSOR_RESP_FORMAT_ERROR;
 	/* 识别阶段的协议探测失败属于候选未命中，不打印错误重试。 */
 	if (ret == NO_ERROR)
 		*sensor_id = (uint32_t) v;
