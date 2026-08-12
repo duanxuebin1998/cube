@@ -1243,7 +1243,7 @@ static void motor_run_monitor_page(void)
 	func_index = KEYNUM_MOTOR_RUN_MONITOR;
 
 	state_text = GetStateString(state, lang);
-	OledDisplayLineWords((uint8_t*)state_text, OLED_LINE8_1, OLED_ROW4_1, 0);
+	OledDisplayLineWords(state_text, OLED_LINE8_1, OLED_ROW4_1, 0);
 	motor_run_monitor_draw_values();
 
 	DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
@@ -1390,7 +1390,7 @@ static void debug_weight_draw_temperature(void)
 		                 2,
 		                 (uint8_t*)"C");
 	} else {
-		OledDisplayLineWords((uint8_t*)"--.--", OLED_LINE8_5, OLED_ROW4_2, 0);
+		OledDisplayLineWords("--.--", OLED_LINE8_5, OLED_ROW4_2, 0);
 	}
 }
 
@@ -2249,13 +2249,13 @@ static int display_formatted_readonly_value(int operaNum, int32_t value, uint8_t
 
 	if (is_version_value_opera(operaNum) != 0) {
 		format_version_u32(raw, text, sizeof(text));
-		OledDisplayLineWords((uint8_t*)text, line, row, shift);
+		OledDisplayLineWords(text, line, row, shift);
 		return 1;
 	}
 
 	if (is_hex_u32_value_opera(operaNum) != 0) {
 		snprintf(text, sizeof(text), "0x%08lX", (unsigned long)raw);
-		OledDisplayLineWords((uint8_t*)text, line, row, shift);
+		OledDisplayLineWords(text, line, row, shift);
 		return 1;
 	}
 
@@ -2393,9 +2393,9 @@ static void display_motor_current_detail(uint32_t irun, uint8_t row)
 
 	line = DisplayLangaugeLineWords((uint8_t*)"当前值:", OLED_LINE8_1, row, 0, (uint8_t*)"Value:");
 	format_motor_current_label(irun, label, sizeof(label));
-	OledDisplayLineWords((uint8_t*)label, line, row, 0);
+	OledDisplayLineWords(label, line, row, 0);
 	line = DisplayLangaugeLineWords((uint8_t*)"RMS范围:", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"RMS Range:");
-	OledDisplayLineWords((uint8_t*)"01-31", line, OLED_ROW4_3, 0);
+	OledDisplayLineWords("01-31", line, OLED_ROW4_3, 0);
 }
 
 /**
@@ -2431,7 +2431,7 @@ static void display_menu_item_with_value(const struct MenuData *item, uint8_t li
 	if (!is_param_item) {
 		if (opera == COM_NUM_AO_SIMULATION_ENABLE) {
 			uint32_t enabled = (g_measurement.ao_output_runtime.simulation_enabled == 0U) ? 0U : 1U;
-			line = OledDisplayLineWords((uint8_t*)":", line, row, shift);
+			line = OledDisplayLineWords(":", line, row, shift);
 			OledDisplayLineWords(arr_ao_simulation_enable[enabled][screen_parameter.language], line, row, shift);
 		}
 		return;
@@ -2446,7 +2446,7 @@ static void display_menu_item_with_value(const struct MenuData *item, uint8_t li
 		param_meta[index].val = Cpu3Local_ReadValue((OperatingNumber)opera);
 	}
 
-	line = OledDisplayLineWords((uint8_t*)":", line, row, shift);
+	line = OledDisplayLineWords(":", line, row, shift);
 	if (display_formatted_readonly_value(opera, param_meta[index].val, line, row, shift) != 0) {
 		return;
 	}
@@ -2460,7 +2460,7 @@ static void display_menu_item_with_value(const struct MenuData *item, uint8_t li
 		if (unit != NULL) {
 			*unit = '\0';
 		}
-		OledDisplayLineWords((uint8_t*)label, line, row, shift);
+		OledDisplayLineWords(label, line, row, shift);
 		return;
 	}
 
@@ -4640,9 +4640,9 @@ static int SignInput(uint8_t row, uint8_t line, uint8_t shift)
 	}
 
 	if (s_param_sign_value == -1) {
-		line = OledDisplayLineWords((u8*)"-", line, row, shift);
+		line = OledDisplayLineWords("-", line, row, shift);
 	} else {
-		line = OledDisplayLineWords((u8*)"+", line, row, shift);
+		line = OledDisplayLineWords("+", line, row, shift);
 	}
 
 	OledValueDisplay(now_Para_CT.val, line, row, 0, now_Para_CT.points, now_Para_CT.unit);
@@ -5866,10 +5866,10 @@ static void display_relay_status_row(const volatile RelayAlarmRuntimeState *stat
     name = (screen_parameter.language == LANGUAGE_CHINESE) ?
         relay_status_field_name[field].name_cn : relay_status_field_name[field].name_en;
     line = OledDisplayLineWords(name, OLED_LINE8_1, row, shift);
-    line = OledDisplayLineWords((uint8_t*)":", line, row, shift);
+    line = OledDisplayLineWords(":", line, row, shift);
 
     if (!snapshot_valid || (state == NULL)) {
-        OledDisplayLineWords((uint8_t*)"N/A", line, row, shift);
+        OledDisplayLineWords("N/A", line, row, shift);
     } else if (field == RELAY_STATUS_FIELD_ALARM_VALUE) {
         OledValueDisplay(relay_status_alarm_value_x10(state->alarm_value),
                          line,
@@ -5947,7 +5947,7 @@ static void menu_relay_status(uint32_t channel, keymenuNumber keynum, pFunc_void
     snprintf(title, sizeof(title), "K%lu%s",
              (unsigned long)(channel + 1U),
              (screen_parameter.language == LANGUAGE_CHINESE) ? "报警状态" : " Alarm");
-    OledDisplayLineWords((uint8_t*)title, OLED_LINE8_1, OLED_ROW4_1, 0);
+    OledDisplayLineWords(title, OLED_LINE8_1, OLED_ROW4_1, 0);
 
     snapshot_valid = CPU2_CommHasRuntimeSnapshot();
     state = (snapshot_valid && (channel < RELAY_ALARM_CHANNEL_COUNT)) ?
@@ -6762,10 +6762,10 @@ static void menu_cpu2_comm_health(void)
 		               (unsigned long)cpu2_comm_display_count(snapshot.max_consecutive_failure_count));
 	}
 
-	OledDisplayLineWords((uint8_t *)line1, OLED_LINE8_1, OLED_ROW4_1, 0);
-	OledDisplayLineWords((uint8_t *)line2, OLED_LINE8_1, OLED_ROW4_2, 0);
-	OledDisplayLineWords((uint8_t *)line3, OLED_LINE8_1, OLED_ROW4_3, 0);
-	OledDisplayLineWords((uint8_t *)line4, OLED_LINE8_1, OLED_ROW4_4, 0);
+	OledDisplayLineWords(line1, OLED_LINE8_1, OLED_ROW4_1, 0);
+	OledDisplayLineWords(line2, OLED_LINE8_1, OLED_ROW4_2, 0);
+	OledDisplayLineWords(line3, OLED_LINE8_1, OLED_ROW4_3, 0);
+	OledDisplayLineWords(line4, OLED_LINE8_1, OLED_ROW4_4, 0);
 }
 
 /**
@@ -6922,7 +6922,7 @@ static void rtc_menu_draw(void)
 
     oled_clear();
     status_line = OledDisplayLineWords(rtc_menu_status_text(), OLED_LINE8_1, OLED_ROW4_1, 0);
-    OledDisplayLineWords((uint8_t *)field_name[rtc_menu_field], status_line, OLED_ROW4_1, 1);
+    OledDisplayLineWords(field_name[rtc_menu_field], status_line, OLED_ROW4_1, 1);
 
     snprintf(line,
              sizeof(line),
@@ -6930,7 +6930,7 @@ static void rtc_menu_draw(void)
              (unsigned int)rtc_menu_dt.year,
              (unsigned int)rtc_menu_dt.month,
              (unsigned int)rtc_menu_dt.day);
-    OledDisplayLineWords((uint8_t *)line, OLED_LINE8_1, OLED_ROW4_2, (rtc_menu_field <= 2U) ? 1U : 0U);
+    OledDisplayLineWords(line, OLED_LINE8_1, OLED_ROW4_2, (rtc_menu_field <= 2U) ? 1U : 0U);
 
     snprintf(line,
              sizeof(line),
@@ -6938,7 +6938,7 @@ static void rtc_menu_draw(void)
              (unsigned int)rtc_menu_dt.hour,
              (unsigned int)rtc_menu_dt.minute,
              (unsigned int)rtc_menu_dt.second);
-    OledDisplayLineWords((uint8_t *)line, OLED_LINE8_1, OLED_ROW4_3, (rtc_menu_field >= 3U) ? 1U : 0U);
+    OledDisplayLineWords(line, OLED_LINE8_1, OLED_ROW4_3, (rtc_menu_field >= 3U) ? 1U : 0U);
 
     DisplayLangaugeLineWords((uint8_t *)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t *)"Back");
     if (rtc_menu_field >= 5U) {
@@ -7509,7 +7509,7 @@ static void menu_ao_runtime(void)
 	if (process_valid) {
 		OledValueDisplay((int)snapshot.process_value_01mm, line, OLED_ROW4_2, 0, 1, (uint8_t*)"mm");
 	} else {
-		OledDisplayLineWords((uint8_t*)"N/A", line, OLED_ROW4_2, 0);
+		OledDisplayLineWords("N/A", line, OLED_ROW4_2, 0);
 	}
 
 	line = DisplayLangaugeLineWords((uint8_t*)"输入比例:", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Percent:");
@@ -7518,9 +7518,9 @@ static void menu_ao_runtime(void)
 		                       (uint8_t)((OLED_LINE8_END + 1U) - line),
 		                       percent_text,
 		                       sizeof(percent_text));
-		OledDisplayLineWords((uint8_t*)percent_text, line, OLED_ROW4_3, 0);
+		OledDisplayLineWords(percent_text, line, OLED_ROW4_3, 0);
 	} else {
-		OledDisplayLineWords((uint8_t*)"N/A", line, OLED_ROW4_3, 0);
+		OledDisplayLineWords("N/A", line, OLED_ROW4_3, 0);
 	}
 
 	/* 第4行用于显示输出电流，物理返回键仍由运行状态页按键表处理。 */
@@ -7531,9 +7531,9 @@ static void menu_ao_runtime(void)
 		               "%lu.%03lumA",
 		               (unsigned long)(snapshot.last_sent_mA_x1000 / 1000U),
 		               (unsigned long)(snapshot.last_sent_mA_x1000 % 1000U));
-		OledDisplayLineWords((uint8_t*)current_text, line, OLED_ROW4_4, 0);
+		OledDisplayLineWords(current_text, line, OLED_ROW4_4, 0);
 	} else {
-		OledDisplayLineWords((uint8_t*)"N/A", line, OLED_ROW4_4, 0);
+		OledDisplayLineWords("N/A", line, OLED_ROW4_4, 0);
 	}
 }
 

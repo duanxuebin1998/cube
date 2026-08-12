@@ -3025,3 +3025,26 @@ CPU3通信和界面：
 - 尚未使用真实LTD、DM4、DSM执行识别、主动/交互恢复、RS485和OLED显示验证，也未执行参数65掉电/异常恢复、故障注入、现场或SIL验证。
 - 本次未处理三个已记录的DM4测量流程问题：测水使能尚未接入业务流程、交互密度读取尚未增加新数据位门禁、参数65不确定状态恢复尚不完整。
 - 静态检查和clean-first构建只证明源码契约与可编译性，不替代目标板、传感器、FRAM、现场或功能安全证据。
+
+## 2026-08-12 - 优化CPU3显示字库索引与只读存储
+
+版本：
+- CPU2：保持`V1.39.1.0`。
+- CPU3：`V1.38.1.0 -> V1.38.1.1`（BUILD）。
+
+协议版本与兼容性：
+- CPU2/CPU3 `DEVICE_PROTOCOL_VERSION`保持33；不新增或移动共享寄存器、命令、状态及字段。
+- CPU2 `DEVICE_PARAM_VERSION`保持3，CPU3 `CPU3_PARAM_VERSION`保持`0x0007`；参数结构、CRC和FRAM布局均不变化，升级不恢复出厂、不清除现场参数。
+- OLED显示文案和保留字形不变；去除7个重复索引时保留每个字符首次命中的原点阵，493个保留字形与修改前逐字节一致。
+
+本次修改：
+- `StockMap`由500项整理为493个唯一字符，`WordStock`和`WordStock2`同步删除重复点阵，点阵注释统一使用0～492全局连续索引；117个仅由静态扫描判定的候选未用字继续保留，避免误删动态或间接显示依赖。
+- `StockMap`、`WordStock`、`WordStock2`及底层绘制入参改为只读，字库数据由可写数据段迁入`.rodata`；`OledDisplayLineWords`接收`const void *`，清除42处只读字符串强制类型转换。
+- 增加6条编译期断言，约束UTF-8索引完整性、28字节点阵长度、索引与点阵总数一致以及单表不超过8位索引上限。
+- 加强`font_check.py`：严格检查数量、重复字符、点阵字节数、连续索引、分段255上限和OLED缺字，并单独报告候选未用字而不自动删除。
+
+验证：
+- `py -X utf8 LTD_DISPLAY_CPU3\font_check.py`通过：493个索引对应493个点阵，`WordStock=252`、`WordStock2=241`，1108条OLED字符串缺字0；保留字形相对修改前首命中点阵逐字节比较493/493一致。
+- `py -m py_compile LTD_DISPLAY_CPU3\font_check.py`、`py tools\check_cpu3_display_isr_boundaries.py`和`py tools\check_cpu3_menu_name_width.py`通过。
+- 2026-08-12按最终V1.38.1.1源码执行CPU3 clean-first构建通过：`text=220608`、`data=20996`、`bss=100764`；固定名和版本名HEX的SHA-256均为`45362AFDA782587E007B9E3C3573DF767C9CB79CA2039518393F8303F95A3F27`。
+- 尚未执行真机OLED逐字显示、目标板、RS485、故障注入或现场验证；静态检查和构建不能替代真实设备验证。

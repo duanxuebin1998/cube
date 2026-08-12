@@ -52,7 +52,7 @@ static HAL_StatusTypeDef OLED_SetFullWindow(void);
 static HAL_StatusTypeDef OLED_SetWindow(uint8_t col_start, uint8_t col_end, uint8_t row_start, uint8_t row_end);
 static HAL_StatusTypeDef OLED_WriteFillData(uint8_t data);
 static HAL_StatusTypeDef write_4_byte(uint8_t DATA);
-static HAL_StatusTypeDef wirte_1616(uint8_t x, uint8_t y, uint8_t *buf, uint8_t coder, uint8_t select);
+static HAL_StatusTypeDef wirte_1616(uint8_t x, uint8_t y, const uint8_t *buf, uint8_t coder, uint8_t select);
 
 /**
  * @brief 记录 OLED SPI 操作结果并累计错误次数。
@@ -632,7 +632,7 @@ static HAL_StatusTypeDef write_4_byte(u8 DATA) {
  * @param select 字模绘制选择标志，用于控制正常或反显模式。
  * @return HAL_OK 表示HAL 操作成功。
  */
-static HAL_StatusTypeDef wirte_1616(u8 x, u8 y, u8 *buf, u8 coder, u8 select) {
+static HAL_StatusTypeDef wirte_1616(u8 x, u8 y, const u8 *buf, u8 coder, u8 select) {
 	HAL_StatusTypeDef status;
 	u8 i;
 	static u8 wordlen;
@@ -671,7 +671,7 @@ static HAL_StatusTypeDef wirte_1616(u8 x, u8 y, u8 *buf, u8 coder, u8 select) {
  * @param endm 字模数组的结束索引，配合起始索引限定连续绘制范围。
  * @param select 字模绘制选择标志，用于控制正常或反显模式。
  */
-void write_hanzi16(u8 x, u8 y, u8 *buf, u8 m, u8 endm, u8 select) {
+void write_hanzi16(u8 x, u8 y, const u8 *buf, u8 m, u8 endm, u8 select) {
 	u8 i;
 
 	for (i = m; i < endm; i++) {
@@ -728,7 +728,7 @@ void all_screen(uint8_t m) {
  * @param coder 待绘制的字模数据表。
  * @param en 待绘制的 8×16 ASCII 字符编码。
  */
-void write_816(u8 x, u8 y, u8 *buf, u8 coder, u8 en) {
+void write_816(u8 x, u8 y, const u8 *buf, u8 coder, u8 en) {
 	u8 j;
 	static int charlen;
 	HAL_StatusTypeDef status;

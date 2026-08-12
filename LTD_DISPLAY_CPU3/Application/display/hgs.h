@@ -84,7 +84,7 @@ void all_screen(uint8_t m);
  * @param endm 字模数组的结束索引，配合起始索引限定连续绘制范围。
  * @param select 字模绘制选择标志，用于控制正常或反显模式。
  */
-void write_hanzi16(uint8_t x,uint8_t y,uint8_t *buf,uint8_t m,uint8_t endm,uint8_t select);
+void write_hanzi16(uint8_t x,uint8_t y,const uint8_t *buf,uint8_t m,uint8_t endm,uint8_t select);
 /**
  * @brief 写入一个8*16的字母。
  *
@@ -94,7 +94,7 @@ void write_hanzi16(uint8_t x,uint8_t y,uint8_t *buf,uint8_t m,uint8_t endm,uint8
  * @param coder 待绘制的字模数据表。
  * @param en 待绘制的 8×16 ASCII 字符编码。
  */
-void write_816(uint8_t x,uint8_t y, uint8_t *buf,uint8_t coder,uint8_t en);
+void write_816(uint8_t x,uint8_t y,const uint8_t *buf,uint8_t coder,uint8_t en);
 
 
 

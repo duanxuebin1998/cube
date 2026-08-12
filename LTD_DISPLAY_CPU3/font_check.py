@@ -18,9 +18,12 @@ CHECK_FILES = (
 SPECIAL_CHARS = "℃←？"
 C_STRING_RE = re.compile(r'"([^"\\]*(?:\\.[^"\\]*)*)"')
 STOCK_MAP_RE = re.compile(
-    r"static\s+uint8_t\s+StockMap\[\]\s*=([\s\S]*?);\s*static\s+const\s+int\s+wordbyte"
+    r"static\s+const\s+uint8_t\s+StockMap\[\]\s*=([\s\S]*?);\s*static\s+const\s+int\s+StockmapLength"
 )
 GLYPH_COMMENT_RE = re.compile(r'/\*\s*"([^"]+)",\s*(\d+)\s*\*/')
+WORD_STOCK_RE = re.compile(
+    r"static\s+const\s+uint8_t\s+(WordStock2?)\[\]\s*=\s*\{([\s\S]*?)\};"
+)
 
 
 @dataclass
@@ -84,24 +87,59 @@ def parse_stock_map() -> str:
     return "".join(unescape_c_string(part) for part in fragments)
 
 
-def parse_glyph_sequence() -> list[str]:
+def parse_glyph_tables() -> tuple[list[str], dict[str, int]]:
     source = read_text(DISPLAY_C)
-    start = source.find("static uint8_t WordStock[255 * 28]")
-    end = source.find("static uint8_t CharStockMap[]")
+    start = source.find("static const uint8_t WordStock[]")
+    end = source.find("static const uint8_t NumberStock[]")
     if start < 0 or end < 0 or end <= start:
         raise RuntimeError(f"未找到 WordStock/WordStock2 字库区域: {DISPLAY_C}")
 
     section = source[start:end]
-    return [match.group(1) for match in GLYPH_COMMENT_RE.finditer(section)]
+    glyph_sequence = []
+    table_counts = {}
+    expected_index = 0
+    for table_match in WORD_STOCK_RE.finditer(section):
+        name = table_match.group(1)
+        table_body = table_match.group(2)
+        glyph_matches = list(GLYPH_COMMENT_RE.finditer(table_body))
+        glyphs = [match.group(1) for match in glyph_matches]
+        byte_count = len(re.findall(r"0x[0-9A-Fa-f]{2}", table_body))
+        if byte_count != len(glyphs) * 28:
+            raise RuntimeError(
+                f"{name} 点阵字节数异常: bytes={byte_count}, glyphs={len(glyphs)}"
+            )
+        for match in glyph_matches:
+            actual_index = int(match.group(2))
+            if actual_index != expected_index:
+                raise RuntimeError(
+                    f"{name} 点阵注释索引异常: expected={expected_index}, actual={actual_index}"
+                )
+            expected_index += 1
+        table_counts[name] = len(glyphs)
+        glyph_sequence.extend(glyphs)
+    if set(table_counts) != {"WordStock", "WordStock2"}:
+        raise RuntimeError(f"未完整解析 WordStock/WordStock2: {DISPLAY_C}")
+    return glyph_sequence, table_counts
 
 
-def validate_stock_map(stock_map: str, glyph_sequence: list[str]) -> list[str]:
+def validate_stock_map(
+    stock_map: str, glyph_sequence: list[str], table_counts: dict[str, int]
+) -> list[str]:
     errors = []
 
-    if len(glyph_sequence) < len(stock_map):
+    if len(glyph_sequence) != len(stock_map):
         errors.append(
-            f"点阵数量不足: StockMap={len(stock_map)}, WordStock/WordStock2={len(glyph_sequence)}"
+            f"索引与点阵数量不相等: StockMap={len(stock_map)}, WordStock/WordStock2={len(glyph_sequence)}"
         )
+
+    duplicate_chars = [ch for ch, count in Counter(stock_map).items() if count > 1]
+    for ch in duplicate_chars:
+        indices = [index for index, value in enumerate(stock_map) if value == ch]
+        errors.append(f"重复字符{ch}: 索引={indices}")
+
+    for name, count in table_counts.items():
+        if count > 255:
+            errors.append(f"{name} 点阵数量超过8位索引上限: {count}")
 
     mismatch_count = 0
     for index, expected in enumerate(stock_map):
@@ -125,6 +163,12 @@ def collect_display_strings() -> list[DisplayString]:
             continue
 
         raw = read_text(path)
+        if path == DISPLAY_C:
+            start = raw.find("static const uint8_t StockMap[]")
+            end = raw.find("static const uint8_t NumberStock[]")
+            if start < 0 or end < 0 or end <= start:
+                raise RuntimeError(f"未找到需要排除的字库定义区域: {DISPLAY_C}")
+            raw = raw[:start] + "\n" * raw[start:end].count("\n") + raw[end:]
         source = strip_comments_keep_lines(raw)
         raw_lines = raw.splitlines()
 
@@ -147,12 +191,18 @@ def collect_display_strings() -> list[DisplayString]:
     return display_strings
 
 
-def print_stock_validation(stock_map: str, glyph_sequence: list[str]) -> bool:
+def print_stock_validation(
+    stock_map: str, glyph_sequence: list[str], table_counts: dict[str, int]
+) -> bool:
     print("====== 字库一致性检查 ======")
     print(f"StockMap 字符数: {len(stock_map)}")
     print(f"WordStock/WordStock2 点阵注释数: {len(glyph_sequence)}")
+    print(
+        "点阵分段:",
+        f"WordStock={table_counts['WordStock']}, WordStock2={table_counts['WordStock2']}",
+    )
 
-    errors = validate_stock_map(stock_map, glyph_sequence)
+    errors = validate_stock_map(stock_map, glyph_sequence, table_counts)
     if not errors:
         print("结果: StockMap 与点阵顺序一致")
         return True
@@ -161,6 +211,24 @@ def print_stock_validation(stock_map: str, glyph_sequence: list[str]) -> bool:
     for error in errors:
         print("   -", error)
     return False
+
+
+def print_unused_report(stock_map: str, display_strings: list[DisplayString]) -> None:
+    used_counter = Counter(
+        ch
+        for item in display_strings
+        for ch in item.text
+        if is_font_char(ch)
+    )
+    unused = [(index, ch) for index, ch in enumerate(stock_map) if ch not in used_counter]
+
+    print("\n====== OLED 字库使用统计 ======")
+    print(f"已使用字符数(去重): {len(set(stock_map) & set(used_counter))}")
+    print(f"候选未使用字符数: {len(unused)}")
+    if unused:
+        print("候选未使用字符:", "".join(ch for _, ch in unused))
+        print("候选未使用索引:", " ".join(f"{index}:{ch}" for index, ch in unused))
+        print("说明: 该结果只基于当前纳入检查的 OLED 源码字符串，不作为自动删字依据。")
 
 
 def print_missing_report(stock_map: str, display_strings: list[DisplayString]) -> bool:
@@ -198,14 +266,15 @@ def print_missing_report(stock_map: str, display_strings: list[DisplayString]) -
 def main() -> int:
     try:
         stock_map = parse_stock_map()
-        glyph_sequence = parse_glyph_sequence()
+        glyph_sequence, table_counts = parse_glyph_tables()
         display_strings = collect_display_strings()
     except Exception as exc:
         print(f"字库检查失败: {exc}", file=sys.stderr)
         return 2
 
-    stock_ok = print_stock_validation(stock_map, glyph_sequence)
+    stock_ok = print_stock_validation(stock_map, glyph_sequence, table_counts)
     missing_ok = print_missing_report(stock_map, display_strings)
+    print_unused_report(stock_map, display_strings)
     return 0 if stock_ok and missing_ok else 1
 
 

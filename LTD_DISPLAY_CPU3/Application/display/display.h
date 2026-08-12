@@ -121,13 +121,13 @@ void Display_RequestRefresh(void);
 /**
  * @brief 显示多个汉字或字符。
  *
- * @param data 待绘制的 NUL 结尾 OLED 文字字节串；ASCII 和中文字节按当前字库规则依次推进横向列坐标。
+ * @param data 待绘制的只读NUL结尾OLED文字字节串；ASCII和中文字节按当前字库规则依次推进横向列坐标。
  * @param x 算法、坐标或比较使用的 X 值。
  * @param y 算法、坐标或比较使用的 Y 值。
  * @param shift OLED 字模阴码/阳码或显示偏移选项。
  * @return 返回字符串绘制完成后的下一 OLED 横坐标；data 为空时保持传入横坐标 y。
  */
-uint8_t OledDisplayLineWords(uint8_t* data,uint8_t x,uint8_t y,uint8_t shift);
+uint8_t OledDisplayLineWords(const void *data,uint8_t x,uint8_t y,uint8_t shift);
 /**
  * @brief 显示多个汉字或字符 - 带中英文选择。
  *
