@@ -3048,3 +3048,24 @@ CPU3通信和界面：
 - `py -m py_compile LTD_DISPLAY_CPU3\font_check.py`、`py tools\check_cpu3_display_isr_boundaries.py`和`py tools\check_cpu3_menu_name_width.py`通过。
 - 2026-08-12按最终V1.38.1.1源码执行CPU3 clean-first构建通过：`text=220608`、`data=20996`、`bss=100764`；固定名和版本名HEX的SHA-256均为`45362AFDA782587E007B9E3C3573DF767C9CB79CA2039518393F8303F95A3F27`。
 - 尚未执行真机OLED逐字显示、目标板、RS485、故障注入或现场验证；静态检查和构建不能替代真实设备验证。
+
+## 2026-08-13 - 修复CPU3到CPU2相邻事务帧间静默不足
+
+版本：
+- CPU2：保持`V1.39.1.0`。
+- CPU3：`V1.38.1.1 -> V1.38.2.0`（PATCH）。
+
+协议版本与兼容性：
+- CPU2/CPU3 `DEVICE_PROTOCOL_VERSION`保持33；共享寄存器、功能码、帧格式、命令和参数语义均不改变，CPU2无需修改。
+- CPU2 `DEVICE_PARAM_VERSION`保持3，CPU3 `CPU3_PARAM_VERSION`保持`0x0007`；参数结构、CRC和FRAM布局不变，升级不会恢复出厂或清除现场参数。
+- 现场CPU2 V1.39.1.0协议33可与CPU3 V1.38.2.0协议33组合；工作区中其它协议34并行改动不属于本提交。
+
+本次修改：
+- CPU3在每笔CPU2响应结束后记录UART5总线活动时刻，下一笔周期读取、参数写入或命令写入在切换RS485发送方向前统一保证3 ms毫秒节拍门限。
+- 首笔事务不等待；节拍差使用无符号运算兼容`HAL_GetTick()`回绕。保留原1秒响应超时、失败计数、快照失效和恢复策略，不对FC10自动重发。
+- 补充现场证据边界、原CPU2回归步骤和逻辑分析仪通过标准；静态检查器保存在本机`tools/`，按仓库边界不纳入Git提交。
+
+验证：
+- UART5帧间保护、CPU2通信超时、带参事务和外部快照新鲜度契约通过；Markdown链接、UTF-8/CRLF、C注释及`git diff --check`通过。
+- 基于`HEAD c90e7346`协议33隔离worktree按最终V1.38.2.0执行CPU3 clean-first构建通过：`text=220664`、`data=20996`、`bss=100764`；固定名与版本名HEX的SHA-256均为`91911364F5C4775E3657FB53C341B1B86CD620623F4C9005E71DBDD50D0D95AA`。
+- 尚未烧写CPU3，未完成原CPU2板200次参数写、最小安全带参命令、逻辑分析仪波形或长期现场验证；当前结论为最高置信软件触发机制，不把静态检查和构建表述为实板闭环。

@@ -18,6 +18,7 @@
 /* CPU2 主板内部 Modbus 从站地址 0x01；保留历史拼写以兼容现有调用，构造请求帧时作为目标地址。 */
 #define ADERSS 0X01
 #define CPU2_RESPONSE_TIMEOUT_MS 1000U /* CPU2 单次响应等待超时，单位 ms。 */
+#define CPU2_MODBUS_INTERFRAME_GAP_MS 3U /* 115200波特率下相邻板间事务发送前保留不少于约2ms的总线静默时间。 */
 #define CPU2_COMM_STATUS_LOG_INTERVAL_MS 5000U /* CPU2通信健康摘要周期，避免阻塞调试串口影响轮询。 */
 #define CPU2_COMM_RESYNC_FAILURE_LIMIT 3U /* 连续失败达到三次后才废弃快照并完整重同步。 */
 #define CPU2_COMM_FAILURE_LIMIT 10U /* CPU2 连续请求未获得合法响应的置错阈值。 */
@@ -56,6 +57,8 @@ static bool s_cpu2_has_fixed_point_snapshot = false; /* 固定点结果与双代
 static uint32_t s_cpu2_consecutive_failure_count = 0U; /* CPU2 连续请求失败次数。 */
 static bool s_cpu2_comm_fault_active = false; /* CPU3 本机通信故障是否等待状态帧恢复。 */
 static uint32_t s_cpu2_snapshot_generation = 0U; /* 每次CPU2公开快照失效时递增，供SI识别通信会话切换。 */
+static uint32_t s_cpu2_last_response_end_tick = 0U; /* 最近一帧CPU2响应结束时的毫秒节拍，用于约束下一事务的帧间静默时间。 */
+static bool s_cpu2_last_response_end_tick_valid = false; /* 已取得至少一帧CPU2响应结束时间后才启用帧间保护。 */
 static bool s_cpu2_parameter_refresh_requested = false; /* 外部参数写后是否要求重新确认 CPU2 参数。 */
 static bool s_cpu2_factory_restore_refresh_pending = false; /* 恢复出厂ACK后等待CPU2发布持久化完成代次。 */
 static uint32_t s_cpu2_confirmed_command_argument_mask = 0U; /* 本连接内逐字段ACK确认、尚未被对应命令消费的命令参数位图。 */
@@ -2791,6 +2794,9 @@ static bool CPU2_CombinatePackage_SendWire(uint8_t f_code,
 			return CPU2_CommFinishFailedRequest(request_kind, request_command);
 		}
 	}
+	/* wait_response由UART5接收、错误中断或超时出口清除；记录总线活动结束时间，避免下一事务紧贴发送。 */
+	s_cpu2_last_response_end_tick = HAL_GetTick();
+	s_cpu2_last_response_end_tick_valid = true;
 	if (s_cpu2_uart_error_pending != HAL_UART_ERROR_NONE) {
 		uint32_t uart_error_code = s_cpu2_uart_error_pending;
 		s_cpu2_uart_error_pending = HAL_UART_ERROR_NONE;
@@ -2825,6 +2831,23 @@ static bool CPU2_CombinatePackage_SendWire(uint8_t f_code,
 	CPU3_WatchdogReportProgress();
 	return true;
 }
+
+/*
+ * 函数用途：等待CPU2板间Modbus上一响应之后的最小总线静默时间。
+ * 调用场景：所有周期读取、参数写入和命令写入统一从sendToCPU2发送前调用。
+ * 关键约束：只在首笔事务之后等待，使用无符号节拍差兼容HAL_GetTick回绕，不改变响应超时和重试语义。
+ */
+static void CPU2_WaitInterframeGap(void)
+{
+	if (!s_cpu2_last_response_end_tick_valid) {
+		return;
+	}
+
+	while ((HAL_GetTick() - s_cpu2_last_response_end_tick) < CPU2_MODBUS_INTERFRAME_GAP_MS) {
+		/* 最大等待3ms，不在此窗口内续看门狗，避免掩盖其它长阻塞。 */
+	}
+}
+
 /**
  * @brief 向CPU2发送数据包。
  *
@@ -2834,6 +2857,7 @@ static bool CPU2_CombinatePackage_SendWire(uint8_t f_code,
  * @return true 表示待发长度和缓冲有效，UART DMA 发送已成功启动并完成；false 表示参数无效、UART 忙/错误或发送等待超时。
  */
 bool sendToCPU2(uint8_t *arr, uint16_t len, bool flag_fromhost) {
+	CPU2_WaitInterframeGap();
 	RS485_SET_SEND_MODE();  /* switch to transmit */
 	wait_response = true; /* wait for CPU2 response */
 	if (HAL_UART_Transmit_DMA(&huart5, arr, len) != HAL_OK) {
