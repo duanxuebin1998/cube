@@ -9,6 +9,7 @@
 /* INC_MEASURE_OILLEVEL_H_ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define INC_MEASURE_OILLEVEL_H_
 
+#include <stdint.h>
 #include "system_parameter.h"
 /* 液位探头当前介质判定；用于在油相与气相之间切换搜索方向和液面确认逻辑。 */
 typedef enum {
@@ -54,6 +55,15 @@ uint32_t determine_level_status_motion(Level_StateTypeDef *state_out);
  *       - OilLevel_RecordSearchResult(): 记录步进精找成功结果
  */
 uint32_t SearchOilLevel(void); /* 寻找油面但不跟随 */
+/**
+ * @brief 使用本次给定的目标频率和死区执行一次固定频率液位搜索。
+ *
+ * @param target_frequency_hz 本次搜索目标频率，单位 Hz；仅在本次调用中使用，不写设备参数或 FRAM。
+ * @param deadband_hz 本次搜索死区半宽，单位 Hz；仅在本次调用中使用。
+ * @return NO_ERROR 表示液位稳定命中；其他值表示参数、命令切换、传感器、电机或安全边界错误。
+ */
+uint32_t OilLevel_RunFixedFrequencySearch(uint32_t target_frequency_hz,
+                                         uint32_t deadband_hz);
 /**
  * @brief 液位跟随函数，用于持续监测并跟踪液位变化
  *

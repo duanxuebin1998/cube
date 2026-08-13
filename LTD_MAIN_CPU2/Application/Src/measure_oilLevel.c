@@ -106,9 +106,22 @@ static uint32_t DensityLevel_GetStableDelayMs(void);
 static void DensityLevel_RecordCurrentPosition(const char *tag);
 
 static uint32_t FrequencyLevel_StopAndReturn(uint32_t error_code, const char *reason);
-static uint32_t FrequencyLevel_SetFixedTarget(void);
+static uint32_t FrequencyLevel_ValidateTarget(uint32_t target_frequency_hz);
+static uint32_t FrequencyLevel_ValidateFixedConfig(uint32_t target_frequency_hz,
+                                                   uint32_t deadband_hz);
 static uint32_t FrequencyLevel_RunFixedClosedLoop(uint32_t follow_mode);
 static uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode);
+static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
+                                                       uint32_t target_frequency_hz,
+                                                       float deadband_override_hz,
+                                                       uint8_t fixed_target_mode);
+static uint32_t FrequencyLevel_CheckMotionGuards(int dir);
+static uint32_t FrequencyLevel_ReadCurrentWithGuards(int active_dir);
+static uint32_t FrequencyLevel_HandleLowLimit(uint32_t follow_mode,
+                                              int *active_dir,
+                                              uint32_t *active_speed_x100,
+                                              uint32_t *stable_count,
+                                              float deadband);
 static uint32_t FrequencyLevel_ComputeSpeedX100(float frequency_error, float deadband, uint32_t max_speed_x100);
 static float FrequencyLevel_GetDeadband(uint32_t raw_threshold);
 static uint32_t FrequencyLevel_GetCompatThresholdHz(uint32_t raw_threshold);
@@ -752,22 +765,59 @@ static uint32_t FrequencyLevel_StopAndReturn(uint32_t error_code, const char *re
 }
 
 /**
- * @brief 校验固定频率目标非零且不超过上限，成功后写入本次跟随目标。
+ * @brief 校验固定频率目标非零且不超过传感器有效上限。
  *
+ * @param target_frequency_hz 待校验的固定目标频率，单位 Hz。
  * @return PARAM_RANGE_ERROR 表示参数超出允许范围；NO_ERROR 表示操作成功。
  */
-static uint32_t FrequencyLevel_SetFixedTarget(void)
+static uint32_t FrequencyLevel_ValidateTarget(uint32_t target_frequency_hz)
 {
-    if (g_deviceParams.oilLevelFrequency == 0U) {
+    if (target_frequency_hz == 0U) {
         printf("固定频率找液位\t目标频率为0\r\n");
         return PARAM_CONFIG_MISSING;
     }
-    if (g_deviceParams.oilLevelFrequency > FREQUENCY_LEVEL_VALID_MAX_HZ) {
+    if (target_frequency_hz > FREQUENCY_LEVEL_VALID_MAX_HZ) {
         printf("固定频率找液位\t目标频率超出有效范围：%lu Hz\r\n",
-               (unsigned long)g_deviceParams.oilLevelFrequency);
+               (unsigned long)target_frequency_hz);
         return PARAM_RANGE_ERROR;
     }
-    g_measurement.oil_measurement.follow_frequency = g_deviceParams.oilLevelFrequency;
+    return NO_ERROR;
+}
+
+/**
+ * @brief 校验固定频率目标、可选死区和运动安全边界参数。
+ *
+ * @param target_frequency_hz 固定频率目标，单位 Hz。
+ * @param deadband_hz 本次覆盖死区，单位 Hz；0 表示由生产闭环读取设备死区。
+ * @return NO_ERROR 表示配置可用于闭环；其他值表示缺失或越界。
+ */
+static uint32_t FrequencyLevel_ValidateFixedConfig(uint32_t target_frequency_hz,
+                                                   uint32_t deadband_hz)
+{
+    uint32_t ret = FrequencyLevel_ValidateTarget(target_frequency_hz);
+    int64_t zero_weight_limit;
+
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+    if (((deadband_hz != 0U) &&
+         (deadband_hz > FREQUENCY_LEVEL_VALID_MAX_HZ)) ||
+        (g_deviceParams.tankHeight <= 1000U) ||
+        ((int64_t)g_deviceParams.blindZone >=
+         ((int64_t)g_deviceParams.tankHeight - 1000LL)) ||
+        (g_deviceParams.full_weight == 0U) ||
+        (g_deviceParams.full_weight > (uint32_t)INT32_MAX) ||
+        (g_deviceParams.bottom_weight_threshold > (uint32_t)INT32_MAX) ||
+        (g_deviceParams.zero_weight_threshold_ratio > 100U)) {
+        return PARAM_RANGE_ERROR;
+    }
+    zero_weight_limit = ((int64_t)g_deviceParams.full_weight *
+                         (100LL + (int64_t)g_deviceParams.zero_weight_threshold_ratio)) /
+                        100LL;
+    if ((zero_weight_limit > (int64_t)INT32_MAX) ||
+        ((int64_t)g_deviceParams.bottom_weight_threshold >= zero_weight_limit)) {
+        return PARAM_RANGE_ERROR;
+    }
     return NO_ERROR;
 }
 
@@ -779,11 +829,49 @@ static uint32_t FrequencyLevel_SetFixedTarget(void)
  */
 static uint32_t FrequencyLevel_RunFixedClosedLoop(uint32_t follow_mode)
 {
-    uint32_t ret = FrequencyLevel_SetFixedTarget();
+    uint32_t ret = FrequencyLevel_ValidateFixedConfig(
+            g_deviceParams.oilLevelFrequency,
+            0U);
     if (ret != NO_ERROR) {
         return ret;
     }
-    return FrequencyLevel_RunClosedLoop(follow_mode);
+    return FrequencyLevel_RunClosedLoopConfigured(follow_mode,
+                                                  g_deviceParams.oilLevelFrequency,
+                                                  0.0f,
+                                                  1U);
+}
+
+/**
+ * @brief 使用串口本次覆盖目标和死区运行一次方法5固定频率搜索。
+ *
+ * @param target_frequency_hz 本次搜索目标频率，单位 Hz。
+ * @param deadband_hz 本次搜索死区半宽，单位 Hz。
+ * @return NO_ERROR 表示稳定命中液位；其他值为参数、命令切换、传感器、电机或安全保护错误。
+ * @note 本接口只在运行期间临时覆盖并在返回前恢复公开目标，不修改设备参数或 FRAM；串口调试与生产方法5共用闭环和保护出口。
+ */
+uint32_t OilLevel_RunFixedFrequencySearch(uint32_t target_frequency_hz,
+                                         uint32_t deadband_hz)
+{
+    uint32_t ret = FrequencyLevel_ValidateFixedConfig(target_frequency_hz,
+                                                      deadband_hz);
+    uint32_t saved_follow_frequency = g_measurement.oil_measurement.follow_frequency;
+
+    if ((ret == NO_ERROR) && (deadband_hz == 0U)) {
+        printf("固定频率找液位\t目标、死区或安全边界参数无效：%lu Hz\r\n",
+               (unsigned long)deadband_hz);
+        ret = PARAM_RANGE_ERROR;
+    }
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    OilLevel_ResetSearchRuntimeState();
+    ret = FrequencyLevel_RunClosedLoopConfigured(FREQUENCY_LEVEL_RUN_SEARCH,
+                                                 target_frequency_hz,
+                                                 (float)deadband_hz,
+                                                 1U);
+    g_measurement.oil_measurement.follow_frequency = saved_follow_frequency;
+    return ret;
 }
 /**
  * @brief 端点频率需要写入油中/空气基准，读取失败时做局部重试。
@@ -994,21 +1082,168 @@ static void FrequencyLevel_RecordCurrentPosition(const char *tag)
 }
 
 /**
+ * @brief 使用已解析的生产目标执行相对频率连续闭环。
+ *
+ * @param follow_mode 0 表示首次搜索，非 0 表示持续跟随。
+ * @return 频率闭环的真实结果码。
+ */
+static uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode)
+{
+    return FrequencyLevel_RunClosedLoopConfigured(
+            follow_mode,
+            g_measurement.oil_measurement.follow_frequency,
+            0.0f,
+            0U);
+}
+
+/**
+ * @brief 在频率闭环运动期间检查位置、称重碰撞和丢步。
+ *
+ * @param dir 当前已执行或即将执行的运动方向；无方向时只刷新位置。
+ * @return NO_ERROR 表示可继续；其他值为位置、称重通信/碰撞或丢步错误。
+ * @note 位置边界只阻止继续向外越界，不阻止从罐顶或盲区向安全区退回。
+ */
+static uint32_t FrequencyLevel_CheckMotionGuards(int dir)
+{
+    uint32_t ret = MotorCtrl_PollRuntimePosition();
+    int64_t zero_weight_limit;
+    int32_t current_weight;
+
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+    if (((dir == MOTOR_DIRECTION_DOWN) || (dir == DENSITY_LEVEL_DIR_NONE)) &&
+        ((int64_t)g_measurement.debug_data.sensor_position <=
+         (int64_t)g_deviceParams.blindZone)) {
+        return MEASUREMENT_OILLEVEL_LOW;
+    }
+    if (((dir == MOTOR_DIRECTION_UP) || (dir == DENSITY_LEVEL_DIR_NONE)) &&
+        (g_deviceParams.tankHeight > 1000U) &&
+        ((int64_t)g_measurement.debug_data.sensor_position >=
+         ((int64_t)g_deviceParams.tankHeight - 1000LL))) {
+        return MEASUREMENT_OILLEVEL_HIGH;
+    }
+    ret = Weight_CheckCommunicationTimeout();
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+    current_weight = (int32_t)weight_parament.current_weight;
+    zero_weight_limit = ((int64_t)g_deviceParams.full_weight *
+                         (100LL + (int64_t)g_deviceParams.zero_weight_threshold_ratio)) /
+                        100LL;
+    if (((dir == MOTOR_DIRECTION_UP) || (dir == DENSITY_LEVEL_DIR_NONE)) &&
+        ((int64_t)current_weight >= zero_weight_limit)) {
+        return WEIGHT_COLLISION_DETECTED;
+    }
+    if (((dir == MOTOR_DIRECTION_DOWN) || (dir == DENSITY_LEVEL_DIR_NONE)) &&
+        (current_weight <= (int32_t)g_deviceParams.bottom_weight_threshold)) {
+        return WEIGHT_COLLISION_DETECTED;
+    }
+    if (dir == DENSITY_LEVEL_DIR_NONE) {
+        return NO_ERROR;
+    }
+
+    ret = CheckWeightCollision();
+    return (ret != NO_ERROR) ?
+           ret : MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.sensor_position);
+}
+
+/**
+ * @brief 在运动保护通过后读取一次液位频率。
+ *
+ * @param active_dir 当前实际运动方向。
+ * @return NO_ERROR 表示保护和频率读取均成功；其他值为安全保护或传感器错误。
+ */
+static uint32_t FrequencyLevel_ReadCurrentWithGuards(int active_dir)
+{
+    uint32_t ret = NO_ERROR;
+
+    if (active_dir != DENSITY_LEVEL_DIR_NONE) {
+        ret = FrequencyLevel_CheckMotionGuards(active_dir);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+    }
+    return DSM_Get_LevelMode_Frequence(
+            &g_measurement.oil_measurement.current_frequency);
+}
+
+/**
+ * @brief 到达盲区时停止下行；首次搜索退出，持续跟随等待频率要求上行撤回。
+ *
+ * @param follow_mode 0 表示首次搜索，非 0 表示持续跟随。
+ * @param active_dir 当前运动方向输出。
+ * @param active_speed_x100 当前运动速度输出。
+ * @param stable_count 当前稳定计数输出。
+ * @return 首次搜索返回 MEASUREMENT_OILLEVEL_LOW；持续跟随在已停机并可重新闭环时返回 NO_ERROR，其他值为停机、命令切换或传感器错误。
+ * @note 等待期间不下行、不发布液位；仅当当前频率低于目标时允许上行离开盲区。
+ */
+static uint32_t FrequencyLevel_HandleLowLimit(uint32_t follow_mode,
+                                              int *active_dir,
+                                              uint32_t *active_speed_x100,
+                                              uint32_t *stable_count,
+                                              float deadband)
+{
+    uint32_t ret;
+
+    if ((follow_mode == 0U) || (active_dir == NULL) ||
+        (active_speed_x100 == NULL) || (stable_count == NULL)) {
+        return (follow_mode == 0U) ?
+               MEASUREMENT_OILLEVEL_LOW : SYSTEM_CALL_CONDITION_ERROR;
+    }
+    ret = LevelVelocity_StartOrUpdateMotion(DENSITY_LEVEL_DIR_NONE,
+                                            0U,
+                                            active_dir,
+                                            active_speed_x100);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+    g_measurement.oil_measurement.probe_at_liquid_level = 0U;
+    g_measurement.oil_measurement.liquid_stable = 0U;
+    *stable_count = 0U;
+    while (1) {
+        if (HasEffectiveCommandSwitchRequest()) {
+            return STATE_SWITCH;
+        }
+        ret = DSM_Get_LevelMode_Frequence(
+                &g_measurement.oil_measurement.current_frequency);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+        if (((float)g_measurement.oil_measurement.current_frequency -
+             (float)g_measurement.oil_measurement.follow_frequency) <
+            -deadband) {
+            return NO_ERROR;
+        }
+        ret = AbortableDelay_CommandSwitch(FREQUENCY_LEVEL_SAMPLE_DELAY_MS, 50U);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+    }
+}
+
+/**
  * @brief 相对频率和固定频率共用的速度模式连续找液位/跟随闭环。
  *
- * 函数使用调用前已经写入 follow_frequency 的目标频率；连续相对频率法和连续固定频率法共用本闭环，查找模式使用 oilLevelThreshold，跟随模式使用
- * oilLevelHysteresisThreshold。
+ * 连续相对频率法、连续固定频率法和 LF 串口调试共用本闭环；目标频率由调用方作为本轮局部值传入，不修改设备参数。生产查找使用
+ * oilLevelThreshold，生产跟随使用 oilLevelHysteresisThreshold，LF 调试可通过 deadband_override_hz 只覆盖本次查找死区。
  * 每轮从传感器读取当前液位频率，以当前频率减目标频率的偏差决定下行、上行或停止；连续相对频率法在空气端或油端附近会修正方向，避免把端点误判为最终死区。
  * 频率满足死区及端点一致性条件时停止速度运动并累计稳定样本，达到门限后记录当前液位、同步密度分布液位及 AO 过程样本；查找模式随后返回，跟随模式继续监测。
- * 离开稳定区后按频率偏差计算并钳位 0.01 m/min 速度；到达液位下限时先等待探头离开盲区，再恢复闭环，同时持续检查位置上限、扭力碰撞和丢步。
+ * 离开稳定区后按频率偏差计算并钳位 0.01 m/min 速度；首次查找到达盲区立即停止并返回低液位，持续跟随在盲区停机等待，只有频率要求上行时才撤回安全区，同时持续检查位置上限、扭力碰撞和丢步。
  * 查找模式受 FREQUENCY_LEVEL_SEARCH_TIMEOUT_MS 限制，跟随模式持续运行直至命令切换或故障。所有异常出口都使 AO 过程样本失效并尝试慢停电机。
  *
  * @param follow_mode 0 表示执行一次频率液位查找并在稳定后返回；非 0 表示使用跟随滞回死区持续闭环，直至命令切换或故障。
+ * @param target_frequency_hz 本轮闭环目标频率，单位 Hz；函数同时更新公开运行态频率用于诊断和盲区等待。
+ * @param deadband_override_hz 大于 0 时覆盖本次闭环死区，单位 Hz；0 表示按查找/跟随模式读取设备参数。
+ * @param fixed_target_mode 非 0 表示本轮使用固定目标语义，禁止应用相对频率端点修正。
  * @return 查找模式稳定完成返回 NO_ERROR；STATE_SWITCH
  *         表示被新命令正常打断，其他值区分目标未配置、频率读取、盲区恢复、位置、扭力、丢步、电机控制和查找超时错误；跟随模式正常运行时不主动返回。
  * @note follow_mode 非 0 时函数设计为长期运行，不应把缺少正常返回理解为死循环缺陷；退出由命令切换和安全故障驱动。
  */
-static uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode)
+static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
+                                                       uint32_t target_frequency_hz,
+                                                       float deadband_override_hz,
+                                                       uint8_t fixed_target_mode)
 {
     uint32_t ret;
     uint32_t start_tick;
@@ -1017,13 +1252,16 @@ static uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode)
     uint32_t active_speed_x100 = 0U;
     float deadband;
     float follow_deadband;
-    uint32_t method = g_deviceParams.liquidLevelMeasurementMethod;
+    uint32_t method = (fixed_target_mode != 0U) ?
+                      OIL_LEVEL_METHOD_CONTINUOUS_FIXED_FREQ :
+                      g_deviceParams.liquidLevelMeasurementMethod;
     const char *method_text = "频率";
 
-    if (g_measurement.oil_measurement.follow_frequency == 0U) {
+    if (target_frequency_hz == 0U) {
         printf("频率找液位\t目标频率未配置\r\n");
         return PARAM_CONFIG_MISSING;
     }
+    g_measurement.oil_measurement.follow_frequency = target_frequency_hz;
 
     if (method == OIL_LEVEL_METHOD_CONTINUOUS_RELATIVE_FREQ) {
         method_text = "连续相对频率";
@@ -1036,6 +1274,9 @@ static uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode)
     if (follow_mode != 0U) {
         deadband = follow_deadband;
     }
+    if (deadband_override_hz > 0.0f) {
+        deadband = deadband_override_hz;
+    }
 
     g_measurement.oil_measurement.probe_at_liquid_level = 0U;
     g_measurement.oil_measurement.liquid_stable = 0U;
@@ -1044,6 +1285,7 @@ static uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode)
     if (ret != NO_ERROR) {
         return FrequencyLevel_StopAndReturn(ret, "切换液位模式失败");
     }
+    MotorCtrl_LostStepInit();
 
     printf("频率找液位\t开始闭环\t方法=%s\t模式=%s\t目标频率=%lu Hz\t死区=%.1f Hz\r\n",
            method_text,
@@ -1061,16 +1303,34 @@ static uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode)
             return FrequencyLevel_StopAndReturn(STATE_SWITCH, "命令切换");
         }
 
-        ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
-        if (ret != NO_ERROR) {
-            return FrequencyLevel_StopAndReturn(ret, "读取液位频率失败");
+        if (fixed_target_mode != 0U) {
+            ret = FrequencyLevel_ReadCurrentWithGuards(active_dir);
+            if (ret == MEASUREMENT_OILLEVEL_LOW) {
+                ret = FrequencyLevel_HandleLowLimit(follow_mode,
+                                                    &active_dir,
+                                                    &active_speed_x100,
+                                                    &stable_count,
+                                                    deadband);
+                if (ret == NO_ERROR) {
+                    continue;
+                }
+            }
+            if (ret != NO_ERROR) {
+                return FrequencyLevel_StopAndReturn(ret, "读取频率或运动保护失败");
+            }
+        } else {
+            ret = DSM_Get_LevelMode_Frequence(
+                    &g_measurement.oil_measurement.current_frequency);
+            if (ret != NO_ERROR) {
+                return FrequencyLevel_StopAndReturn(ret, "读取液位频率失败");
+            }
         }
 
         frequency_error = (float)g_measurement.oil_measurement.current_frequency -
                           (float)g_measurement.oil_measurement.follow_frequency;
         printf("频率找液位\t当前频率=%lu Hz\t目标=%lu Hz\t偏差=%.1f Hz\r\n",
                (unsigned long)g_measurement.oil_measurement.current_frequency,
-               (unsigned long)g_measurement.oil_measurement.follow_frequency,
+               (unsigned long)target_frequency_hz,
                (double)frequency_error);
 
         if (frequency_error > deadband) {
@@ -1080,9 +1340,30 @@ static uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode)
         } else {
             dir = DENSITY_LEVEL_DIR_NONE;
         }
-        dir = FrequencyLevel_CorrectRelativeEndpointDirection(dir);
+        if (fixed_target_mode == 0U) {
+            dir = FrequencyLevel_CorrectRelativeEndpointDirection(dir);
+        }
 
-        if (FrequencyLevel_IsStableInsideBand(frequency_error, deadband) != 0U) {
+        if (fixed_target_mode != 0U) {
+            ret = FrequencyLevel_CheckMotionGuards(dir);
+            if (ret == MEASUREMENT_OILLEVEL_LOW) {
+                ret = FrequencyLevel_HandleLowLimit(follow_mode,
+                                                    &active_dir,
+                                                    &active_speed_x100,
+                                                    &stable_count,
+                                                    deadband);
+                if (ret == NO_ERROR) {
+                    continue;
+                }
+            }
+            if (ret != NO_ERROR) {
+                return FrequencyLevel_StopAndReturn(ret, "运动安全保护");
+            }
+        }
+
+        if (((fixed_target_mode != 0U) && (fabsf(frequency_error) <= deadband)) ||
+            ((fixed_target_mode == 0U) &&
+             (FrequencyLevel_IsStableInsideBand(frequency_error, deadband) != 0U))) {
             ret = LevelVelocity_StartOrUpdateMotion(DENSITY_LEVEL_DIR_NONE, 0U, &active_dir, &active_speed_x100);
             if (ret != NO_ERROR) {
                 return FrequencyLevel_StopAndReturn(ret, "停止确认失败");
@@ -1121,28 +1402,54 @@ static uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode)
             return FrequencyLevel_StopAndReturn(ret, "启动速度模式失败");
         }
 
-        ret = determineTheSensorPositionAndUpdateTheLevelValue();
-        if (ret == MEASUREMENT_OILLEVEL_LOW) {
-            active_dir = DENSITY_LEVEL_DIR_NONE;
-            active_speed_x100 = 0U;
-            ret = waitForTheLiquidLevelToExceedTheBlindZone();
-            if (ret != NO_ERROR) {
-                return FrequencyLevel_StopAndReturn((uint32_t)ret, "等待液位离开盲区失败");
+        if (fixed_target_mode != 0U) {
+            ret = FrequencyLevel_CheckMotionGuards(active_dir);
+            if (ret == MEASUREMENT_OILLEVEL_LOW) {
+                ret = LevelVelocity_StartOrUpdateMotion(DENSITY_LEVEL_DIR_NONE,
+                                                        0U,
+                                                        &active_dir,
+                                                        &active_speed_x100);
+                if (ret != NO_ERROR) {
+                    return FrequencyLevel_StopAndReturn(ret, "盲区停机失败");
+                }
+                if (follow_mode != 0U) {
+                    ret = FrequencyLevel_HandleLowLimit(follow_mode,
+                                                        &active_dir,
+                                                        &active_speed_x100,
+                                                        &stable_count,
+                                                        deadband);
+                    if (ret == NO_ERROR) {
+                        continue;
+                    }
+                } else {
+                    ret = MEASUREMENT_OILLEVEL_LOW;
+                }
             }
-            continue;
-        }
-        if (ret != NO_ERROR) {
-            return FrequencyLevel_StopAndReturn((uint32_t)ret, "位置越界");
-        }
-
-        ret = CheckWeightCollision();
-        if (ret != NO_ERROR) {
-            return FrequencyLevel_StopAndReturn(ret, "扭力碰撞");
-        }
-
-        ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.sensor_position);
-        if (ret != NO_ERROR) {
-            return FrequencyLevel_StopAndReturn(ret, "丢步检测失败");
+            if (ret != NO_ERROR) {
+                return FrequencyLevel_StopAndReturn(ret, "运动安全保护");
+            }
+        } else {
+            ret = determineTheSensorPositionAndUpdateTheLevelValue();
+            if (ret == MEASUREMENT_OILLEVEL_LOW) {
+                active_dir = DENSITY_LEVEL_DIR_NONE;
+                active_speed_x100 = 0U;
+                ret = waitForTheLiquidLevelToExceedTheBlindZone();
+                if (ret == NO_ERROR) {
+                    continue;
+                }
+            }
+            if (ret != NO_ERROR) {
+                return FrequencyLevel_StopAndReturn((uint32_t)ret, "位置越界");
+            }
+            ret = CheckWeightCollision();
+            if (ret != NO_ERROR) {
+                return FrequencyLevel_StopAndReturn(ret, "扭力碰撞");
+            }
+            ret = MotorCtrl_CheckLostStepAutoTiming(
+                    g_measurement.debug_data.sensor_position);
+            if (ret != NO_ERROR) {
+                return FrequencyLevel_StopAndReturn(ret, "丢步检测失败");
+            }
         }
 
         if ((follow_mode == 0U) &&

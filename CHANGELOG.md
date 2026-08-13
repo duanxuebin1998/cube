@@ -3069,3 +3069,25 @@ CPU3通信和界面：
 - UART5帧间保护、CPU2通信超时、带参事务和外部快照新鲜度契约通过；Markdown链接、UTF-8/CRLF、C注释及`git diff --check`通过。
 - 基于`HEAD c90e7346`协议33隔离worktree按最终V1.38.2.0执行CPU3 clean-first构建通过：`text=220664`、`data=20996`、`bss=100764`；固定名与版本名HEX的SHA-256均为`91911364F5C4775E3657FB53C341B1B86CD620623F4C9005E71DBDD50D0D95AA`。
 - 尚未烧写CPU3，未完成原CPU2板200次参数写、最小安全带参命令、逻辑分析仪波形或长期现场验证；当前结论为最高置信软件触发机制，不把静态检查和构建表述为实板闭环。
+
+## 2026-08-13 - 修正固定频率液位闭环与低液位保护
+
+版本：
+- CPU2：`V1.39.1.0 -> V1.39.2.0`（PATCH）。
+- CPU3：保持`V1.38.2.0`。
+
+协议版本与兼容性：
+- CPU2/CPU3 `DEVICE_PROTOCOL_VERSION`保持33；不新增或移动共享寄存器、命令、状态及字段，CPU3无需修改。
+- CPU2 `DEVICE_PARAM_VERSION`保持3，`DeviceParameters`结构大小、字段偏移、`struct_size`、CRC范围和FRAM布局均不变化；升级不会恢复出厂或清除现场参数。
+- `LF=<目标>[,<死区>]`仍只覆盖本次运行，不写FRAM；生产方法5继续使用既有`oilLevelFrequency`、`oilLevelThreshold`和`oilLevelHysteresisThreshold`，仅修正运行逻辑和低液位安全出口。
+
+本次修改：
+- 方法5直接使用已知`oilLevelFrequency`作为目标，不学习或依赖`oil_frequency`；首次搜索使用`oilLevelThreshold`，持续跟随使用`oilLevelHysteresisThreshold`，均按x10换算为Hz且未配置时使用15 Hz。
+- 以`current_frequency - target_frequency`决定方向：高于死区上沿下行，低于死区下沿上行；速度从`0.10 m/min`起随超出死区的频差增加，并受电机默认速度上限约束，连续3次进入死区后停机记录液位。
+- 方法5不再执行命中液体后的固定下行100 mm；首次搜索到达盲区时停机返回低液位，持续跟随到达盲区时停机等待，仅在频率要求上行时撤回。
+- 保留罐高、盲区、满载/罐底称重、称重通信、扭力碰撞、丢步、命令切换和600秒搜索超时保护；`LF`调试入口改为复用同一生产闭环，`LF?`按实际输出报告目标及搜索/跟随死区。
+
+验证：
+- 固定频率液位专项静态契约、LF串口命令解析、CP936/CRLF/BOM/块注释和Git差异检查按最终源码执行。
+- CPU2 V1.39.2.0按最终源码执行clean-first构建；最终段大小和HEX SHA-256记录在本版本改动与测试方案。
+- 尚未执行目标板烧写、真实电机、液位传感器、称重、盲区、FRAM掉电、RS485、台架、现场或SIL验证；静态检查、主机解析测试和构建不替代真实设备证据。

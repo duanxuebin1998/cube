@@ -160,11 +160,13 @@ POWER_BOOT 电源监测启动：结果=成功，ADC=2707，24V电压=24000毫伏
 | `LF` | 使用当前 `oilLevelFrequency` 和 `oilLevelThreshold` 执行一次找液位 | 目标频率必须为 `1～6500 Hz` |
 | `LF=<frequency>` | 临时覆盖本次目标频率 | `<frequency>` 为 `1～6500 Hz` 整数 |
 | `LF=<frequency>,<deadband>` | 同时临时覆盖目标频率和死区 | 两项均为 `1～6500 Hz` 整数 |
-| `LF?` | 只读打印解析后的频率、位置、扭力和速度限制 | 不调用 `MeasureStart()`，不启动电机 |
+| `LF?` | 只读打印生产目标、首次搜索死区和持续跟随死区 | 不调用 `MeasureStart()`，不启动电机 |
 
-闭环方向固定为：`当前频率 > 目标频率 + 死区` 时下行，`当前频率 < 目标频率 - 死区` 时上行；连续三次进入死区后停机并记录当前位置。位置上限沿用 `tankHeight - 100.0 mm`，位置下限使用 `blindZone`；最大扭力由 `full_weight × (100 + zero_weight_threshold_ratio) / 100` 得到，最小扭力使用 `bottom_weight_threshold`。任一限位、通信失败、丢步、搜索超时或新命令都会慢停退出。
+闭环方向固定为：`当前频率 > 目标频率 + 死区` 时下行，`当前频率 < 目标频率 - 死区` 时上行；速度从 `0.10 m/min` 起随超出死区的频差增加，并受电机默认速度上限约束。连续三次进入死区后停机并记录当前位置。方法 5 直接使用已知 `oilLevelFrequency`，不学习、不依赖 `oil_frequency`，也不执行命中液体后的固定下行 100 mm。
 
-运行中发送 `STOP` 可打断闭环。`ACK cmd=LF...` 只表示命令语法已接受；最终结果以 `LF RESULT status=FOUND/ERROR/ABORT ...` 为准。本命令自 CPU2 V1.32.0.0 起提供；CPU2 V1.31.1.0 及更早版本不支持该命令。
+生产方法 5 首次搜索使用 `oilLevelThreshold`，持续跟随使用 `oilLevelHysteresisThreshold`；二者均按参数原始值 x10 换算为 Hz，未配置时使用 15 Hz。位置上限沿用 `tankHeight - 100.0 mm`，位置下限使用 `blindZone`；最大扭力由 `full_weight × (100 + zero_weight_threshold_ratio) / 100` 得到，最小扭力使用 `bottom_weight_threshold`。首次搜索到达盲区会停机并返回低液位；持续跟随到达盲区会停机等待，只有当前频率低于目标死区下沿时才允许上行撤回，不再继续下行。任一上限、称重、通信、丢步、搜索超时或新命令保护触发时都会停机退出。
+
+运行中发送 `STOP` 可打断闭环。`ACK cmd=LF...` 只表示命令语法已接受；最终结果以 `LF RESULT status=FOUND/ERROR/ABORT ...` 为准。本命令自 CPU2 V1.32.0.0 起提供；CPU2 V1.39.2.0 起与生产方法 5 共用上述闭环和低液位保护。CPU2 V1.31.1.0 及更早版本不支持该命令。
 
 ## 8. 重复性、耐久与基础测试
 
