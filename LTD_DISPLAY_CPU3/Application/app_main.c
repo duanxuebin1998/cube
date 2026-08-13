@@ -1321,6 +1321,7 @@ static uint32_t cpu3_port_process(uint8_t port_idx,
 
     target_protocol = cfg->protocol;
     switch_result = ProtocolSwitchFrame_Process((uint8_t)SlaveAddress,
+                                                cfg->protocol,
                                                 rx,
                                                 rx_len,
                                                 tx,

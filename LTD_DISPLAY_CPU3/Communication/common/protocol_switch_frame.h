@@ -17,6 +17,10 @@ extern "C" {
 #define PROTOCOL_SWITCH_ACK_LENGTH          6U
 /* 协议切换确认状态 0x00：请求已接受并完成必要校验。 */
 #define PROTOCOL_SWITCH_ACK_STATUS_OK       0x00U
+/* 当前协议读取响应状态 0x01：响应数据字段携带当前端口协议原始值。 */
+#define PROTOCOL_SWITCH_ACK_STATUS_QUERY    0x01U
+/* 当前协议读取操作值 0xFF；该值只读，不得作为协议切换目标写入。 */
+#define PROTOCOL_SWITCH_QUERY_CURRENT       0xFFU
 /* 协议切换请求魔术字第 1 字节，ASCII 字符 'L'（0x4C）。 */
 #define PROTOCOL_SWITCH_MAGIC_L             0x4CU
 /* 协议切换请求魔术字第 2 字节，ASCII 字符 'T'（0x54）。 */
@@ -40,6 +44,7 @@ typedef enum
  * @note 关键约束：CRC 错误静默丢弃，非法目标协议返回 Modbus 非法数据值异常，合法请求返回独立 ACK。
  */
 ProtocolSwitchFrameResult ProtocolSwitchFrame_Process(uint8_t slave_address,
+                                                       ComProtocolType current_protocol,
                                                        const uint8_t *rx,
                                                        uint16_t rx_len,
                                                        uint8_t *tx,

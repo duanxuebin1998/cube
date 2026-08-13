@@ -58,6 +58,7 @@ static void ProtocolSwitchFrame_AppendCrc(uint8_t *frame,
  * @brief 识别并处理独立协议切换帧，返回是否接收及是否应答。
  *
  * @param slave_address 从站地址。
+ * @param current_protocol 收到请求的外部 COM 口当前运行态协议；查询操作只读取该值，不访问持久化参数。
  * @param rx 接收到的数据缓冲区。有效字节范围由 rx_len 或调用点固定帧长限定，函数不会修改原始请求帧。
  * @param rx_len 接收数据的有效长度，单位字节。函数只读取 rx[0..rx_len-1]，并在访问固定字段前检查协议要求的最小长度。
  * @param tx 独立协议切换确认帧的输出缓冲区；请求合法并需要应答时由函数填充。
@@ -67,6 +68,7 @@ static void ProtocolSwitchFrame_AppendCrc(uint8_t *frame,
  *         表示已识别并处理但未接受切换，PROTOCOL_SWITCH_FRAME_ACCEPTED 表示请求合法且已生成接受应答。
  */
 ProtocolSwitchFrameResult ProtocolSwitchFrame_Process(uint8_t slave_address,
+                                                       ComProtocolType current_protocol,
                                                        const uint8_t *rx,
                                                        uint16_t rx_len,
                                                        uint8_t *tx,
@@ -100,6 +102,17 @@ ProtocolSwitchFrameResult ProtocolSwitchFrame_Process(uint8_t slave_address,
     if (received_crc != calculated_crc)
     {
         /* 已识别为管理帧但 CRC 错误时静默丢弃，避免落入当前业务协议产生误应答。 */
+        return PROTOCOL_SWITCH_FRAME_HANDLED;
+    }
+
+    if (rx[5] == PROTOCOL_SWITCH_QUERY_CURRENT)
+    {
+        /* 查询只返回本端口运行态协议，不进入切换状态机，也不访问 FRAM 或重配 UART。 */
+        tx[0] = slave_address;
+        tx[1] = PROTOCOL_SWITCH_FUNCTION_CODE;
+        tx[2] = PROTOCOL_SWITCH_ACK_STATUS_QUERY;
+        tx[3] = (uint8_t)current_protocol;
+        ProtocolSwitchFrame_AppendCrc(tx, 4U, tx_len);
         return PROTOCOL_SWITCH_FRAME_HANDLED;
     }
 
