@@ -35,6 +35,34 @@ typedef struct
     uint8_t parity_ok;/* 1表示本地重算结果与帧校验位一致。 */
 } SSI_Data_t;
 
+/* ENC? 使用的 AS5145 采样链诊断快照；查询只复制 RAM，不发起 SPI 访问。 */
+typedef struct
+{
+    uint8_t raw[4];
+    SSI_Data_t parsed;
+    uint32_t latched_error_code;
+    uint32_t last_error_code;
+    uint32_t consecutive_error_code;
+    uint32_t frame_count;
+    uint32_t error_count;
+    uint32_t transfer_error_count;
+    uint32_t disconnected_pattern_count;
+    uint32_t queue_overrun_count;
+    uint32_t timeout_count;
+    uint32_t parity_count;
+    uint32_t ocf_count;
+    uint32_t cof_count;
+    uint32_t lin_count;
+    uint32_t position_jump_count;
+    uint32_t other_error_count;
+    uint32_t last_ok_tick;
+    uint32_t last_bad_tick;
+    uint8_t parsed_valid;
+    uint8_t consecutive_bad_count;
+    uint8_t recovery_good_count;
+    uint8_t fault_latched;
+} AS5145DiagnosticSnapshot;
+
 extern SPI_HandleTypeDef SSI;
 extern TIM_HandleTypeDef ENCODER_TIM_HANDLE;
 
@@ -55,6 +83,12 @@ HAL_StatusTypeDef Start_Encoder_Collection_TIM(void);
  * @return 存在锁存故障时返回锁存错误码，否则返回最近一次 AS5145 访问错误码；无错误时为 NO_ERROR。
  */
 uint32_t AS5145_GetLastError(void);
+/**
+ * @brief 读取已经达到连续确认条件并锁存的编码器错误。
+ *
+ * @return 已锁存时返回锁存错误码；未锁存时返回 NO_ERROR。
+ */
+uint32_t AS5145_GetLatchedError(void);
 /**
  * @brief 判断 AS5145 是否已经取得至少一个有效角度样本。
  *
@@ -78,6 +112,13 @@ uint32_t AS5145_WaitFirstValidSample(uint32_t timeout_ms);
 void AS5145_ProcessDeferred(void);
 
 /**
+ * @brief 判断SSI延后事件是否仍有积压。
+ *
+ * @return true表示仍有事件或溢出证据待处理；false表示本轮已经排空。
+ */
+bool AS5145_HasDeferredWork(void);
+
+/**
  * @brief 为新的顶层正式业务过程解除编码器故障锁存。
  *
  * @details 调用场景：ProcessMeasureCmd 进入正式测量初始化之前。
@@ -91,5 +132,13 @@ void AS5145_ClearLatchedFaultForNewProcess(void);
  * @return true 表示 AS5145 采样链路仍锁存故障；false 表示 AS5145 采样链路已不再锁存故障。
  */
 bool AS5145_IsFaultLatched(void);
+
+/**
+ * @brief 取得最近原始帧、解析状态和分项错误计数的一致 RAM 快照。
+ *
+ * @param snapshot 诊断快照输出；不得为 NULL。
+ * @return true 表示快照已复制；false 表示输出指针无效。
+ */
+bool AS5145_GetDiagnosticSnapshot(AS5145DiagnosticSnapshot *snapshot);
 
 #endif

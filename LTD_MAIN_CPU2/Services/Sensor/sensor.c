@@ -1412,7 +1412,8 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
     }
 
     if (!MotorCtrl_IsPositionSourceMotor()) {
-        ret = AS5145_GetLastError();
+        /* 业务停机只消费已经连续确认的锁存错误；单帧瞬态仅保留给ENC?诊断。 */
+        ret = AS5145_GetLatchedError();
         if (ret != NO_ERROR) {
             return ret;
         }

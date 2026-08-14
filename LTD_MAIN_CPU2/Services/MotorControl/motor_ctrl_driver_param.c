@@ -210,11 +210,25 @@ static uint32_t MotorDriver_CheckMotionReadyInternal(bool ignore_encoder_ready)
 
     if (MotorCtrl_IsPositionSourceMotor()) {
         /* 电机记步模式下，编码器只作为后台采集对象，旧编码器错误不阻断运动。 */
-        if ((g_measurement.device_status.error_code >= ENCODER_TIMEOUT) &&
-            (g_measurement.device_status.error_code <= ENCODER_FIRST_SAMPLE_TIMEOUT)) {
+        if (Encoder_IsRuntimeFaultCode(g_measurement.device_status.error_code)) {
             g_measurement.device_status.error_code = NO_ERROR;
         }
         return NO_ERROR;
+    }
+
+    if (!Encoder_CanStartHoming()) {
+        if (ignore_encoder_ready) {
+            printf("强制调试运动：忽略编码器角度未同步，仅保留驱动安全检查\r\n");
+            return NO_ERROR;
+        }
+        /* 清锁存后先等待连续3帧重新同步；具体LIN、校验或跳变故障不得降级为首帧超时。 */
+        ret = Encoder_WaitAngleSynchronized(1500U);
+        if (ret != NO_ERROR) {
+            g_measurement.device_status.error_code = ret;
+            printf("电机运动被拦截：编码器重新同步失败，错误码=0x%08lX\r\n",
+                   (unsigned long)ret);
+            return ret;
+        }
     }
 
     if (!Encoder_IsReady()) {

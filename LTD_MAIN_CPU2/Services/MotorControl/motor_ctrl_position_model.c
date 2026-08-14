@@ -393,10 +393,21 @@ uint32_t MotorCtrl_PollRuntimePosition(void)
  * @brief 切换为编码轮记步位置源。
  *
  * 切换后业务位置由外部编码器刷新，电机基准仍保留用于诊断和后续切回。
- * @return 固定返回 NO_ERROR；当前切换、位置同步和参数保存接口不向调用方报告失败。
+ * @return NO_ERROR表示切换完成；编码器未就绪、位置不可信或已有锁存故障时返回具体错误码。
  */
 uint32_t MotorCtrl_SwitchPositionSourceToEncoder(void)
 {
+    uint32_t encoder_error = AS5145_GetLastError();
+
+    if (encoder_error != NO_ERROR) {
+        return encoder_error;
+    }
+    if (!Encoder_HasTrustedPosition()) {
+        return ENCODER_POWERON_FAIL;
+    }
+    if (!Encoder_IsReady()) {
+        return ENCODER_FIRST_SAMPLE_TIMEOUT;
+    }
     g_deviceParams.position_count_mode = POSITION_COUNT_MODE_ENCODER;
     update_sensor_height_from_encoder();
     MotorPosition_SyncDebugDrumState(&stepper);
@@ -1091,7 +1102,7 @@ static void MotorPosition_SavePositionSourceParams(bool force)
  */
 static bool MotorPosition_IsEncoderErrorCode(uint32_t error_code)
 {
-    return (error_code >= ENCODER_TIMEOUT) && (error_code <= ENCODER_FIRST_SAMPLE_TIMEOUT);
+    return Encoder_IsRuntimeFaultCode(error_code);
 }
 
 /**

@@ -96,10 +96,19 @@ typedef struct {
 #define ENCODER_RECORD_V2_FITS_SLOT        (sizeof(EncoderPersistRecordV2) <= FRAM_ENCODER_SLOT_SIZE)
 /* 普通运行每累计变化256计数请求保存，约为1/16圈。 */
 #define ENCODER_PERSIST_THRESHOLD_COUNTS   256
+#define ENCODER_BOOT_STABLE_FRAMES          3U
+#define ENCODER_BOOT_STABLE_DELTA_COUNTS    16
+#define ENCODER_POWERON_CHANGE_LIMIT_COUNTS 320
+#define ENCODER_RUNTIME_GAP_MAX_MS          50U
+#define ENCODER_PHYSICAL_MAX_SPEED_MM_MIN   20000UL
+#define ENCODER_DYNAMIC_MARGIN_PERCENT      125UL
+#define ENCODER_DYNAMIC_EXTRA_COUNTS        8UL
 /* 线程态同步保存单次调用的最大快照提交次数。 */
 #define ENCODER_PERSIST_RETRY_LIMIT        3U
 /* 紧急PendSV跨多次调度累计允许的总尝试次数。 */
 #define ENCODER_EMERGENCY_TOTAL_ATTEMPTS   3U
+/* 普通保存持续失败时退避，避免每个10ms采样周期都占用PendSV；紧急保存不受限制。 */
+#define ENCODER_NORMAL_PERSIST_RETRY_MS     200U
 
 /* 数组长度为负会使编译失败，从而把FRAM布局约束固化为编译期门禁。 */
 typedef char EncoderPersistRecordV2FitsSlot[ENCODER_RECORD_V2_FITS_SLOT ? 1 : -1];
@@ -110,6 +119,7 @@ typedef char EncoderPowerSaveReceiptIs24Bytes[(sizeof(EncoderPowerSaveReceipt) =
  * 报告发布等多字段一致性由短临界区及请求序号共同保证。
  */
 static volatile uint8_t s_encoder_persist_pending = 0U; /* 普通或紧急快照待提交。 */
+static volatile uint32_t s_encoder_normal_persist_retry_tick = 0U;
 static volatile uint8_t s_encoder_emergency_persist_pending = 0U; /* 紧急A/B与回执流程未结束。 */
 static volatile uint32_t s_encoder_emergency_request_sequence = 0U; /* 区分保存期间到达的新请求。 */
 static volatile uint8_t s_encoder_emergency_attempt_count = 0U; /* 当前紧急请求累计失败次数。 */
@@ -117,6 +127,19 @@ static volatile EncoderEmergencyPersistSource s_encoder_emergency_source =
     ENCODER_EMERGENCY_SOURCE_NONE; /* 当前紧急请求来源，ADC优先于测试。 */
 static volatile uint8_t s_encoder_position_valid = 0U; /* 累计位置是否可被保存和用于运动。 */
 static volatile uint32_t s_encoder_sample_sequence = 0U; /* 每个已处理有效帧递增一次。 */
+static volatile uint8_t s_encoder_angle_synchronized = 0U;
+static volatile uint8_t s_encoder_boot_stable_count = 0U;
+static volatile uint8_t s_encoder_boot_change_latched = 0U;
+static volatile uint8_t s_encoder_runtime_resynchronizing = 0U;
+static volatile uint8_t s_encoder_cold_sync_completed = 0U;
+static uint16_t s_encoder_boot_candidate_angle = 0U;
+static uint32_t s_encoder_last_accepted_tick = 0U;
+static volatile int16_t s_encoder_last_candidate_delta = 0;
+static volatile uint16_t s_encoder_last_candidate_limit = 0U;
+static volatile uint32_t s_encoder_last_candidate_dt_ms = 0U;
+static volatile uint32_t s_encoder_rejected_sample_count = 0U;
+static volatile uint32_t s_encoder_direction_mismatch_count = 0U;
+static volatile uint8_t s_encoder_last_reject_reason = ENCODER_REJECT_NONE;
 static volatile EncoderPersistResult s_encoder_last_commit_result = ENCODER_PERSIST_RESULT_NONE; /* 最近提交结果。 */
 static volatile EncoderPowerLossPersistResult s_encoder_boot_power_loss_result =
     ENCODER_POWER_LOSS_RESULT_NO_RECORD; /* 本次启动对上次掉电的判定。 */
@@ -128,6 +151,18 @@ static uint32_t s_encoder_active_slot = FRAM_ENCODER_A_ADDRESS; /* 当前有效A/B槽
 static uint32_t s_encoder_generation = 0U; /* 当前活动记录代次。 */
 
 static void update_sensor_height_from_encoder_impl(bool force_position_update);
+static int16_t EncoderWrapDelta(uint16_t current_angle, uint16_t reference_angle);
+static uint16_t EncoderRuntimeDeltaLimit(uint32_t dt_ms);
+static void EncoderRecordRejectedSample(int16_t delta,
+                                        uint16_t limit,
+                                        uint32_t dt_ms,
+                                        EncoderRejectReason reason);
+static uint32_t EncoderSynchronizeAngleSample(uint16_t current_angle,
+                                              uint32_t sample_tick,
+                                              bool *sample_accepted);
+static uint32_t EncoderProcessRuntimeSample(uint16_t current_angle,
+                                            uint32_t sample_tick,
+                                            bool *sample_accepted);
 
 /**
  * @brief 计算V1记录受保护字段CRC；magic用于快速识别，不纳入历史CRC兼容范围。
@@ -580,6 +615,7 @@ void Encoder_ProcessDeferredPersistence(void)
     bool commit_success;
     bool receipt_committed = false;
     bool emergency_receipt_invalidated = true;
+    uint32_t now_tick;
 
     if ((s_encoder_persist_pending == 0U) ||
         (s_encoder_position_valid == 0U)) {
@@ -592,6 +628,13 @@ void Encoder_ProcessDeferredPersistence(void)
                            &emergency_request_sequence,
                            &emergency_request_active,
                            &emergency_source);
+    now_tick = HAL_GetTick();
+    if ((emergency_request_active == 0U) &&
+        (AS5145_HasDeferredWork() ||
+         ((s_encoder_normal_persist_retry_tick != 0U) &&
+          ((int32_t)(now_tick - s_encoder_normal_persist_retry_tick) < 0)))) {
+        return;
+    }
     if (emergency_request_active != 0U) {
         /*
          * 紧急所有者可以越过普通写禁止和预约门禁；先作废旧回执，再写本次V2快照。
@@ -626,6 +669,7 @@ void Encoder_ProcessDeferredPersistence(void)
      */
     if (commit_success &&
         ((emergency_request_active == 0U) || receipt_committed)) {
+        s_encoder_normal_persist_retry_tick = 0U;
         s_encoder_position_valid = 1U;
         EncoderRefreshPendingAfterCommit(emergency_request_sequence);
         if (emergency_request_active != 0U) {
@@ -646,6 +690,10 @@ void Encoder_ProcessDeferredPersistence(void)
             EncoderFinishEmergencyFailure(emergency_request_sequence,
                                           emergency_source);
         }
+    } else {
+        /* 保留待保存标志，退避结束后由后续PendSV提交最新位置快照。 */
+        s_encoder_normal_persist_retry_tick =
+            now_tick + ENCODER_NORMAL_PERSIST_RETRY_MS;
     }
 }
 
@@ -717,8 +765,18 @@ bool Encoder_GetDebugSnapshot(EncoderDebugSnapshot *snapshot)
     snapshot->position_valid = s_encoder_position_valid;
     snapshot->persistence_pending = s_encoder_persist_pending;
     snapshot->emergency_persistence_pending = s_encoder_emergency_persist_pending;
+    snapshot->fault_latched = AS5145_IsFaultLatched() ? 1U : 0U;
     snapshot->last_commit_result = s_encoder_last_commit_result;
     snapshot->boot_power_loss_result = s_encoder_boot_power_loss_result;
+    snapshot->last_candidate_delta = s_encoder_last_candidate_delta;
+    snapshot->last_candidate_limit = s_encoder_last_candidate_limit;
+    snapshot->last_candidate_dt_ms = s_encoder_last_candidate_dt_ms;
+    snapshot->rejected_sample_count = s_encoder_rejected_sample_count;
+    snapshot->direction_mismatch_count = s_encoder_direction_mismatch_count;
+    snapshot->last_reject_reason = s_encoder_last_reject_reason;
+    snapshot->boot_stable_count = s_encoder_boot_stable_count;
+    snapshot->angle_synchronized = s_encoder_angle_synchronized;
+    snapshot->runtime_resynchronizing = s_encoder_runtime_resynchronizing;
     if (primask == 0U) {
         __enable_irq();
     }
@@ -741,7 +799,6 @@ bool Encoder_GetDebugSnapshot(EncoderDebugSnapshot *snapshot)
         /* 差值已在单圈最短路径范围内。 */
     }
     snapshot->raw_delta = raw_delta;
-    snapshot->fault_latched = AS5145_IsFaultLatched() ? 1U : 0U;
     return true;
 }
 
@@ -871,11 +928,13 @@ uint32_t Encoder_SaveCurrentPosition(void)
  *
  * @note 关键约束：在中断或回调上下文中只更新必要状态，避免阻塞和高耗时操作。
  *
- * @return true 表示编码器位置恢复有效且 AS5145 已取得至少一帧有效样本；false 表示持久位置尚未建立，或角度传感器仍无有效样本。
+ * @return true 表示编码器位置恢复有效且单圈角已完成连续稳定同步；false 表示持久位置尚未建立，或角度同步尚未完成。
  */
 bool Encoder_IsReady(void)
 {
-    return (s_encoder_position_valid != 0U) && AS5145_HasValidSample();
+    return (s_encoder_position_valid != 0U) &&
+           (s_encoder_angle_synchronized != 0U) &&
+           (!AS5145_IsFaultLatched());
 }
 
 /**
@@ -889,17 +948,48 @@ uint32_t Encoder_WaitReady(uint32_t timeout_ms)
     if (s_encoder_position_valid == 0U) {
         return ENCODER_POWERON_FAIL;
     }
-    return AS5145_WaitFirstValidSample(timeout_ms);
+    return Encoder_WaitAngleSynchronized(timeout_ms);
 }
 
 /**
- * @brief 判断 AS5145 是否已有可用于回零的有效样本。
+ * @brief 在线程态有限等待角度重新同步，等待期间的具体故障优先于通用首帧超时。
+ */
+uint32_t Encoder_WaitAngleSynchronized(uint32_t timeout_ms)
+{
+    uint32_t start_tick = HAL_GetTick();
+    uint32_t error_code;
+
+    while ((HAL_GetTick() - start_tick) < timeout_ms) {
+        /* 同一时刻既有同步标志又有锁存故障时，必须优先保留具体故障码。 */
+        if (AS5145_IsFaultLatched()) {
+            error_code = AS5145_GetLatchedError();
+            return (error_code != NO_ERROR) ? error_code : ENCODER_FIRST_SAMPLE_TIMEOUT;
+        }
+        if (s_encoder_angle_synchronized != 0U) {
+            return NO_ERROR;
+        }
+        HAL_Delay(5U);
+    }
+    if (AS5145_IsFaultLatched()) {
+        error_code = AS5145_GetLatchedError();
+        return (error_code != NO_ERROR) ? error_code : ENCODER_FIRST_SAMPLE_TIMEOUT;
+    }
+    if (s_encoder_angle_synchronized != 0U) {
+        return NO_ERROR;
+    }
+    error_code = AS5145_GetLatchedError();
+    return (error_code != NO_ERROR) ? error_code : ENCODER_FIRST_SAMPLE_TIMEOUT;
+}
+
+/**
+ * @brief 判断 AS5145 是否已完成可用于回零的单圈角同步。
  *
- * @return true 表示 AS5145 已有可用于回零的有效样本；false 表示 AS5145 尚未有可用于回零的有效样本。
+ * @return true 表示单圈角已稳定同步；false 表示稳定确认尚未完成。
  */
 bool Encoder_CanStartHoming(void)
 {
-    return AS5145_HasValidSample();
+    return (s_encoder_angle_synchronized != 0U) &&
+           (!AS5145_IsFaultLatched());
 }
 
 /**
@@ -923,11 +1013,51 @@ bool Encoder_DidBootDetectPowerLossSaveFailure(void)
 }
 
 /**
- * @brief 开始新流程前清除 AS5145 的流程级锁存故障。
+ * @brief 在同一临界区准备编码器重同步并清除 AS5145 的流程级锁存故障。
  */
 void Encoder_BeginNewProcess(void)
 {
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    if (AS5145_IsFaultLatched()) {
+        /* 冷启动尚未成功时仍执行上电位置核对；运行故障恢复只重建角度和时间基准。 */
+        s_encoder_runtime_resynchronizing =
+            (s_encoder_cold_sync_completed != 0U) ? 1U : 0U;
+        s_encoder_angle_synchronized = 0U;
+        s_encoder_boot_stable_count = 0U;
+        s_encoder_boot_candidate_angle = 0U;
+        s_encoder_last_accepted_tick = 0U;
+    }
+    if ((g_measurement.device_status.current_command == CMD_BACK_ZERO) ||
+        (g_measurement.device_status.current_command == CMD_CALIBRATE_ZERO)) {
+        /* 上电位置跳变后只允许正式回零流程解除累计位置禁用。 */
+        s_encoder_boot_change_latched = 0U;
+    }
     AS5145_ClearLatchedFaultForNewProcess();
+    __set_PRIMASK(primask);
+}
+
+/**
+ * @brief 显式识别编码器运行期故障，避免依赖不连续枚举值的数值范围。
+ */
+bool Encoder_IsRuntimeFaultCode(uint32_t error_code)
+{
+    switch (error_code) {
+    case ENCODER_TIMEOUT:
+    case ENCODER_PARITY_ERROR:
+    case ENCODER_LOST_STEP:
+    case ENCODER_POWERON_FAIL:
+    case ENCODER_POWERON_CHANGE:
+    case ENCODER_CORDIC_OVERFLOW:
+    case ENCODER_LINEARITY_WARNING:
+    case ENCODER_OCF_INCOMPLETE:
+    case ENCODER_FIRST_SAMPLE_TIMEOUT:
+    case ENCODER_POSITION_JUMP:
+        return true;
+    default:
+        return false;
+    }
 }
 
 /**
@@ -1070,6 +1200,20 @@ uint32_t Initialize_Encoder(void)
     s_encoder_boot_power_loss_save_failed = 0U;
     s_encoder_emergency_report_ready = 0U;
     s_encoder_emergency_source = ENCODER_EMERGENCY_SOURCE_NONE;
+    s_encoder_normal_persist_retry_tick = 0U;
+    s_encoder_angle_synchronized = 0U;
+    s_encoder_boot_stable_count = 0U;
+    s_encoder_boot_change_latched = 0U;
+    s_encoder_runtime_resynchronizing = 0U;
+    s_encoder_cold_sync_completed = 0U;
+    s_encoder_boot_candidate_angle = 0U;
+    s_encoder_last_accepted_tick = 0U;
+    s_encoder_last_candidate_delta = 0;
+    s_encoder_last_candidate_limit = 0U;
+    s_encoder_last_candidate_dt_ms = 0U;
+    s_encoder_rejected_sample_count = 0U;
+    s_encoder_direction_mismatch_count = 0U;
+    s_encoder_last_reject_reason = ENCODER_REJECT_NONE;
 
     raw_a_v2 = EncoderReadV2Raw(FRAM_ENCODER_A_ADDRESS, &record_a_v2);
     raw_b_v2 = EncoderReadV2Raw(FRAM_ENCODER_B_ADDRESS, &record_b_v2);
@@ -1181,32 +1325,261 @@ uint32_t Initialize_Encoder(void)
         printf("编码器就绪等待失败：0x%08lX\r\n", (unsigned long)ready_result);
     }
 
+    if ((s_encoder_boot_change_latched != 0U) &&
+        (!MotorCtrl_IsPositionSourceMotor())) {
+        g_measurement.device_status.error_code = ENCODER_POWERON_CHANGE;
+        init_error = ENCODER_POWERON_CHANGE;
+    }
+
     return init_error;
 }
 /**
- * @brief 按单圈角跨零增量更新累计计数和位置快照，并在未保存位移达到阈值时登记延迟持久化。
- *
- * @param current_angle 当前值角度。
+ * @brief 计算两个单圈角度之间的最短有符号增量。
  */
-void Update_Encoder_Count(uint16_t current_angle)
+static int16_t EncoderWrapDelta(uint16_t current_angle, uint16_t reference_angle)
 {
-    int16_t delta = (int16_t)(current_angle - prev_angle);
+    int16_t delta = (int16_t)(current_angle - reference_angle);
 
     if (delta > (int16_t)(MAX_ANGLE / 2U)) {
         delta = (int16_t)(delta - (int16_t)MAX_ANGLE);
     } else if (delta < -(int16_t)(MAX_ANGLE / 2U)) {
         delta = (int16_t)(delta + (int16_t)MAX_ANGLE);
+    } else {
+        /* 差值已经处于单圈最短路径范围。 */
+    }
+    return delta;
+}
+
+/**
+ * @brief 按20m/min物理极限和实际采样间隔计算候选增量门限。
+ *
+ * @note 周长参数单位为0.001mm，与采样间隔的ms单位共同参与整数换算；门限包含25%余量和8计数抖动余量。
+ */
+static uint16_t EncoderRuntimeDeltaLimit(uint32_t dt_ms)
+{
+    uint64_t numerator;
+    uint64_t denominator;
+    uint64_t limit;
+
+    if ((dt_ms == 0U) || (g_deviceParams.encoder_wheel_circumference_mm == 0U)) {
+        return 0U;
+    }
+
+    numerator = (uint64_t)ENCODER_PHYSICAL_MAX_SPEED_MM_MIN *
+                (uint64_t)MAX_ANGLE *
+                (uint64_t)dt_ms *
+                (uint64_t)ENCODER_DYNAMIC_MARGIN_PERCENT;
+    denominator = 60ULL *
+                  (uint64_t)g_deviceParams.encoder_wheel_circumference_mm *
+                  100ULL;
+    limit = (numerator + denominator - 1ULL) / denominator;
+    limit += ENCODER_DYNAMIC_EXTRA_COUNTS;
+    if (limit > (uint64_t)(MAX_ANGLE / 2U)) {
+        limit = (uint64_t)(MAX_ANGLE / 2U);
+    }
+    return (uint16_t)limit;
+}
+
+/**
+ * @brief 保存一次被拒绝的编码器候选证据，不改变累计位置和可信单圈角。
+ */
+static void EncoderRecordRejectedSample(int16_t delta,
+                                        uint16_t limit,
+                                        uint32_t dt_ms,
+                                        EncoderRejectReason reason)
+{
+    s_encoder_last_candidate_delta = delta;
+    s_encoder_last_candidate_limit = limit;
+    s_encoder_last_candidate_dt_ms = dt_ms;
+    s_encoder_last_reject_reason = (uint8_t)reason;
+    if (s_encoder_rejected_sample_count < UINT32_MAX) {
+        s_encoder_rejected_sample_count++;
+    }
+}
+
+/**
+ * @brief 完成启动或运行故障后的三帧稳定同步，并在冷启动时核对持久化单圈角。
+ *
+ * @note 运行故障后的真实位移未知，只重建单圈角和时间基准；冷启动只使用一个上电跳变阈值。
+ */
+static uint32_t EncoderSynchronizeAngleSample(uint16_t current_angle,
+                                              uint32_t sample_tick,
+                                              bool *sample_accepted)
+{
+    int16_t delta;
+    int32_t absolute_delta;
+
+    if (s_encoder_boot_stable_count == 0U) {
+        s_encoder_boot_candidate_angle = current_angle;
+        s_encoder_boot_stable_count = 1U;
+        return NO_ERROR;
+    }
+
+    delta = EncoderWrapDelta(current_angle, s_encoder_boot_candidate_angle);
+    absolute_delta = (delta < 0) ? -(int32_t)delta : (int32_t)delta;
+    if (absolute_delta > ENCODER_BOOT_STABLE_DELTA_COUNTS) {
+        s_encoder_boot_candidate_angle = current_angle;
+        s_encoder_boot_stable_count = 1U;
+        EncoderRecordRejectedSample(delta, ENCODER_BOOT_STABLE_DELTA_COUNTS,
+                                    0U, ENCODER_REJECT_BOOT_UNSTABLE);
+        return NO_ERROR;
+    }
+
+    s_encoder_boot_candidate_angle = current_angle;
+    if (s_encoder_boot_stable_count < UINT8_MAX) {
+        s_encoder_boot_stable_count++;
+    }
+    if (s_encoder_boot_stable_count < ENCODER_BOOT_STABLE_FRAMES) {
+        return NO_ERROR;
+    }
+
+    if (s_encoder_runtime_resynchronizing != 0U) {
+        prev_angle = current_angle;
+        s_encoder_angle_synchronized = 1U;
+        s_encoder_runtime_resynchronizing = 0U;
+        s_encoder_last_accepted_tick = sample_tick;
+        s_encoder_sample_sequence++;
+        s_encoder_last_candidate_delta = 0;
+        s_encoder_last_candidate_limit = 0U;
+        s_encoder_last_candidate_dt_ms = 0U;
+        s_encoder_last_reject_reason = ENCODER_REJECT_NONE;
+        if (sample_accepted != NULL) {
+            *sample_accepted = true;
+        }
+        return NO_ERROR;
+    }
+
+    if (s_encoder_position_valid != 0U) {
+        delta = EncoderWrapDelta(current_angle, prev_angle);
+        absolute_delta = (delta < 0) ? -(int32_t)delta : (int32_t)delta;
+        if (absolute_delta > ENCODER_POWERON_CHANGE_LIMIT_COUNTS) {
+            s_encoder_position_valid = 0U;
+            s_encoder_boot_change_latched = 1U;
+            s_encoder_angle_synchronized = 1U;
+            s_encoder_cold_sync_completed = 1U;
+            prev_angle = current_angle;
+            s_encoder_last_accepted_tick = sample_tick;
+            EncoderRecordRejectedSample(delta, ENCODER_POWERON_CHANGE_LIMIT_COUNTS,
+                                        0U, ENCODER_REJECT_BOOT_CHANGE);
+            return ENCODER_POWERON_CHANGE;
+        }
+        g_encoder_count += delta;
+    } else {
+        delta = 0;
+    }
+
+    prev_angle = current_angle;
+    s_encoder_angle_synchronized = 1U;
+    s_encoder_cold_sync_completed = 1U;
+    s_encoder_last_accepted_tick = sample_tick;
+    s_encoder_sample_sequence++;
+    s_encoder_last_candidate_delta = delta;
+    s_encoder_last_candidate_limit = ENCODER_POWERON_CHANGE_LIMIT_COUNTS;
+    s_encoder_last_candidate_dt_ms = 0U;
+    s_encoder_last_reject_reason = ENCODER_REJECT_NONE;
+    update_sensor_height_from_encoder();
+    if ((s_encoder_position_valid != 0U) &&
+        (EncoderUnsavedDistance() >= ENCODER_PERSIST_THRESHOLD_COUNTS)) {
+        s_encoder_persist_pending = 1U;
+    }
+    if (sample_accepted != NULL) {
+        *sample_accepted = true;
+    }
+    return NO_ERROR;
+}
+
+/**
+ * @brief 按采样间隔和20m/min物理上限检查运行样本，并把方向不一致只记录为诊断。
+ */
+static uint32_t EncoderProcessRuntimeSample(uint16_t current_angle,
+                                            uint32_t sample_tick,
+                                            bool *sample_accepted)
+{
+    uint32_t dt_ms = sample_tick - s_encoder_last_accepted_tick;
+    int16_t delta = EncoderWrapDelta(current_angle, prev_angle);
+    int32_t absolute_delta = (delta < 0) ? -(int32_t)delta : (int32_t)delta;
+    uint32_t motor_state = g_measurement.debug_data.motor_state;
+    uint16_t limit = EncoderRuntimeDeltaLimit(dt_ms);
+
+    if (dt_ms == 0U) {
+        EncoderRecordRejectedSample(delta, limit, dt_ms,
+                                    ENCODER_REJECT_SAMPLE_GAP);
+        return ENCODER_TIMEOUT;
+    }
+    if (dt_ms > ENCODER_RUNTIME_GAP_MAX_MS) {
+        EncoderRecordRejectedSample(delta, limit, dt_ms,
+                                    ENCODER_REJECT_SAMPLE_GAP);
+        /* 断档期间位移未知且不补算；推进角度和时刻基准，避免同一次断档派生连续超时。 */
+        prev_angle = current_angle;
+        s_encoder_last_accepted_tick = sample_tick;
+        /* 未知位移无法由后续单圈角补回，任何记步模式都必须撤销编码器累计位置可信性。 */
+        s_encoder_position_valid = 0U;
+        return ENCODER_TIMEOUT;
+    }
+    if ((limit == 0U) || (absolute_delta > (int32_t)limit)) {
+        EncoderRecordRejectedSample(delta, limit, dt_ms,
+                                    ENCODER_REJECT_PHYSICAL_LIMIT);
+        if (MotorCtrl_IsPositionSourceMotor()) {
+            /* 物理不可能增量无法重建，只有正式回零或人工位置修正才能重新建立可信位置。 */
+            s_encoder_position_valid = 0U;
+        }
+        return ENCODER_POSITION_JUMP;
+    }
+
+    if (((motor_state == 1U) && (delta < -ENCODER_BOOT_STABLE_DELTA_COUNTS)) ||
+        ((motor_state == 2U) && (delta > ENCODER_BOOT_STABLE_DELTA_COUNTS))) {
+        if (s_encoder_direction_mismatch_count < UINT32_MAX) {
+            s_encoder_direction_mismatch_count++;
+        }
     }
 
     g_encoder_count += delta;
     prev_angle = current_angle;
+    s_encoder_last_accepted_tick = sample_tick;
     s_encoder_sample_sequence++;
+    s_encoder_last_candidate_delta = delta;
+    s_encoder_last_candidate_limit = limit;
+    s_encoder_last_candidate_dt_ms = dt_ms;
+    s_encoder_last_reject_reason = ENCODER_REJECT_NONE;
     update_sensor_height_from_encoder();
 
     if ((s_encoder_position_valid != 0U) &&
         (EncoderUnsavedDistance() >= ENCODER_PERSIST_THRESHOLD_COUNTS)) {
         s_encoder_persist_pending = 1U;
     }
+    if (sample_accepted != NULL) {
+        *sample_accepted = true;
+    }
+    return NO_ERROR;
+}
+
+/**
+ * @brief 校验并提交一帧AS5145单圈角，阻止上电或运行毛刺污染累计位置。
+ *
+ * @note 函数由PendSV调用，只更新RAM状态，不打印、不访问FRAM。
+ */
+uint32_t Encoder_ProcessAngleSample(uint16_t current_angle,
+                                    uint32_t sample_tick,
+                                    bool *sample_accepted)
+{
+    if (sample_accepted != NULL) {
+        *sample_accepted = false;
+    }
+
+    if (s_encoder_boot_change_latched != 0U) {
+        EncoderRecordRejectedSample(EncoderWrapDelta(current_angle, prev_angle),
+                                    ENCODER_POWERON_CHANGE_LIMIT_COUNTS,
+                                    0U, ENCODER_REJECT_BOOT_CHANGE);
+        return ENCODER_POWERON_CHANGE;
+    }
+    if (s_encoder_angle_synchronized == 0U) {
+        return EncoderSynchronizeAngleSample(current_angle,
+                                             sample_tick,
+                                             sample_accepted);
+    }
+    return EncoderProcessRuntimeSample(current_angle,
+                                       sample_tick,
+                                       sample_accepted);
 }
 
 /**

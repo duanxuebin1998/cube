@@ -786,19 +786,21 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
     case ENCODER_POWERON_FAIL:
         return "编码器位置记录不可用";
     case ENCODER_POWERON_CHANGE:
-        return "编码器上电位置跳变（保留码）";
+        return "编码器上电位置跳变";
     case ENCODER_DIFF_EXCESS:
         return "编码轮周长标定值过大";
     case ENCODER_CORDIC_OVERFLOW:
         return "编码器角度计算超限";
     case ENCODER_LINEARITY_WARNING:
-        return "编码器角度线性异常（保留码）";
+        return "编码器角度线性异常";
     case ENCODER_OCF_INCOMPLETE:
         return "编码器角度计算未完成";
     case ENCODER_FIRST_SAMPLE_TIMEOUT:
         return "编码器首次读取超时";
     case ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR:
         return "编码轮周长标定异常";
+    case ENCODER_POSITION_JUMP:
+        return "编码器运行位置跳变";
     case SENSOR_BCC_ERROR:
         return "传感器校验错误";
     case SONIC_FREQ_ABNORMAL:

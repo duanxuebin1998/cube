@@ -42,6 +42,24 @@ static int Compose04Package(uint8_t  *revframe, uint8_t  *sendframe);
 static int Compose10Package(uint8_t  const *revframe, uint8_t  *sendframe);
 static bool IsPersistentDeviceParamWrite(uint16_t startAddr, uint16_t regCount);
 static bool PersistentParamWriteRuntimeAllowed(void);
+
+/**
+ * @brief 检查候选寄存器镜像中的编码轮周长是否可以进入CPU2运行态。
+ *
+ * @note 当前机械资料未定义可靠上下限，本轮只拒绝会破坏位置换算和动态门限的零值。
+ */
+static bool EncoderCircumferenceCandidateIsValid(const uint16_t *registers)
+{
+    uint32_t circumference;
+
+    if (registers == NULL) {
+        return false;
+    }
+    circumference =
+        ((uint32_t)registers[HOLDREGISTER_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM] << 16) |
+        (uint32_t)registers[HOLDREGISTER_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM + 1U];
+    return circumference != 0U;
+}
 /**
  * @brief 接收到的数据包进行地址检查。
  *
@@ -378,6 +396,13 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
     /* 先发布当前镜像，再叠加主站本次写入。 */
     WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
     length = Compose10Package(revframe, sendframe);
+    if (!EncoderCircumferenceCandidateIsValid(HoldingRegisterArray)) {
+        WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
+        sendframe[0] = (uint8_t)SlaveAddress;
+        sendframe[1] = (uint8_t)(presetmultipleregisterfuncode | 0x80);
+        sendframe[2] = (uint8_t)illegaldatavalue;
+        return 3;
+    }
     candidate_simulation_raw =
             ((uint32_t)HoldingRegisterArray[HOLDREGISTER_AO_SIMULATION_ENABLE] << 16) |
             (uint32_t)HoldingRegisterArray[HOLDREGISTER_AO_SIMULATION_ENABLE + 1U];

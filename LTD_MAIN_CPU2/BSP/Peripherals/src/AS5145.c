@@ -18,8 +18,10 @@
 #define SSI_EVENT_QUEUE_CAPACITY    8U
 /* 单次PendSV最多消费4项，限制低优先级异常处理对其它延后服务的占用。 */
 #define SSI_DEFERRED_EVENT_BUDGET   4U
-/* 任意类型连续3个异常事件才锁存，正常帧会打断未锁存的连续计数。 */
+/* 同一错误码连续3个异常事件才锁存，正常帧会打断未锁存的连续计数。 */
 #define SSI_FAULT_CONFIRM_FRAMES    3U
+/* 当前产品策略暂不将LIN作为停机条件；原始状态位和累计计数仍保留在ENC?中。 */
+#define SSI_LINEARITY_FAULT_ENABLED 0U
 
 /* ISR投递的证据类型；PendSV统一把传输异常映射为编码器超时故障。 */
 typedef enum {
@@ -48,8 +50,10 @@ static volatile uint8_t ssi_queue_count = 0U; /* 当前已发布且未消费的事件数。 */
 static SSI_Event ssi_event_queue[SSI_EVENT_QUEUE_CAPACITY]; /* 固定环形事件存储。 */
 static volatile uint32_t ssi_event_sequence = 0U; /* 每次成功入队递增的事件序号。 */
 static volatile uint32_t ssi_process_start_sequence = 0U; /* 新正式流程允许处理的序号边界。 */
-static volatile uint32_t ssi_frame_count = 0U; /* 本次采集收到的完整帧总数。 */
-static volatile uint32_t ssi_error_count = 0U; /* 传输错误和队列溢出证据总数。 */
+static volatile uint32_t ssi_frame_count = 0U; /* 本次采集收到的完整帧总数，包括因队列满未处理的完整帧。 */
+static volatile uint32_t ssi_error_count = 0U; /* 传输错误和队列溢出两类异常证据总数。 */
+static volatile uint32_t ssi_transfer_error_count = 0U; /* SPI启动或接收失败事件总数。 */
+static volatile uint32_t ssi_disconnected_pattern_count = 0U; /* 全0或全1断线特征帧总数。 */
 static volatile uint32_t ssi_queue_overrun_count = 0U; /* 因队列满而丢失的事件数。 */
 static uint32_t ssi_processed_overrun_count = 0U; /* 已转换为故障证据的溢出数。 */
 
@@ -61,6 +65,18 @@ static volatile uint32_t ssi_latched_error_code = NO_ERROR; /* 第3个连续异常对应
 static volatile uint32_t ssi_last_error_code = NO_ERROR; /* 最近一次未锁存异常或锁存码。 */
 static volatile bool ssi_first_valid_sample = false; /* 本次采集是否至少收到一帧有效数据。 */
 static volatile uint32_t ssi_last_ok_tick = 0U; /* 最近有效帧处理时刻，单位ms。 */
+static volatile uint32_t ssi_last_bad_tick = 0U; /* 最近异常证据处理时刻，单位ms。 */
+static volatile uint32_t ssi_consecutive_error_code = NO_ERROR; /* 当前连续异常对应的同一错误码。 */
+static volatile uint32_t ssi_timeout_count = 0U;
+static volatile uint32_t ssi_parity_count = 0U;
+static volatile uint32_t ssi_ocf_count = 0U;
+static volatile uint32_t ssi_cof_count = 0U;
+static volatile uint32_t ssi_lin_count = 0U;
+static volatile uint32_t ssi_position_jump_count = 0U;
+static volatile uint32_t ssi_other_error_count = 0U;
+static uint8_t ssi_last_raw[SSI_FRAME_LENGTH] = {0U};
+static SSI_Data_t ssi_last_parsed;
+static volatile uint8_t ssi_last_parsed_valid = 0U;
 static uint8_t rxData[SSI_FRAME_LENGTH] = {0U}; /* SPI5 DMA当前接收缓冲区。 */
 
 static uint8_t Calculate_Even_Parity(uint32_t data);
@@ -71,7 +87,7 @@ static uint32_t Get_SSI_Error_Code(const SSI_Data_t *data);
 static void Recover_SSI_Bus(void);
 static HAL_StatusTypeDef Start_Read_SSI_Data(void);
 static void SSI_ProcessError(uint32_t error_code);
-static void SSI_ProcessFrame(const uint8_t *raw);
+static void SSI_ProcessFrame(const SSI_Event *event);
 
 /**
  * @brief 挂起最低优先级PendSV，并用屏障保证事件内容先于挂起请求对处理器可见。
@@ -105,6 +121,12 @@ static void SSI_EnqueueEvent(SSI_EventType type,
     SSI_Event *event;
 
     __disable_irq();
+    if (type == SSI_EVENT_FRAME) {
+        ssi_frame_count++;
+    } else {
+        ssi_transfer_error_count++;
+        ssi_error_count++;
+    }
     head = ssi_queue_head;
     next = (uint8_t)((head + 1U) % SSI_EVENT_QUEUE_CAPACITY);
     if (ssi_queue_count >= SSI_EVENT_QUEUE_CAPACITY) {
@@ -129,11 +151,6 @@ static void SSI_EnqueueEvent(SSI_EventType type,
     event->hal_error = hal_error;
     event->sample_tick = HAL_GetTick();
     event->sequence = ++ssi_event_sequence;
-    if (type == SSI_EVENT_FRAME) {
-        ssi_frame_count++;
-    } else {
-        ssi_error_count++;
-    }
     __DMB();
     ssi_queue_head = next;
     ssi_queue_count++;
@@ -218,14 +235,16 @@ static SSI_Data_t Parse_SSI_Data(const uint8_t *raw)
 }
 
 /**
- * @brief 校验、OCF和COF属于阻止位置更新的硬异常；LIN只作为独立诊断码保留。
+ * @brief 校验、OCF和COF始终阻止位置更新；LIN是否触发停机由产品策略宏控制。
  *
  * @param data 已经从 AS5145 SSI 原始帧解码出的只读数据对象；包含角度、奇偶校验位和系统、磁场、线性、坐标溢出等诊断标志。
  * @return true 表示上述校验全部通过；false 表示至少一项校验未通过。
  */
 static bool Check_SSI_Error_Condition(const SSI_Data_t *data)
 {
-    return (data->parity_ok == 0U) || (data->OCF == 0U) || (data->COF != 0U);
+    return (data->parity_ok == 0U) || (data->OCF == 0U) ||
+           (data->COF != 0U) ||
+           ((SSI_LINEARITY_FAULT_ENABLED != 0U) && (data->LIN != 0U));
 }
 
 /**
@@ -272,17 +291,43 @@ static uint32_t Get_SSI_Error_Code(const SSI_Data_t *data)
  * @brief 处理一项延后的编码器异常。
  *
  * @details 调用场景：PendSV 消费原始帧或 SPI/DMA 错误事件。
- * @note 关键约束：第 3 个连续异常才锁存；只发布故障快照，不打印和不执行阻塞停机。
+ * @note 关键约束：上电跳变或累计位置连续性已失效时立即锁存；其他异常第 3 个连续帧才锁存；只发布故障快照，不打印和不执行阻塞停机。
  *
  * @param error_code 待记录、转换或判断的错误码。该值是 AS5145 SSI 帧校验或磁场状态对应的整机错误码，用于统一错误处理。
  */
 static void SSI_ProcessError(uint32_t error_code)
 {
     ssi_last_error_code = error_code;
+    ssi_last_bad_tick = HAL_GetTick();
     ssi_recovery_good_count = 0U;
+
+    switch (error_code) {
+    case ENCODER_TIMEOUT:
+        ssi_timeout_count++;
+        break;
+    case ENCODER_PARITY_ERROR:
+        ssi_parity_count++;
+        break;
+    case ENCODER_OCF_INCOMPLETE:
+        ssi_ocf_count++;
+        break;
+    case ENCODER_CORDIC_OVERFLOW:
+        ssi_cof_count++;
+        break;
+    case ENCODER_LINEARITY_WARNING:
+        /* LIN按解析帧统一计数，避免恢复报警后同一帧重复累计。 */
+        break;
+    case ENCODER_POSITION_JUMP:
+        ssi_position_jump_count++;
+        break;
+    default:
+        ssi_other_error_count++;
+        break;
+    }
 
     if (MotorCtrl_IsPositionSourceMotor()) {
         ssi_consecutive_bad_count = 0U;
+        ssi_consecutive_error_code = NO_ERROR;
         return;
     }
 
@@ -291,7 +336,19 @@ static void SSI_ProcessError(uint32_t error_code)
         return;
     }
 
-    if (ssi_consecutive_bad_count < UINT8_MAX) {
+    if ((error_code == ENCODER_POWERON_CHANGE) ||
+        (!Encoder_HasTrustedPosition())) {
+        /* 上电跳变和已确认的连续性丢失不能由后续好帧补回，编码轮记步时立即停机。 */
+        ssi_fault_latched = true;
+        ssi_latched_error_code = error_code;
+        FaultManager_LatchAsyncError(error_code);
+        return;
+    }
+
+    if (ssi_consecutive_error_code != error_code) {
+        ssi_consecutive_error_code = error_code;
+        ssi_consecutive_bad_count = 1U;
+    } else if (ssi_consecutive_bad_count < UINT8_MAX) {
         ssi_consecutive_bad_count++;
     }
     if (ssi_consecutive_bad_count >= SSI_FAULT_CONFIRM_FRAMES) {
@@ -302,38 +359,80 @@ static void SSI_ProcessError(uint32_t error_code)
 }
 
 /**
- * @brief 处理一帧原始证据：异常帧不更新累计位置；正常帧清未锁存连续计数，但已经锁存的故障只重复发布，必须由下一条顶层正式命令清除。
+ * @brief 处理一帧原始证据：异常帧不更新累计位置；通过帧状态和位置门禁后才清未锁存连续计数。
  *
- * @param raw 从中断事件邮箱取出的连续 SSI_FRAME_LENGTH 字节 AS5145 原始帧。
+ * @param event 从中断事件邮箱取出的AS5145原始帧、采样时刻和事件序号。
  */
-static void SSI_ProcessFrame(const uint8_t *raw)
+static void SSI_ProcessFrame(const SSI_Event *event)
 {
     SSI_Data_t parsed;
+    uint32_t angle_result;
+    bool sample_accepted = false;
 
-    if (Is_SSI_DisconnectedPattern(raw)) {
+    if (event == NULL) {
         SSI_ProcessError(ENCODER_TIMEOUT);
         return;
     }
 
-    parsed = Parse_SSI_Data(raw);
+    memcpy(ssi_last_raw, event->raw, SSI_FRAME_LENGTH);
+    if (Is_SSI_DisconnectedPattern(event->raw)) {
+        ssi_last_parsed_valid = 0U;
+        ssi_disconnected_pattern_count++;
+        SSI_ProcessError(ENCODER_TIMEOUT);
+        return;
+    }
+
+    parsed = Parse_SSI_Data(event->raw);
+    ssi_last_parsed = parsed;
+    ssi_last_parsed_valid = 1U;
+    if ((parsed.LIN != 0U) && (ssi_lin_count < UINT32_MAX)) {
+        /* 即使LIN未作为停机条件，也持续保留每帧LIN诊断证据。 */
+        ssi_lin_count++;
+    }
     if (Check_SSI_Error_Condition(&parsed)) {
         SSI_ProcessError(Get_SSI_Error_Code(&parsed));
         return;
     }
 
-    ssi_consecutive_bad_count = 0U;
-    ssi_first_valid_sample = true;
-    ssi_last_ok_tick = HAL_GetTick();
     if (ssi_fault_latched && (!MotorCtrl_IsPositionSourceMotor())) {
+        /* 锁存期间只记录恢复证据，禁止把故障前后角差补入累计位置。 */
+        ssi_consecutive_bad_count = 0U;
+        ssi_consecutive_error_code = NO_ERROR;
+        ssi_last_ok_tick = HAL_GetTick();
         if (ssi_recovery_good_count < UINT8_MAX) {
             ssi_recovery_good_count++;
         }
         FaultManager_LatchAsyncError(ssi_latched_error_code);
-    } else {
-        ssi_recovery_good_count = 0U;
-        ssi_last_error_code = NO_ERROR;
+        return;
     }
-    Update_Encoder_Count(parsed.angle);
+
+    angle_result = Encoder_ProcessAngleSample(parsed.angle,
+                                              event->sample_tick,
+                                              &sample_accepted);
+    if (angle_result != NO_ERROR) {
+        if (angle_result == ENCODER_POWERON_CHANGE) {
+            /* 保留有效单圈角供正式回零；统一异常入口按当前记步模式决定停机或仅记录诊断。 */
+            ssi_first_valid_sample = true;
+        }
+        SSI_ProcessError(angle_result);
+        return;
+    }
+    if (!sample_accepted) {
+        /* 状态位正常但仍在角度同步确认的帧会打断此前异常，不能与后续异常拼成连续3帧。 */
+        ssi_consecutive_bad_count = 0U;
+        ssi_consecutive_error_code = NO_ERROR;
+        if (!ssi_fault_latched) {
+            ssi_last_error_code = NO_ERROR;
+        }
+        return;
+    }
+
+    ssi_consecutive_bad_count = 0U;
+    ssi_consecutive_error_code = NO_ERROR;
+    ssi_first_valid_sample = true;
+    ssi_last_ok_tick = HAL_GetTick();
+    ssi_recovery_good_count = 0U;
+    ssi_last_error_code = NO_ERROR;
 }
 
 /**
@@ -360,7 +459,7 @@ void AS5145_ProcessDeferred(void)
             continue;
         }
         if (event.type == (uint8_t)SSI_EVENT_FRAME) {
-            SSI_ProcessFrame(event.raw);
+            SSI_ProcessFrame(&event);
         } else {
             SSI_ProcessError(ENCODER_TIMEOUT);
         }
@@ -371,6 +470,15 @@ void AS5145_ProcessDeferred(void)
         (ssi_processed_overrun_count != ssi_queue_overrun_count)) {
         SSI_PendDeferred();
     }
+}
+
+/**
+ * @brief 判断SSI延后事件是否仍有积压。
+ */
+bool AS5145_HasDeferredWork(void)
+{
+    return (ssi_queue_count != 0U) ||
+           (ssi_processed_overrun_count != ssi_queue_overrun_count);
 }
 
 /**
@@ -477,6 +585,14 @@ uint32_t AS5145_GetLastError(void)
 }
 
 /**
+ * @brief 读取已经达到连续确认条件并锁存的编码器错误。
+ */
+uint32_t AS5145_GetLatchedError(void)
+{
+    return ssi_fault_latched ? ssi_latched_error_code : NO_ERROR;
+}
+
+/**
  * @brief 判断 AS5145 是否已经取得至少一个有效角度样本。
  *
  * @return true 表示 AS5145 已经取得至少一个有效角度样本；false 表示 AS5145 尚未取得至少一个有效角度样本。
@@ -497,6 +613,46 @@ bool AS5145_IsFaultLatched(void)
 }
 
 /**
+ * @brief 取得最近原始帧、解析状态和分项错误计数的一致 RAM 快照。
+ */
+bool AS5145_GetDiagnosticSnapshot(AS5145DiagnosticSnapshot *snapshot)
+{
+    uint32_t primask;
+
+    if (snapshot == NULL) {
+        return false;
+    }
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    memcpy(snapshot->raw, ssi_last_raw, SSI_FRAME_LENGTH);
+    snapshot->parsed = ssi_last_parsed;
+    snapshot->latched_error_code = ssi_latched_error_code;
+    snapshot->last_error_code = ssi_last_error_code;
+    snapshot->consecutive_error_code = ssi_consecutive_error_code;
+    snapshot->frame_count = ssi_frame_count;
+    snapshot->error_count = ssi_error_count;
+    snapshot->transfer_error_count = ssi_transfer_error_count;
+    snapshot->disconnected_pattern_count = ssi_disconnected_pattern_count;
+    snapshot->queue_overrun_count = ssi_queue_overrun_count;
+    snapshot->timeout_count = ssi_timeout_count;
+    snapshot->parity_count = ssi_parity_count;
+    snapshot->ocf_count = ssi_ocf_count;
+    snapshot->cof_count = ssi_cof_count;
+    snapshot->lin_count = ssi_lin_count;
+    snapshot->position_jump_count = ssi_position_jump_count;
+    snapshot->other_error_count = ssi_other_error_count;
+    snapshot->last_ok_tick = ssi_last_ok_tick;
+    snapshot->last_bad_tick = ssi_last_bad_tick;
+    snapshot->parsed_valid = ssi_last_parsed_valid;
+    snapshot->consecutive_bad_count = ssi_consecutive_bad_count;
+    snapshot->recovery_good_count = ssi_recovery_good_count;
+    snapshot->fault_latched = ssi_fault_latched ? 1U : 0U;
+    __set_PRIMASK(primask);
+    return true;
+}
+
+/**
  * @brief 清除锁存时记录当前事件/溢出序号边界，避免新正式流程重新消费清锁存前的旧证据。
  */
 void AS5145_ClearLatchedFaultForNewProcess(void)
@@ -508,6 +664,7 @@ void AS5145_ClearLatchedFaultForNewProcess(void)
     ssi_latched_error_code = NO_ERROR;
     ssi_last_error_code = NO_ERROR;
     ssi_consecutive_bad_count = 0U;
+    ssi_consecutive_error_code = NO_ERROR;
     ssi_recovery_good_count = 0U;
     ssi_process_start_sequence = ssi_event_sequence;
     ssi_processed_overrun_count = ssi_queue_overrun_count;
@@ -535,8 +692,8 @@ uint32_t AS5145_WaitFirstValidSample(uint32_t timeout_ms)
     if (ssi_first_valid_sample) {
         return NO_ERROR;
     }
-    if (AS5145_GetLastError() != NO_ERROR) {
-        return AS5145_GetLastError();
+    if (AS5145_GetLatchedError() != NO_ERROR) {
+        return AS5145_GetLatchedError();
     }
     return ENCODER_FIRST_SAMPLE_TIMEOUT;
 }
@@ -560,6 +717,8 @@ HAL_StatusTypeDef Start_Encoder_Collection_TIM(void)
     ssi_event_sequence = 0U;
     ssi_frame_count = 0U;
     ssi_error_count = 0U;
+    ssi_transfer_error_count = 0U;
+    ssi_disconnected_pattern_count = 0U;
     ssi_queue_overrun_count = 0U;
     ssi_processed_overrun_count = 0U;
     ssi_consecutive_bad_count = 0U;
@@ -569,6 +728,18 @@ HAL_StatusTypeDef Start_Encoder_Collection_TIM(void)
     ssi_last_error_code = NO_ERROR;
     ssi_first_valid_sample = false;
     ssi_last_ok_tick = 0U;
+    ssi_last_bad_tick = 0U;
+    ssi_consecutive_error_code = NO_ERROR;
+    ssi_timeout_count = 0U;
+    ssi_parity_count = 0U;
+    ssi_ocf_count = 0U;
+    ssi_cof_count = 0U;
+    ssi_lin_count = 0U;
+    ssi_position_jump_count = 0U;
+    ssi_other_error_count = 0U;
+    memset(ssi_last_raw, 0, sizeof(ssi_last_raw));
+    memset(&ssi_last_parsed, 0, sizeof(ssi_last_parsed));
+    ssi_last_parsed_valid = 0U;
     if (primask == 0U) {
         __enable_irq();
     }

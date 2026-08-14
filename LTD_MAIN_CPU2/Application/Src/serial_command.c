@@ -1,6 +1,7 @@
 #include "serial_command.h"
 
 #include "app_version.h"
+#include "AS5145.h"
 #include "encoder.h"
 #include "error_log.h"
 #include "power_monitor.h"
@@ -179,12 +180,40 @@ static void SerialCommand_PrintPowerStatus(void)
 static void SerialCommand_PrintEncoderStatus(void)
 {
     EncoderDebugSnapshot snapshot;
+    AS5145DiagnosticSnapshot ssi_snapshot;
+    uint64_t link_total;
+    uint64_t process_total;
+    uint32_t link_quality_x1000;
+    uint32_t parity_quality_x1000;
+    uint32_t process_quality_x1000;
+    uint32_t link_bad_frames;
+    uint32_t parity_bad_frames;
 
-    if (!Encoder_GetDebugSnapshot(&snapshot)) {
+    if (!Encoder_GetDebugSnapshot(&snapshot) ||
+        !AS5145_GetDiagnosticSnapshot(&ssi_snapshot)) {
         printf("ENC 编码器：状态=不可用\r\n");
         return;
     }
-    printf("ENC 编码器：当前累计=%ld，已保存=%ld，未保存差值=%ld，当前单圈=%u，已保存单圈=%u，单圈差值=%ld，位置有效=%u，普通保存中=%u，紧急保存中=%u，存储代次=%lu，活动槽=%c，最近提交=%s，上次掉电保存=%s，故障锁存=%u\r\n",
+
+    link_bad_frames = (ssi_snapshot.disconnected_pattern_count > ssi_snapshot.frame_count) ?
+                      ssi_snapshot.frame_count : ssi_snapshot.disconnected_pattern_count;
+    parity_bad_frames = (ssi_snapshot.parity_count > ssi_snapshot.frame_count) ?
+                        ssi_snapshot.frame_count : ssi_snapshot.parity_count;
+    link_total = (uint64_t)ssi_snapshot.frame_count +
+                 (uint64_t)ssi_snapshot.transfer_error_count;
+    process_total = link_total;
+    link_quality_x1000 = (link_total == 0ULL) ? 0U :
+        (uint32_t)((((uint64_t)ssi_snapshot.frame_count - link_bad_frames) * 100000ULL) /
+                   link_total);
+    parity_quality_x1000 = (ssi_snapshot.frame_count == 0U) ? 0U :
+        (uint32_t)((((uint64_t)ssi_snapshot.frame_count - parity_bad_frames) * 100000ULL) /
+                   (uint64_t)ssi_snapshot.frame_count);
+    process_quality_x1000 = (process_total == 0ULL) ? 0U :
+        (uint32_t)((((process_total > ssi_snapshot.queue_overrun_count) ?
+                     (process_total - ssi_snapshot.queue_overrun_count) : 0ULL) * 100000ULL) /
+                   process_total);
+
+    printf("ENC 编码器：当前累计=%ld，已保存=%ld，未保存差值=%ld，当前单圈=%u，已保存单圈=%u，单圈差值=%ld，位置有效=%u，普通保存中=%u，紧急保存中=%u，存储代次=%lu，活动槽=%c，最近提交=%s，上次掉电保存=%s，故障锁存=%u，锁存码=0x%08lX，最近错误=0x%08lX，同步=%u，重同步=%u，启动稳定=%u，候选增量=%d，上限=%u，间隔=%lums，拒绝原因=%u，拒绝总数=%lu，方向不一致=%lu\r\n",
            (long)snapshot.encoder_count,
            (long)snapshot.saved_count,
            (long)snapshot.unsaved_count,
@@ -198,7 +227,56 @@ static void SerialCommand_PrintEncoderStatus(void)
            (char)snapshot.active_slot,
            SerialCommand_GetPersistResultName(snapshot.last_commit_result),
            SerialCommand_GetPowerLossResultName(snapshot.boot_power_loss_result),
-           (unsigned int)snapshot.fault_latched);
+           (unsigned int)snapshot.fault_latched,
+           (unsigned long)ssi_snapshot.latched_error_code,
+           (unsigned long)ssi_snapshot.last_error_code,
+           (unsigned int)snapshot.angle_synchronized,
+           (unsigned int)snapshot.runtime_resynchronizing,
+           (unsigned int)snapshot.boot_stable_count,
+           (int)snapshot.last_candidate_delta,
+           (unsigned int)snapshot.last_candidate_limit,
+           (unsigned long)snapshot.last_candidate_dt_ms,
+           (unsigned int)snapshot.last_reject_reason,
+           (unsigned long)snapshot.rejected_sample_count,
+           (unsigned long)snapshot.direction_mismatch_count);
+    printf("ENC SSI：原始=%02X %02X %02X %02X，解析有效=%u，角度=%u，OCF=%u，COF=%u，LIN=%u，MagINCn=%u，MagDECn=%u，校验=%u，连续错误=0x%08lX，连续数=%u，恢复正常数=%u，帧=%lu，异常证据=%lu，溢出=%lu，超时=%lu，校验错=%lu，OCF=%lu，COF=%lu，LIN=%lu，跳变=%lu，其他=%lu，最后正常=%lu，最后异常=%lu\r\n",
+           (unsigned int)ssi_snapshot.raw[0],
+           (unsigned int)ssi_snapshot.raw[1],
+           (unsigned int)ssi_snapshot.raw[2],
+           (unsigned int)ssi_snapshot.raw[3],
+           (unsigned int)ssi_snapshot.parsed_valid,
+           (unsigned int)ssi_snapshot.parsed.angle,
+           (unsigned int)ssi_snapshot.parsed.OCF,
+           (unsigned int)ssi_snapshot.parsed.COF,
+           (unsigned int)ssi_snapshot.parsed.LIN,
+           (unsigned int)ssi_snapshot.parsed.MagINCn,
+           (unsigned int)ssi_snapshot.parsed.MagDECn,
+           (unsigned int)ssi_snapshot.parsed.parity_ok,
+           (unsigned long)ssi_snapshot.consecutive_error_code,
+           (unsigned int)ssi_snapshot.consecutive_bad_count,
+           (unsigned int)ssi_snapshot.recovery_good_count,
+           (unsigned long)ssi_snapshot.frame_count,
+           (unsigned long)ssi_snapshot.error_count,
+           (unsigned long)ssi_snapshot.queue_overrun_count,
+           (unsigned long)ssi_snapshot.timeout_count,
+           (unsigned long)ssi_snapshot.parity_count,
+           (unsigned long)ssi_snapshot.ocf_count,
+           (unsigned long)ssi_snapshot.cof_count,
+           (unsigned long)ssi_snapshot.lin_count,
+           (unsigned long)ssi_snapshot.position_jump_count,
+           (unsigned long)ssi_snapshot.other_error_count,
+           (unsigned long)ssi_snapshot.last_ok_tick,
+           (unsigned long)ssi_snapshot.last_bad_tick);
+    printf("ENC 质量：链路=%lu.%03lu%%，校验=%lu.%03lu%%，处理=%lu.%03lu%%，传输失败=%lu，断线帧=%lu，处理溢出=%lu，统计范围=本次上电\r\n",
+           (unsigned long)(link_quality_x1000 / 1000U),
+           (unsigned long)(link_quality_x1000 % 1000U),
+           (unsigned long)(parity_quality_x1000 / 1000U),
+           (unsigned long)(parity_quality_x1000 % 1000U),
+           (unsigned long)(process_quality_x1000 / 1000U),
+           (unsigned long)(process_quality_x1000 % 1000U),
+           (unsigned long)ssi_snapshot.transfer_error_count,
+           (unsigned long)ssi_snapshot.disconnected_pattern_count,
+           (unsigned long)ssi_snapshot.queue_overrun_count);
 }
 
 /**

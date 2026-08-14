@@ -55,7 +55,24 @@ typedef struct {
     uint8_t fault_latched;             /* AS5145连续异常故障是否锁存。 */
     EncoderPersistResult last_commit_result; /* 最近一次快照提交结果。 */
     EncoderPowerLossPersistResult boot_power_loss_result; /* 上次掉电保存判定。 */
+    int16_t last_candidate_delta;       /* 最近一次候选单帧增量。 */
+    uint16_t last_candidate_limit;      /* 最近一次候选增量物理上限。 */
+    uint32_t last_candidate_dt_ms;      /* 最近一次候选与可信样本间隔。 */
+    uint32_t rejected_sample_count;     /* 本次上电累计拒绝的候选样本数。 */
+    uint32_t direction_mismatch_count;  /* 方向状态与编码增量不一致的诊断次数，不触发停机。 */
+    uint8_t last_reject_reason;         /* 最近拒绝原因，0表示未拒绝。 */
+    uint8_t boot_stable_count;          /* 上电角度稳定确认帧数。 */
+    uint8_t angle_synchronized;         /* 单圈角是否已与累计位置同步。 */
+    uint8_t runtime_resynchronizing;    /* 1表示运行故障后仅重建角度基准，不执行上电位置比较。 */
 } EncoderDebugSnapshot;
+
+typedef enum {
+    ENCODER_REJECT_NONE = 0,
+    ENCODER_REJECT_BOOT_UNSTABLE,
+    ENCODER_REJECT_BOOT_CHANGE,
+    ENCODER_REJECT_SAMPLE_GAP,
+    ENCODER_REJECT_PHYSICAL_LIMIT
+} EncoderRejectReason;
 
 /* PendSV向主循环发布的一次性紧急保存结果；主循环只负责报告和故障升级。 */
 typedef struct {
@@ -95,10 +112,18 @@ bool Encoder_IsReady(void);
 uint32_t Encoder_WaitReady(uint32_t timeout_ms);
 
 /**
+ * @brief 在线程态有限等待角度重新同步，优先返回等待期间锁存的具体编码器故障。
+ *
+ * @param timeout_ms 允许等待的最长时间，单位 ms。
+ * @return NO_ERROR 表示完成同步；具体编码器故障优先原样返回，否则返回 ENCODER_FIRST_SAMPLE_TIMEOUT。
+ */
+uint32_t Encoder_WaitAngleSynchronized(uint32_t timeout_ms);
+
+/**
  * @brief 判断编码器传感器是否可用于重新回零。
  *
  * @details 调用场景：A/B 持久化记录都损坏后的 CMD_BACK_ZERO 运动门控。
- * @note 关键约束：只代表 AS5145 已有有效帧，不代表累计位置已经可信。
+ * @note 关键约束：只代表 AS5145 已完成单圈角稳定同步，不代表累计位置已经可信。
  */
 bool Encoder_CanStartHoming(void);
 /**
@@ -122,7 +147,16 @@ bool Encoder_DidBootDetectPowerLossSaveFailure(void);
  * @details 调用场景：PendSV 延后处理有效编码器帧。
  * @note 关键约束：不访问 FRAM、不打印、不阻塞。
  */
-void Update_Encoder_Count(uint16_t current_angle);
+uint32_t Encoder_ProcessAngleSample(uint16_t current_angle,
+                                    uint32_t sample_tick,
+                                    bool *sample_accepted);
+
+/**
+ * @brief 判断错误码是否属于编码器采集、位置恢复或运行跳变故障。
+ *
+ * @note 周长标定确定性错误不在本集合内，不能在电机记步模式下被后台清除。
+ */
+bool Encoder_IsRuntimeFaultCode(uint32_t error_code);
 
 /**
  * @brief 尝试提交一份待保存编码器快照。

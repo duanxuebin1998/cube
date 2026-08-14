@@ -30,7 +30,7 @@
 /* 历史有线温度无效哨兵值 0；保留用于旧接口兼容，不能与无线温度无效值 UNVALID_TEMPERATURE_WIRELESS 混用。 */
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
-#define DEVICE_PROTOCOL_VERSION 33u /* CPU2/CPU3共享协议版本；协议33将AO电流修正及最终目标/实发电流倍率提升为x1000。 */
+#define DEVICE_PROTOCOL_VERSION 34u /* CPU2/CPU3共享协议版本；协议34启用编码器上电和运行位置跳变故障，保留线性度诊断映射。 */
 /* 故障自动恢复的默认重试次数 3；仅在参数缺省、越界或旧版本迁移时作为归一化值。 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 /* 故障自动恢复重试次数的配置硬上限 10；CPU3 菜单和参数校验不得允许写入超过该值的重试次数。 */
@@ -296,13 +296,14 @@ typedef enum {
     ENCODER_PARITY_ERROR = 0x000C0002,            /*编码器数据校验失败*/
     ENCODER_LOST_STEP = 0x000C0003,               /*编码器记录位移不足*/
     ENCODER_POWERON_FAIL = 0x000C0005,            /*编码器位置记录不可用*/
-    ENCODER_POWERON_CHANGE = 0x000C0006,          /*编码器上电位置跳变（保留码）*/
+    ENCODER_POWERON_CHANGE = 0x000C0006,          /*编码器上电位置跳变*/
     ENCODER_DIFF_EXCESS = 0x000C000A,             /*编码轮周长标定值过大*/
     ENCODER_CORDIC_OVERFLOW = 0x000C000C,         /*编码器角度计算超限*/
-    ENCODER_LINEARITY_WARNING = 0x000C000D,       /*编码器角度线性异常（保留码）*/
+    ENCODER_LINEARITY_WARNING = 0x000C000D,       /*编码器角度线性异常（保留定义，当前仅诊断）*/
     ENCODER_OCF_INCOMPLETE = 0x000C000E,          /*编码器角度计算未完成*/
     ENCODER_FIRST_SAMPLE_TIMEOUT = 0x000C000F,    /* 启动后首个有效位置等待超时 */
     ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR = 0x000C0010, /* 编码轮周长标定异常 */
+    ENCODER_POSITION_JUMP = 0x000C0011,           /* 编码器运行位置跳变 */
 
     /* ==================== 13 传感器与密度故障 (0x000D0000 - 0x000DFFFF) ==================== */
     SENSOR_BCC_ERROR = 0x000D0001,                /* 传感器数据校验失败 */

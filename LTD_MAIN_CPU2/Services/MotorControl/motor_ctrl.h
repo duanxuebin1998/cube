@@ -237,7 +237,7 @@ uint32_t MotorCtrl_ResetDrumReferenceForZeroCalibration(void);
  *
  * 切换为编码轮记步，后续 cable_length/sensor_position 由外部编码器刷新。
  *
- * @return 固定返回 NO_ERROR；当前切换、位置同步和参数保存接口不向调用方报告失败。
+ * @return NO_ERROR表示切换完成；编码器未就绪、位置不可信或已有锁存故障时返回具体错误码。
  */
 uint32_t MotorCtrl_SwitchPositionSourceToEncoder(void);
 

@@ -695,6 +695,7 @@ static void clear_relay_alarm_runtime_commands(DeviceParameters *params)
 #define MOTOR_LOCAL_CIRC_MIN_001MM  (50000u)    /* 50.000mm，和motor_count_first_loop_circumference_mm模型下限保持一致 */
 #define MOTOR_LOCAL_CIRC_MAX_001MM  (5000000u)  /* 5000.000mm，防止旧 reserved 脏值被当成有效周长 */
 #define MOTOR_LOCAL_CIRC_FALLBACK_001MM (600000u) /* 默认 600.000mm，用于first_loop_circumference_mm本身也异常时兜底 */
+#define ENCODER_WHEEL_CIRC_FALLBACK_001MM (95000u) /* 默认95.000mm；当前机械规格尚未定义可靠上下限。 */
 
 /**
  * @brief 根据首圈周长生成电机本地周长默认值，并对旧参数脏值执行范围兜底。
@@ -1114,6 +1115,10 @@ static int migrate_ao_current_correction_scale_runtime(void)
     if (old_protocol == DEVICE_PROTOCOL_VERSION) {
         return 0;
     }
+    if (old_protocol == 33U) {
+        /* 协议33已经使用x1000，升级到协议34只扩展故障语义，保持原修正值。 */
+        return 0;
+    }
     if ((old_protocol >= 26U) && (old_protocol <= 32U) &&
         (old_value >= -100) && (old_value <= 100)) {
         config->current_correction_mA_x1000 = old_value * 10;
@@ -1278,6 +1283,13 @@ static int normalize_device_params_runtime(void)
     if ((g_deviceParams.position_count_mode != POSITION_COUNT_MODE_ENCODER) &&
         (g_deviceParams.position_count_mode != POSITION_COUNT_MODE_MOTOR)) {
         g_deviceParams.position_count_mode = POSITION_COUNT_MODE_ENCODER;
+        changed = 1;
+    }
+
+    if (g_deviceParams.encoder_wheel_circumference_mm == 0U) {
+        /* 零周长会同时破坏位置换算和20m/min动态门限，上电时恢复为既有出厂值。 */
+        g_deviceParams.encoder_wheel_circumference_mm =
+            ENCODER_WHEEL_CIRC_FALLBACK_001MM;
         changed = 1;
     }
 

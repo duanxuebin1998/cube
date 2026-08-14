@@ -35,7 +35,7 @@
  * @return true 表示错误码属于编码器通信、校验、就绪或持久化故障集合；否则返回 false。
  */
 static uint8_t App_IsEncoderErrorCode(uint32_t error_code) {
-	return (error_code >= ENCODER_TIMEOUT) && (error_code <= ENCODER_FIRST_SAMPLE_TIMEOUT);
+	return Encoder_IsRuntimeFaultCode(error_code) ? 1U : 0U;
 }
 
 /**
