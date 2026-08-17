@@ -14,6 +14,8 @@
 #define DEBUG_DISPLAY 0
 /* OLED 异常后的周期恢复尝试间隔 60000 ms；限制重复初始化频率，避免故障时持续占用总线。 */
 #define DISPLAY_RECOVER_INTERVAL_MS 60000U
+/* 单轮 OLED 恢复最多连续尝试 3 次；全部失败后等待下一恢复窗口或新的显式请求。 */
+#define DISPLAY_RECOVER_MAX_ATTEMPTS 3U
 /* 一次显示刷新等待完成的超时 500 ms；超过后进入显示故障与恢复处理。 */
 #define DISPLAY_REFRESH_TIMEOUT_MS 500U
 /* 菜单数值修改后高亮显示的保持时间 500 ms。 */
@@ -37,7 +39,8 @@ static volatile bool flag_bright = false;            /* 亮屏标志位 */
 static volatile bool display_refresh_pending = false; /* 等待 Display_Task 消费的一次 OLED 刷新请求；定时器、按键和页面流程只置位，前台取走后在非中断上下文执行绘制。 */
 static bool display_recover_before_draw = false; /* 下一帧绘制前必须先恢复 OLED 控制器和清屏的标志；由主动恢复、SPI 错误变化或周期恢复判定设置，帧结束后清除。 */
 static volatile bool display_screen_off_active = false; /* OLED 已执行关显示命令的运行态标志；按键中断和前台绘制流程均会读取，因此使用 volatile 保证每次访问均取得最新状态。 */
-static bool display_recover_requested = false; /* OLED 从息屏状态唤醒后挂起的一次主动恢复请求；下一次恢复判定消费并清除，确保重新开屏后重建控制器和显存状态。 */
+static bool display_recover_requested = false; /* OLED 显式恢复或受控重试请求；下一次恢复判定消费后执行一次硬恢复。 */
+static uint8_t display_recover_attempt_count = 0U; /* 当前 OLED 恢复轮次已经失败的次数；达到上限后不再逐帧硬复位。 */
 static uint32_t display_last_recover_tick = 0U; /* 最近一次确认或发起 OLED 恢复的 HAL 毫秒节拍；用于限制周期恢复间隔，按无符号差值兼容系统节拍回绕。 */
 static uint32_t display_last_spi_error_count = 0U; /* 显示恢复判定最近一次确认过的 OLED SPI 累计错误数；计数发生变化时要求下一帧重建控制器和显存状态。 */
 static uint32_t display_last_refresh_ms = 0U; /* 最近一次 RefreshScreen 完整执行耗时，单位 ms；与 DISPLAY_REFRESH_TIMEOUT_MS 比较后累计刷新超时诊断。 */
@@ -2008,7 +2011,7 @@ static void Display_DrawStatusHighlightRestore(void);
  *
  * @param snapshot 可写 CPU3 状态页快照；函数追加或读取固定槽位中的文字、数值、位置、反显和数据新鲜度，最终用于全量或差量绘制。
  */
-static void Display_DrawStatusFull(DisplayStatusSnapshot *snapshot);
+static bool Display_DrawStatusFull(DisplayStatusSnapshot *snapshot);
 /**
  * @brief 比较前后快照，只重绘发生变化的状态槽。
  *
@@ -2039,8 +2042,18 @@ static uint8_t Display_GetStatusSlotShift(DisplayStatusSlotId id,
                                           const char *text);
 /**
  * @brief 按页面清屏策略清除下一次绘制涉及的 OLED 区域。
+ * @return true 表示普通清屏或硬恢复成功；false 表示底层发送失败，本帧不得继续绘制。
  */
-static void Display_ClearBeforeDraw(void);
+static bool Display_ClearBeforeDraw(void);
+/**
+ * @brief 执行一次 OLED 硬恢复，并在失败时安排不超过上限的后续重试。
+ * @return true 表示本次硬恢复成功；false 表示失败，本帧不得继续绘制或提交。
+ */
+static bool Display_PerformRecovery(void);
+/**
+ * @brief 请求一轮新的 OLED 硬恢复，并重置该轮连续失败计数。
+ */
+static void Display_RequestRecovery(void);
 /**
  * @brief 主动恢复、SPI 错误计数变化或周期到期时，要求下一帧恢复 OLED 状态。
  * @return true 表示收到主动恢复请求、OLED SPI 累计错误数发生变化，或周期恢复时限已到；false 表示本帧无需重新初始化 OLED 绘制状态。
@@ -2168,7 +2181,9 @@ uint8_t OledDisplayLineWords(const void *data,uint8_t x,uint8_t y,uint8_t shift)
 void EquipFirstPower(void)
 {
     int line;
-    Display_ClearBeforeDraw();
+    if (!Display_ClearBeforeDraw()) {
+        return;
+    }
     DisplayLangaugeLineWords((uint8_t*)"通讯尝试中...",0,OLED_ROW4_1,0,(u8*)"Communicate Attempt...");
     line = DisplayLangaugeLineWords((uint8_t*)"版本:",0,OLED_ROW4_2,0,(u8*)"Version:");
     OledDisplayLineWords(CPU3_APP_VERSION_STRING,line,OLED_ROW4_2,0);
@@ -2206,7 +2221,9 @@ static void oled_workingdata(void)
     if (display_status_full_redraw_required ||
         display_recover_before_draw ||
         Display_StatusLayoutChanged(&current_snapshot, &display_status_last_snapshot)) {
-        Display_DrawStatusFull(&current_snapshot);
+        if (!Display_DrawStatusFull(&current_snapshot)) {
+            return;
+        }
     } else {
         Display_DrawStatusDelta(&current_snapshot, &display_status_last_snapshot);
     }
@@ -2369,13 +2386,46 @@ void Display_RequestRefresh(void)
 /**
  * @brief 按页面清屏策略清除下一次绘制涉及的 OLED 区域。
  */
-static void Display_ClearBeforeDraw(void)
+static bool Display_ClearBeforeDraw(void)
 {
     if (display_recover_before_draw) {
-        OLED_RecoverAndClear();
-    } else {
-        oled_clear();
+        return Display_PerformRecovery();
     }
+    return OLED_Clear() == HAL_OK;
+}
+
+/**
+ * @brief 请求一轮新的 OLED 硬恢复，并重置该轮连续失败计数。
+ */
+static void Display_RequestRecovery(void)
+{
+    display_recover_attempt_count = 0U;
+    display_recover_requested = true;
+}
+
+/**
+ * @brief 执行一次 OLED 硬恢复，并在失败时安排不超过上限的后续重试。
+ * @return true 表示本次硬恢复成功；false 表示失败，本帧不得继续绘制或提交。
+ */
+static bool Display_PerformRecovery(void)
+{
+    HAL_StatusTypeDef status = OLED_RecoverAndClear();
+
+    /* 本次恢复产生的 SPI 错误已经在底层累计，立即确认计数，避免同一错误绕过重试上限。 */
+    display_last_spi_error_count = OLED_GetSpiErrorCount();
+    if (status == HAL_OK) {
+        display_recover_attempt_count = 0U;
+        display_recover_requested = false;
+        return true;
+    }
+
+    if (display_recover_attempt_count < DISPLAY_RECOVER_MAX_ATTEMPTS) {
+        display_recover_attempt_count++;
+    }
+    display_last_recover_tick = HAL_GetTick();
+    display_recover_requested =
+        (display_recover_attempt_count < DISPLAY_RECOVER_MAX_ATTEMPTS);
+    return false;
 }
 
 /**
@@ -2396,11 +2446,13 @@ static bool Display_ShouldRecoverBeforeDraw(void)
     /* OLED SPI 累计错误数一旦增加，下一帧立即执行恢复；不能继续等待周期性恢复窗口。 */
     if (spi_error_count != display_last_spi_error_count) {
         display_last_spi_error_count = spi_error_count;
+        display_recover_attempt_count = 0U;
         display_last_recover_tick = now;
         return true;
     }
 
     if ((now - display_last_recover_tick) >= DISPLAY_RECOVER_INTERVAL_MS) {
+        display_recover_attempt_count = 0U;
         display_last_recover_tick = now;
         return true;
     }
@@ -2433,29 +2485,35 @@ static void Display_FinishFrame(uint32_t frame_spi_error_start)
 
 /**
  * @brief 前景页绘制前重置状态页局部刷新缓存，并按需恢复 OLED。
- * @return 返回前景绘制开始时的 OLED SPI 累计错误计数，供绘制结束时判断本帧是否新增传输错误。
+ *
+ * @param frame_spi_error_start 输出前景绘制开始时的 OLED SPI 累计错误计数，供帧结束时判断是否新增传输错误。
+ * @return true 表示可以继续绘制；false 表示 OLED 恢复失败，本帧必须停止。
  */
-static uint32_t Display_PrepareForForegroundDraw(void)
+static bool Display_PrepareForForegroundDraw(uint32_t *frame_spi_error_start)
 {
     bool should_recover;
-    uint32_t frame_spi_error_start = Display_BeginFrame();
+
+    if (frame_spi_error_start == NULL) {
+        return false;
+    }
+    *frame_spi_error_start = Display_BeginFrame();
 
     /* 菜单、确认页等前景界面会覆盖整屏，回到状态页时不能继续用状态页局部刷新缓存。 */
     display_status_full_redraw_required = true;
 
     if (display_screen_off_active) {
         OLED_DisplayOn();
-        display_recover_requested = true;
+        Display_RequestRecovery();
         display_screen_off_active = false;
     }
 
     should_recover = Display_ShouldRecoverBeforeDraw();
     display_recover_before_draw = false;
-    if (should_recover) {
-        OLED_RecoverAndClear();
+    if (should_recover && !Display_PerformRecovery()) {
+        return false;
     }
 
-    return frame_spi_error_start;
+    return true;
 }
 
 /**
@@ -2466,7 +2524,11 @@ static uint32_t Display_PrepareForForegroundDraw(void)
 static void Display_ProcessLongPressAction(uint8_t long_press_key)
 {
     if (long_press_key == LONG_PRESS_KEY_SURE) {
-        uint32_t frame_spi_error_start = Display_PrepareForForegroundDraw();
+        uint32_t frame_spi_error_start;
+
+        if (!Display_PrepareForForegroundDraw(&frame_spi_error_start)) {
+            return;
+        }
         FlagofTankOpera = true;
         Display_RecordMenuActivity(HAL_GetTick());
         useKey();
@@ -2478,7 +2540,9 @@ static void Display_ProcessLongPressAction(uint8_t long_press_key)
 
         /* 与长按确认进菜单一致：先进入确认页，确认键再执行对应动作。 */
         if (Display_CanEnterCancelMeasurementConfirm()) {
-            frame_spi_error_start = Display_PrepareForForegroundDraw();
+            if (!Display_PrepareForForegroundDraw(&frame_spi_error_start)) {
+                return;
+            }
             prepared = true;
         }
         if (Display_EnterCancelMeasurementConfirm()) {
@@ -2510,7 +2574,9 @@ static void Display_ProcessPendingInput(void)
             uint32_t frame_spi_error_start = 0U;
 
             if (DisplayTankOpera_CanProcessKey(keypress)) {
-                frame_spi_error_start = Display_PrepareForForegroundDraw();
+                if (!Display_PrepareForForegroundDraw(&frame_spi_error_start)) {
+                    return;
+                }
                 prepared = true;
             }
             if (KeyProcess(keypress)) {
@@ -3382,12 +3448,12 @@ static void Display_UpdateStatusHighlights(DisplayStatusSnapshot *current,
  *
  * @param snapshot 可写 CPU3 状态页快照；函数追加或读取固定槽位中的文字、数值、位置、反显和数据新鲜度，最终用于全量或差量绘制。
  */
-static void Display_DrawStatusFull(DisplayStatusSnapshot *snapshot)
+static bool Display_DrawStatusFull(DisplayStatusSnapshot *snapshot)
 {
     uint8_t i;
 
     if (snapshot == NULL) {
-        return;
+        return false;
     }
 
     for (i = 0U; i < snapshot->slot_count; i++) {
@@ -3395,10 +3461,13 @@ static void Display_DrawStatusFull(DisplayStatusSnapshot *snapshot)
         snapshot->slots[i].highlight_until_tick = 0U;
     }
 
+    if (!Display_ClearBeforeDraw()) {
+        return false;
+    }
     display_status_active_snapshot = *snapshot;
     display_status_full_redraw_required = false;
-    Display_ClearBeforeDraw();
     oled_equipment();
+    return true;
 }
 
 /**
@@ -3563,7 +3632,9 @@ void RefreshScreen(void)
             DisplayTankOpera_IsDebugWeightWaitActive() ||
             DisplayTankOpera_IsAoRuntimeActive() ||
             DisplayTankOpera_IsCpu2CommHealthActive()) {
-            frame_spi_error_start = Display_PrepareForForegroundDraw();
+            if (!Display_PrepareForForegroundDraw(&frame_spi_error_start)) {
+                return;
+            }
             if (DisplayTankOpera_RedrawCurrentPage()) {
                 Display_FinishFrame(frame_spi_error_start);
             }
@@ -3571,8 +3642,7 @@ void RefreshScreen(void)
         }
         if (Display_ShouldRecoverBeforeDraw()) {
             frame_spi_error_start = Display_BeginFrame();
-            OLED_RecoverAndClear();
-            if (DisplayTankOpera_RedrawCurrentPage()) {
+            if (Display_PerformRecovery() && DisplayTankOpera_RedrawCurrentPage()) {
                 Display_FinishFrame(frame_spi_error_start);
             }
         }
@@ -3592,7 +3662,7 @@ void RefreshScreen(void)
         frame_spi_error_start = Display_BeginFrame();
         if (display_screen_off_active) {
             OLED_DisplayOn();
-            display_recover_requested = true;
+            Display_RequestRecovery();
             display_screen_off_active = false;
         }
         SetScreenOffState();

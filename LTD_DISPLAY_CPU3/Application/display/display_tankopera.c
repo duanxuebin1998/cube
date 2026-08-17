@@ -2869,7 +2869,8 @@ static void ifsendcmd(void)
 	}
 
 	if (NowKeyPress == USE_KEY_SURE) {
-		if (timesure > 1) {
+		/* 进入确认页的按键只负责显示页面；页面出现后再确认一次即执行。 */
+		if (timesure != 0) {
 			timesure = 0;
 			timeback = 0;
 			dtm_suretofunc()();

@@ -11,8 +11,17 @@ static uint8_t oled_fill_buf[64]; /* OLED 批量填充和分块清零共用的 6
 
 /* OLED 单次 SPI 传输等待超时 20 ms；超时后返回错误并交由恢复流程处理。 */
 #define OLED_SPI_TIMEOUT_MS 20U
+/* OLED 硬件复位释放后等待 1 ms，再发送初始化命令，匹配屏厂参考时序。 */
+#define OLED_RESET_RELEASE_DELAY_MS 1U
+/* SSD1325 每行包含 64 个显存字节，共 80 行；可见区域使用其中连续 64 行。 */
+#define OLED_RAM_COLUMN_BYTES 64U
+#define OLED_RAM_ROW_COUNT 80U
+#define OLED_RAM_ROW_END 0x4FU
+#define OLED_VISIBLE_ROW_START 0x0CU
+#define OLED_VISIBLE_ROW_END 0x4BU
+#define OLED_VISIBLE_ROW_COUNT 64U
 /* OLED 软件影子缓冲区容量 5120 字节；覆盖控制器完整显示 RAM，用于 CRC 检查和局部更新。 */
-#define OLED_SHADOW_SIZE 5120U
+#define OLED_SHADOW_SIZE (OLED_RAM_COLUMN_BYTES * OLED_RAM_ROW_COUNT)
 /* OLED 影子数据 CRC32 的初始余数 0xFFFFFFFF。 */
 #define OLED_CRC32_INIT 0xFFFFFFFFU
 /* OLED 影子数据 CRC32 使用的反射多项式 0xEDB88320。 */
@@ -21,17 +30,17 @@ static uint8_t oled_fill_buf[64]; /* OLED 批量填充和分块清零共用的 6
 #define OLED_CONTRAST_MAX 0x7FU
 
 static volatile uint32_t oled_spi_error_count = 0U; /* 本次上电以来 OLED SPI HAL 操作失败的累计次数；底层每次非 HAL_OK 结果递增，显示恢复逻辑通过计数变化识别新故障。 */
-static uint8_t oled_shadow_buffer[OLED_SHADOW_SIZE]; /* 覆盖 SSD1322 完整 5120 字节显示 RAM 的软件影子显存；仅在 SPI 数据发送成功后同步更新，用于帧 CRC 和一致性诊断。 */
+static uint8_t oled_shadow_buffer[OLED_SHADOW_SIZE]; /* 覆盖 SSD1325 完整 5120 字节显示 RAM 的软件影子显存；仅在 SPI 数据发送成功后同步更新，用于帧 CRC 和一致性诊断。 */
 static uint32_t oled_shadow_crc = 0U; /* 最近一帧无新增 SPI 错误且完成提交时计算的完整 OLED 影子显存 CRC32，供显示一致性诊断读取。 */
 static uint32_t oled_refresh_seq = 0U; /* 无新增 SPI 错误并完成提交的 OLED 逻辑帧累计序号；每次 OLED_MarkFrameComplete 成功记录一帧时递增。 */
 static uint8_t oled_configured_brightness = OLED_BRIGHTNESS_LEVEL_LOW; /* 当前归一化后的 OLED 亮度档位；取值限制在 OLED_BRIGHTNESS_LEVEL_COUNT 内，并用于重新计算控制器对比度。 */
-static uint8_t oled_configured_contrast = 0x20U; /* 最近一次应用到 SSD1322 的对比度寄存器值；OLED 重新初始化和恢复时复用该值，避免恢复后回到默认亮度。 */
+static uint8_t oled_configured_contrast = 0x20U; /* 最近一次应用到 SSD1325 的对比度寄存器值；OLED 重新初始化和恢复时复用该值，避免恢复后回到默认亮度。 */
 static uint8_t oled_window_col_start = 0U; /* OLED 影子显存当前写窗口的起始列地址，写光标到达行尾后回绕到该列。 */
 static uint8_t oled_window_col_end = 0x3FU; /* OLED 影子显存当前写窗口的结束列地址，写入该列后切换到下一行或窗口起始位置。 */
-static uint8_t oled_window_row_start = 0x0CU; /* OLED 影子显存当前写窗口的起始行地址；SSD1322 可见区从 0x0C 开始，窗口回绕时恢复到该行。 */
-static uint8_t oled_window_row_end = 0x4BU; /* OLED 影子显存当前写窗口的结束行地址，写光标到达该行末尾后回绕到窗口起点。 */
+static uint8_t oled_window_row_start = OLED_VISIBLE_ROW_START; /* OLED 影子显存当前写窗口的起始行地址；SSD1325 可见区从 0x0C 开始，窗口回绕时恢复到该行。 */
+static uint8_t oled_window_row_end = OLED_VISIBLE_ROW_END; /* OLED 影子显存当前写窗口的结束行地址，写光标到达该行末尾后回绕到窗口起点。 */
 static uint8_t oled_cursor_col = 0U; /* 下一字节在 OLED 影子显存中的目标列地址；每次成功同步数据后按当前窗口自动推进。 */
-static uint8_t oled_cursor_row = 0x0CU; /* 下一字节在 OLED 影子显存中的目标行地址；写入前限制在 SSD1322 可见行 0x0C～0x4B 范围内。 */
+static uint8_t oled_cursor_row = OLED_VISIBLE_ROW_START; /* 下一字节在 OLED 影子显存中的目标行地址；硬恢复允许覆盖 SSD1325 完整 0x00～0x4F 行。 */
 
 static HAL_StatusTypeDef WriteCommand(uint8_t Cmd);
 static HAL_StatusTypeDef WriteSingleData(uint8_t Data);
@@ -48,9 +57,11 @@ static uint32_t OLED_CalcCrc32(const uint8_t *data, uint32_t len);
 static void OLED_ShadowSetWindow(uint8_t col_start, uint8_t col_end, uint8_t row_start, uint8_t row_end);
 static void OLED_ShadowWriteByte(uint8_t data);
 static void OLED_ShadowWriteBuffer(const uint8_t *data, uint16_t len);
-static HAL_StatusTypeDef OLED_SetFullWindow(void);
+static HAL_StatusTypeDef OLED_SetVisibleWindow(void);
+static HAL_StatusTypeDef OLED_SetRamWindow(void);
 static HAL_StatusTypeDef OLED_SetWindow(uint8_t col_start, uint8_t col_end, uint8_t row_start, uint8_t row_end);
-static HAL_StatusTypeDef OLED_WriteFillData(uint8_t data);
+static HAL_StatusTypeDef OLED_WriteFillData(uint8_t data, uint32_t row_count);
+static HAL_StatusTypeDef OLED_InitializeAndFill(uint8_t data, uint32_t reset_low_ms);
 static HAL_StatusTypeDef write_4_byte(uint8_t DATA);
 static HAL_StatusTypeDef wirte_1616(uint8_t x, uint8_t y, const uint8_t *buf, uint8_t coder, uint8_t select);
 
@@ -67,9 +78,9 @@ static void OLED_RecordSpiStatus(HAL_StatusTypeDef status)
 }
 
 /**
- * @brief 按顺序向 SSD1322 发送一组初始化或控制命令。
+ * @brief 按顺序向 SSD1325 发送一组初始化或控制命令。
  *
- * @param commands 指向 len 个 SSD1322 初始化或控制命令字节的只读数组；函数按原顺序逐字节切换命令通道并发送。
+ * @param commands 指向 len 个 SSD1325 初始化或控制命令字节的只读数组；函数按原顺序逐字节切换命令通道并发送。
  * @param len 数据长度。该值是本轮 OLED 命令、影子缓冲或 SPI 数据块中的有效字节数，函数只处理前 len 个字节。
  * @return HAL 状态码，用于判断底层外设访问是否成功。
  */
@@ -104,10 +115,10 @@ static uint8_t OLED_NormalizeBrightnessLevel(uint8_t level)
 }
 
 /**
- * @brief 把亮度挡位转换为 SSD1322 对比度寄存器值。
+ * @brief 把亮度挡位转换为 SSD1325 对比度寄存器值。
  *
- * @param level OLED 亮度挡位；函数先钳位到有效范围，再查表得到 SSD1322 对比度寄存器值。
- * @return 返回亮度挡位归一化后在对比度表中对应的 SSD1322 寄存器值。
+ * @param level OLED 亮度挡位；函数先钳位到有效范围，再查表得到 SSD1325 对比度寄存器值。
+ * @return 返回亮度挡位归一化后在对比度表中对应的 SSD1325 寄存器值。
  */
 static uint8_t OLED_BrightnessLevelToContrast(uint8_t level)
 {
@@ -124,7 +135,7 @@ static uint8_t OLED_BrightnessLevelToContrast(uint8_t level)
 
 /**
  * @brief 读取当前配置对应的 OLED 对比度值。
- * @return 返回最近一次由屏幕亮度配置计算并保存的 SSD1322 对比度寄存器值。
+ * @return 返回最近一次由屏幕亮度配置计算并保存的 SSD1325 对比度寄存器值。
  */
 static uint8_t OLED_ConfiguredContrast(void)
 {
@@ -141,10 +152,11 @@ static void OLED_ResetPin(uint32_t delay_ms)
 	HAL_GPIO_WritePin(OLED_NREST_GPIO_Port, OLED_NREST_Pin, GPIO_PIN_RESET);
 	HAL_Delay(delay_ms);
 	HAL_GPIO_WritePin(OLED_NREST_GPIO_Port, OLED_NREST_Pin, GPIO_PIN_SET);
+	HAL_Delay(OLED_RESET_RELEASE_DELAY_MS);
 }
 
 /**
- * @brief 发送 SSD1322 显示开启所需的完整命令序列。
+ * @brief 发送 SSD1325 显示开启所需的完整命令序列。
  * @return HAL 状态码，用于判断底层外设访问是否成功。
  */
 static HAL_StatusTypeDef OLED_WriteDisplayOnCommands(void)
@@ -182,7 +194,7 @@ static HAL_StatusTypeDef OLED_WriteInitCommands(uint8_t contrast)
 	};
 	HAL_StatusTypeDef status;
 
-	status = OLED_SetFullWindow();
+	status = OLED_SetVisibleWindow();
 	if (status != HAL_OK) {
 		return status;
 	}
@@ -284,12 +296,12 @@ static void OLED_ShadowWriteByte(uint8_t data)
 	uint32_t row_index;
 	uint32_t index;
 
-	if ((oled_cursor_row < 0x0CU) || (oled_cursor_row > 0x4BU) || (oled_cursor_col > 0x3FU)) {
+	if ((oled_cursor_row > OLED_RAM_ROW_END) || (oled_cursor_col >= OLED_RAM_COLUMN_BYTES)) {
 		return;
 	}
 
-	row_index = (uint32_t)(oled_cursor_row - 0x0CU);
-	index = (row_index * 64U) + oled_cursor_col;
+	row_index = (uint32_t)oled_cursor_row;
+	index = (row_index * OLED_RAM_COLUMN_BYTES) + oled_cursor_col;
 	if (index < OLED_SHADOW_SIZE) {
 		oled_shadow_buffer[index] = data;
 	}
@@ -416,21 +428,31 @@ static HAL_StatusTypeDef OLED_SetWindow(uint8_t col_start, uint8_t col_end, uint
 }
 
 /**
- * @brief 把 SSD1322 显存写窗口设置为全屏范围。
+ * @brief 把 SSD1325 显存写窗口设置为 128×64 可见区域。
  * @return HAL 状态码，用于判断底层外设访问是否成功。
  */
-static HAL_StatusTypeDef OLED_SetFullWindow(void)
+static HAL_StatusTypeDef OLED_SetVisibleWindow(void)
 {
-	return OLED_SetWindow(0x00, 0x3F, 0x0C, 0x4B);
+	return OLED_SetWindow(0x00, 0x3F, OLED_VISIBLE_ROW_START, OLED_VISIBLE_ROW_END);
+}
+
+/**
+ * @brief 把 SSD1325 显存写窗口设置为完整 128×80 GDDRAM。
+ * @return HAL 状态码，用于判断底层外设访问是否成功。
+ */
+static HAL_StatusTypeDef OLED_SetRamWindow(void)
+{
+	return OLED_SetWindow(0x00, 0x3F, 0x00, OLED_RAM_ROW_END);
 }
 
 /**
  * @brief 向当前 OLED 显存窗口写入重复填充值。
  *
- * @param data 数据缓冲区。
+ * @param data 写入每个显存字节的重复填充值。
+ * @param row_count 需要连续填充的显存行数；每行固定写入 OLED_RAM_COLUMN_BYTES 字节。
  * @return HAL 状态码，用于判断底层外设访问是否成功。
  */
-static HAL_StatusTypeDef OLED_WriteFillData(uint8_t data)
+static HAL_StatusTypeDef OLED_WriteFillData(uint8_t data, uint32_t row_count)
 {
 	HAL_StatusTypeDef status;
 	uint32_t j;
@@ -440,7 +462,7 @@ static HAL_StatusTypeDef OLED_WriteFillData(uint8_t data)
 		oled_fill_buf[i] = data;
 	}
 
-	for (j = 0; j < 80; j++) {
+	for (j = 0; j < row_count; j++) {
 		status = WriteDataBuffer(oled_fill_buf, (uint16_t)sizeof(oled_fill_buf));
 		if (status != HAL_OK) {
 			return status;
@@ -453,12 +475,15 @@ static HAL_StatusTypeDef OLED_WriteFillData(uint8_t data)
 /**
  * @brief 清空 OLED 显存并复位软件绘制缓存。
  */
-void OLED_Clear(void)
+HAL_StatusTypeDef OLED_Clear(void)
 {
-	if (OLED_SetFullWindow() != HAL_OK) {
-		return;
+	HAL_StatusTypeDef status;
+
+	status = OLED_SetVisibleWindow();
+	if (status != HAL_OK) {
+		return status;
 	}
-	OLED_WriteFillData(0x00);
+	return OLED_WriteFillData(0x00, OLED_VISIBLE_ROW_COUNT);
 }
 
 /**
@@ -515,7 +540,7 @@ void OLED_ClearArea(uint8_t x, uint8_t y, uint8_t width_cols, uint8_t height_row
 }
 
 /**
- * @brief 发送 SSD1322 显示开启命令。
+ * @brief 发送 SSD1325 显示开启命令。
  */
 void OLED_DisplayOn(void)
 {
@@ -523,7 +548,7 @@ void OLED_DisplayOn(void)
 }
 
 /**
- * @brief 发送 SSD1322 显示关闭命令。
+ * @brief 发送 SSD1325 显示关闭命令。
  */
 void OLED_DisplayOff(void)
 {
@@ -531,7 +556,7 @@ void OLED_DisplayOff(void)
 }
 
 /**
- * @brief 向 SSD1322 写入对比度命令和参数。
+ * @brief 向 SSD1325 写入对比度命令和参数。
  *
  * @param contrast 对比度。
  * @return HAL 状态码，用于判断底层外设访问是否成功。
@@ -552,7 +577,7 @@ static HAL_StatusTypeDef OLED_WriteContrastCommand(uint8_t contrast)
 }
 
 /**
- * @brief 设置 SSD1322 对比度寄存器。
+ * @brief 设置 SSD1325 对比度寄存器。
  *
  * @param contrast 对比度。
  */
@@ -569,7 +594,7 @@ void OLED_SetContrast(uint8_t contrast)
 /**
  * @brief 按亮度挡位更新 OLED 对比度并保存运行值。
  *
- * @param level 准备应用的 OLED 亮度挡位；越界值先钳位，随后写入 SSD1322 对比度寄存器并更新运行时亮度缓存。
+ * @param level 准备应用的 OLED 亮度挡位；越界值先钳位，随后写入 SSD1325 对比度寄存器并更新运行时亮度缓存。
  */
 void OLED_SetBrightnessLevel(uint8_t level)
 {
@@ -580,9 +605,9 @@ void OLED_SetBrightnessLevel(uint8_t level)
 /**
  * @brief 复位 OLED 通信和显示状态后清屏恢复。
  */
-void OLED_RecoverAndClear(void)
+HAL_StatusTypeDef OLED_RecoverAndClear(void)
 {
-	all_screen(0x00);
+	return all_screen(0x00);
 }
 /**
  * @brief 写字符最初级。
@@ -686,16 +711,8 @@ void write_hanzi16(u8 x, u8 y, const u8 *buf, u8 m, u8 endm, u8 select) {
  *
  * @param m 写入 OLED 整块显存的填充值；0x00 清空像素，其他值按位形成全屏填充图案。
  */
-void all_screen(uint8_t m) {
-	OLED_ResetPin(10U);
-	if (OLED_WriteInitCommands(OLED_ConfiguredContrast()) != HAL_OK) {
-		return;
-	}
-	if (OLED_WriteFillData(m) != HAL_OK) {
-		return;
-	}
-	(void)OLED_WriteDisplayOnCommands();
-
+HAL_StatusTypeDef all_screen(uint8_t m) {
+	return OLED_InitializeAndFill(m, 10U);
 }
 /* / * 清屏 * / */
 /* void all_screen(uint8_t m) */
@@ -754,13 +771,38 @@ void write_816(u8 x, u8 y, const u8 *buf, u8 coder, u8 en) {
  * @brief 硬件复位 OLED，写入控制器初始化命令，清空显存并开启显示。
  */
 void OLED_Init(void) {
-	OLED_ResetPin(200U);
-	if (OLED_WriteInitCommands(OLED_ConfiguredContrast()) != HAL_OK) {
-		return;
+	(void)OLED_InitializeAndFill(0x00, 200U);
+
+}
+
+/**
+ * @brief 硬件复位并初始化 OLED，清空完整 128×80 GDDRAM 后恢复可见区窗口并开屏。
+ *
+ * @param data 写入完整 OLED GDDRAM 的重复填充值。
+ * @param reset_low_ms NREST 保持低电平的时间，单位 ms。
+ * @return HAL_OK 表示复位后的初始化、整块显存填充、可见窗口恢复和开屏命令均发送成功；否则返回首个底层错误。
+ */
+static HAL_StatusTypeDef OLED_InitializeAndFill(uint8_t data, uint32_t reset_low_ms)
+{
+	HAL_StatusTypeDef status;
+
+	OLED_ResetPin(reset_low_ms);
+	status = OLED_WriteInitCommands(OLED_ConfiguredContrast());
+	if (status != HAL_OK) {
+		return status;
 	}
-	if (OLED_WriteFillData(0x00) != HAL_OK) {
-		return;
+	status = OLED_SetRamWindow();
+	if (status != HAL_OK) {
+		return status;
 	}
-	(void)OLED_WriteDisplayOnCommands();
+	status = OLED_WriteFillData(data, OLED_RAM_ROW_COUNT);
+	if (status != HAL_OK) {
+		return status;
+	}
+	status = OLED_SetVisibleWindow();
+	if (status != HAL_OK) {
+		return status;
+	}
+	return OLED_WriteDisplayOnCommands();
 
 }

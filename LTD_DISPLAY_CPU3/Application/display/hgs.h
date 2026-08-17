@@ -14,8 +14,9 @@
 void OLED_Init(void);
 /**
  * @brief 清空 OLED 显存并复位软件绘制缓存。
+ * @return HAL_OK 表示可见区窗口和清零数据发送成功；否则返回首个底层错误。
  */
-void OLED_Clear(void);
+HAL_StatusTypeDef OLED_Clear(void);
 /**
  * @brief 校验逻辑坐标后清空指定 OLED 矩形区域。
  *
@@ -26,15 +27,15 @@ void OLED_Clear(void);
  */
 void OLED_ClearArea(uint8_t x, uint8_t y, uint8_t width_cols, uint8_t height_rows);
 /**
- * @brief 发送 SSD1322 显示开启命令。
+ * @brief 发送 SSD1325 显示开启命令。
  */
 void OLED_DisplayOn(void);
 /**
- * @brief 发送 SSD1322 显示关闭命令。
+ * @brief 发送 SSD1325 显示关闭命令。
  */
 void OLED_DisplayOff(void);
 /**
- * @brief 设置 SSD1322 对比度寄存器。
+ * @brief 设置 SSD1325 对比度寄存器。
  *
  * @param contrast 对比度。
  */
@@ -42,13 +43,14 @@ void OLED_SetContrast(uint8_t contrast);
 /**
  * @brief 按亮度挡位更新 OLED 对比度并保存运行值。
  *
- * @param level 待判断或显示的级别值。该值是 OLED 亮度档位，函数先限制到支持范围，再映射为 SSD1305 对比度寄存器值。
+ * @param level 待判断或显示的级别值。该值是 OLED 亮度档位，函数先限制到支持范围，再映射为 SSD1325 对比度寄存器值。
  */
 void OLED_SetBrightnessLevel(uint8_t level);
 /**
  * @brief 复位 OLED 通信和显示状态后清屏恢复。
+ * @return HAL_OK 表示硬复位后的初始化、整块显存清零和开屏命令全部发送成功；否则返回首个底层错误。
  */
-void OLED_RecoverAndClear(void);
+HAL_StatusTypeDef OLED_RecoverAndClear(void);
 /**
  * @brief 记录一帧 OLED 刷新已完成并推进帧代际。
  */
@@ -72,8 +74,9 @@ uint32_t OLED_GetRefreshSeq(void);
  * @brief 重新初始化 OLED 地址窗口，并用指定字节填充整块显存后开启显示。
  *
  * @param m 写入 OLED 整块显存的填充值；0x00 清空像素，其他值按位形成全屏填充图案。
+ * @return HAL_OK 表示硬恢复和完整 GDDRAM 填充成功；否则返回首个底层错误。
  */
-void all_screen(uint8_t m);
+HAL_StatusTypeDef all_screen(uint8_t m);
 /**
  * @brief 写入汉字最上级。
  *
