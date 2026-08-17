@@ -11,6 +11,7 @@
  *
  * 全工程必须保持一致的单位：
  *  - speed_x100：0.01m/min，100 表示 1.00m/min
+ *  - fine_speed_m_min：液位近界面专用浮点速度，单位 m/min
  *  - cable_length / sensor_position / motor_distance：0.1mm
  *  - first_loop_circumference_mm：0.1mm
  *  - motor_count_first_loop_circumference_mm：0.001mm
@@ -340,6 +341,15 @@ uint32_t MotorCtrl_MoveDown(uint32_t speed_x100);
  * @return PARAM_RANGE_ERROR 表示参数超出允许范围；NO_ERROR 表示操作成功。
  */
 uint32_t MotorCtrl_StartVelocity(int dir, uint32_t speed_x100);
+
+/**
+ * @brief 以低于常规0.01m/min分辨率的速度启动液位近界面连续运动。
+ *
+ * @param dir 运动方向，必须为 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN。
+ * @param speed_m_min 精细线速度，单位 m/min，必须大于0且不超过常规最大速度。
+ * @return NO_ERROR表示启动成功，其他值为参数、驱动或通信错误。
+ */
+uint32_t MotorCtrl_StartFineVelocity(int dir, float speed_m_min);
 
 /**
  * @brief 按指定距离和方向下发非阻塞电机运动命令。

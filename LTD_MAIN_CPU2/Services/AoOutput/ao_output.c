@@ -118,8 +118,8 @@ static AD5421DiagnosticSnapshot ao_output_diag_pending_recover_snapshot = {0U};
 /**
  * @brief 执行AO固定优先级状态机并刷新AD5421。
  *
- * 函数在 AO 子系统尚未初始化时无操作返回；初始化后先取得一致的配置快照、处理配置切换，并按禁用或固定或上电初始来源计算经电流修正后的 AD5421 初始化目标。
- * 驱动未就绪时根据 allow_driver_init 决定是否执行初始化；随后限频读取诊断。非过温故障可按恢复间隔对最近成功目标执行一次 AD5421
+ * 函数在 AO 子系统尚未初始化时无操作返回；初始化后先取得一致的配置快照并处理配置切换。禁用态只发布软件运行状态并立即返回，不初始化、诊断或写入 AD5421。
+ * 启用态按固定或上电初始来源计算经电流修正后的 AD5421 初始化目标；驱动未就绪时根据 allow_driver_init 决定是否执行初始化，随后限频读取诊断。非过温故障可按恢复间隔对最近成功目标执行一次 AD5421
  * 恢复，过温告警或关断只等待温度恢复，不周期复位器件。
  * 本轮基础目标严格按禁用、整机故障、仿真、固定电流、有效过程量的优先级选择；过程样本无效时优先保持最近一次已经成功写入的过程目标，没有历史值才回退到上电电流。
  * 目标选择阶段只产生未经修正的基础电流，随后统一执行一次零点或增益修正并钳位到硬件范围；只有变化量或刷新周期要求写入时才访问 AD5421。
@@ -946,6 +946,61 @@ static void AoOutput_ResetRecoverState(void)
 }
 
 /**
+ * @brief 进入AO禁用态并停止所有AD5421后台访问。
+ *
+ * @details 调用场景：上电配置为禁用，或运行中从输出模式切换为禁用。
+ * @note 关键约束：只清理AO软件状态并发布禁用运行态，不初始化、诊断或写入AD5421。
+ *
+ * @param now 本次禁用状态发布使用的系统节拍，单位ms。
+ * @param target_mA_x1000 禁用运行态保留的名义目标电流，单位0.001mA；该值不代表已写入芯片。
+ */
+static void AoOutput_EnterDisabledState(uint32_t now, uint32_t target_mA_x1000)
+{
+    AoOutputRuntime next;
+    uint32_t primask;
+
+    ao_output_driver_ready = 0U;
+    ao_output_driver_retry_valid = 0U;
+    ao_output_last_driver_retry_tick = 0U;
+    ao_output_diag_valid = 0U;
+    ao_output_last_diag_tick = 0U;
+    ao_output_last_diag_error = NO_ERROR;
+    ao_output_write_attempt_valid = 0U;
+    ao_output_last_write_attempt_tick = 0U;
+    ao_output_last_write_attempt_mA_x1000 = 0U;
+    ao_simulation_enabled = 0U;
+    AoOutput_ResetRecoverState();
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    ao_output_diag_error_pending = 0U;
+    ao_output_diag_recover_pending = 0U;
+    ao_output_diag_fault_active = 0U;
+    ao_output_diag_active_error_code = NO_ERROR;
+    ao_output_diag_pending_error_code = NO_ERROR;
+    ao_output_diag_pending_recover_code = NO_ERROR;
+    __set_PRIMASK(primask);
+
+    AoOutput_GetRuntimeSnapshot(&next);
+    next.target_mA_x1000 = target_mA_x1000;
+    next.last_sent_mA_x1000 = 0U;
+    next.source = AO_OUTPUT_SOURCE_DISABLED;
+    next.driver_fault_flags = 0U;
+    next.driver_fault_register = 0U;
+    next.last_error_code = NO_ERROR;
+    next.last_update_tick = now;
+    next.last_sent_tick = 0U;
+    next.process_value_01mm = 0;
+    next.percent_x100 = 0;
+    next.process_valid = 0U;
+    next.simulation_enabled = 0U;
+    next.dac_readback_mA_x100 = 0U;
+    next.dac_readback_valid = 0U;
+    next.update_counter++;
+    AoOutput_CommitRuntime(&next);
+}
+
+/**
  * @brief 判断当前是否允许执行一次AD5421恢复序列。
  *
  * @param now 本次判断使用的当前系统节拍，单位 ms；调用方在同一轮处理内复用该快照，避免多次取时造成边界漂移。
@@ -1150,9 +1205,9 @@ static uint8_t AoOutput_ShouldWriteCurrent(uint32_t now, uint32_t target_mA_x100
 }
 
 /**
- * @brief 初始化AO并按当前配置写入禁用、固定或初始电流。
+ * @brief 初始化AO；禁用态仅发布软件状态，启用态才初始化AD5421并写入固定或初始电流。
  *
- * @return NO_ERROR 表示 AO 已按禁用、固定或上电电流配置完成初始化；配置校验失败返回缓存的参数错误，AD5421 启动、写电流或诊断失败返回对应驱动错误。
+ * @return NO_ERROR 表示禁用态已发布或启用态AO已完成初始化；配置校验失败返回缓存的参数错误，AD5421启动、写电流或诊断失败返回对应驱动错误。
  */
 uint32_t AoOutput_Init(void)
 {
@@ -1192,6 +1247,12 @@ uint32_t AoOutput_Init(void)
     initial_target_mA_x1000 = AoOutput_ApplyCurrentCorrection(&config,
                                                              initial_source,
                                                              initial_base_mA_x100);
+    if (config.work_mode == AO_WORK_MODE_DISABLED) {
+        /* 电流环可能开路且AD5421无有效应答，禁用态不得触发任何芯片访问。 */
+        AoOutput_EnterDisabledState(now, initial_target_mA_x1000);
+        AoOutput_LeaveUpdate();
+        return NO_ERROR;
+    }
     next.target_mA_x1000 = initial_target_mA_x1000;
     next.last_sent_mA_x1000 = 0U;
     next.source = (uint32_t)initial_source;
@@ -1224,8 +1285,8 @@ uint32_t AoOutput_Init(void)
 /**
  * @brief 执行AO固定优先级状态机并刷新AD5421。
  *
- * 函数在 AO 子系统尚未初始化时无操作返回；初始化后先取得一致的配置快照、处理配置切换，并按禁用或固定或上电初始来源计算经电流修正后的 AD5421 初始化目标。
- * 驱动未就绪时根据 allow_driver_init 决定是否执行初始化；随后限频读取诊断。非过温故障可按恢复间隔对最近成功目标执行一次 AD5421
+ * 函数在 AO 子系统尚未初始化时无操作返回；初始化后先取得一致的配置快照并处理配置切换。禁用态只发布软件运行状态并立即返回，不初始化、诊断或写入 AD5421。
+ * 启用态按固定或上电初始来源计算经电流修正后的 AD5421 初始化目标；驱动未就绪时根据 allow_driver_init 决定是否执行初始化，随后限频读取诊断。非过温故障可按恢复间隔对最近成功目标执行一次 AD5421
  * 恢复，过温告警或关断只等待温度恢复，不周期复位器件。
  * 本轮基础目标严格按禁用、整机故障、仿真、固定电流、有效过程量的优先级选择；过程样本无效时优先保持最近一次已经成功写入的过程目标，没有历史值才回退到上电电流。
  * 目标选择阶段只产生未经修正的基础电流，随后统一执行一次零点或增益修正并钳位到硬件范围；只有变化量或刷新周期要求写入时才访问 AD5421。
@@ -1268,6 +1329,11 @@ static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init)
             ((config.current_mode == AO_CURRENT_MODE_FIXED) ?
              AO_OUTPUT_SOURCE_FIXED : AO_OUTPUT_SOURCE_INITIAL),
             initial_base_mA_x100);
+    if (config.work_mode == AO_WORK_MODE_DISABLED) {
+        /* 禁用态只发布软件运行状态，不初始化、诊断或写入AD5421。 */
+        AoOutput_EnterDisabledState(now, initial_target_mA_x1000);
+        return NO_ERROR;
+    }
     ret = AoOutput_EnsureDriverReady(now, allow_driver_init, initial_target_mA_x1000);
     if (ret != NO_ERROR) {
         return AoOutput_RecordRuntimeDriverError(&config,

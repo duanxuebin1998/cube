@@ -171,6 +171,8 @@ static double MotorMotion_TmcVelocityToUstepsPerSec(uint32_t vmax);
 static double MotorMotion_TmcAccelerationToUstepsPerSec2(uint32_t accel);
 static uint32_t MotorMotion_CalcVelocityFromSpeedX100(uint32_t speed_x100,
                                                        float current_mm);
+static uint32_t MotorMotion_CalcVelocityFromSpeedMMin(float speed_m_min,
+                                                       float current_mm);
 static uint32_t MotorMotion_ClampVelocityDouble(double vmax);
 
 /**
@@ -643,6 +645,48 @@ uint32_t MotorCtrl_StartVelocity(int dir, uint32_t speed_x100)
 
     ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
     CHECK_ERROR(ret);
+
+    ret = MotorMotion_StartJogVelocity(dir);
+    CHECK_ERROR(ret);
+
+    MotorMotion_SetActiveState(MotorMotion_DisplayStateFromDirection(dir), false);
+    return NO_ERROR;
+}
+
+/**
+ * @brief 以低于常规速度参数分辨率的线速度启动液位近界面连续运动。
+ *
+ * @param dir 运动方向，必须为 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN。
+ * @param speed_m_min 精细线速度，单位 m/min，必须大于0且不超过设备最大线速度。
+ * @return NO_ERROR表示启动成功，其他值为参数、驱动就绪、健康或通信错误。
+ */
+uint32_t MotorCtrl_StartFineVelocity(int dir, float speed_m_min)
+{
+    uint32_t ret;
+    float current_mm;
+
+    CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
+
+    if ((!MotorDriver_IsDirValid(dir)) ||
+        (!(speed_m_min > 0.0f)) ||
+        (speed_m_min > ((float)MOTOR_LINEAR_SPEED_MAX_X100 / 100.0f))) {
+        return PARAM_RANGE_ERROR;
+    }
+
+    ret = MotorDriver_CheckMotionReady();
+    CHECK_ERROR(ret);
+
+    ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_BEFORE_MOTION);
+    CHECK_ERROR(ret);
+
+    ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+    CHECK_ERROR(ret);
+
+    current_mm = (float)g_measurement.debug_data.cable_length * 0.1f;
+    velocity = MotorMotion_CalcVelocityFromSpeedMMin(speed_m_min, current_mm);
+    if (velocity == 0U) {
+        return PARAM_CONFIG_MISSING;
+    }
 
     ret = MotorMotion_StartJogVelocity(dir);
     CHECK_ERROR(ret);
@@ -2288,6 +2332,33 @@ static uint32_t MotorMotion_CalcVelocityFromSpeedX100(uint32_t speed_x100,
     }
 
     usteps_per_s = ((double)speed_x100 * ticks_per_rev) / (6.0 * circumference_mm);
+    vmax = usteps_per_s * 16777216.0 / TMC5130_FCLK_HZ;
+    return MotorMotion_ClampVelocityDouble(vmax);
+}
+
+/**
+ * @brief 按浮点线速度和当前位置计算TMC5130 VMAX。
+ *
+ * @param speed_m_min 精细线速度，单位 m/min。
+ * @param current_mm 当前尺带长度，单位 mm。
+ * @return 返回按当前卷筒周长换算并限制后的VMAX；参数无效时返回0。
+ */
+static uint32_t MotorMotion_CalcVelocityFromSpeedMMin(float speed_m_min,
+                                                      float current_mm)
+{
+    const double circumference_mm = MotorPosition_TapeInstantCircumferenceFromLength((double)current_mm);
+    const double ticks_per_rev = (double)MotorPosition_TapeTicksPerRev();
+    double usteps_per_s;
+    double vmax;
+
+    if ((speed_m_min <= 0.0f) ||
+        (circumference_mm <= 1e-6) ||
+        (ticks_per_rev <= 1e-6)) {
+        return 0U;
+    }
+
+    usteps_per_s = ((double)speed_m_min * 1000.0 / 60.0) *
+                   ticks_per_rev / circumference_mm;
     vmax = usteps_per_s * 16777216.0 / TMC5130_FCLK_HZ;
     return MotorMotion_ClampVelocityDouble(vmax);
 }

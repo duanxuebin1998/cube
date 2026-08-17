@@ -85,6 +85,12 @@ static uint32_t OilLevel_CheckPositionLimit(int32_t oil_level);
 #define FREQUENCY_LEVEL_RUN_SEARCH              0U /* 频率法液位控制参数：运行 搜索。 */
 #define FREQUENCY_LEVEL_RUN_FOLLOW              1U /* 频率法液位控制参数：运行 跟随。 */
 #define FREQUENCY_LEVEL_MIN_SPEED_X100          10U /* 频率法液位控制参数：最小值 SPEED 放大 100 倍。 */
+#define FREQUENCY_LEVEL_FINE_MIN_SPEED_M_MIN    0.0007f /* 方法5目标死区边缘的最小精细速度，单位 m/min。 */
+#define FREQUENCY_LEVEL_FINE_MAX_SPEED_M_MIN    0.1000f /* 方法5首次换向后的精细调速上限，单位 m/min。 */
+#define FREQUENCY_LEVEL_FINE_FULL_SPEED_ERROR_HZ 450.0f /* 超出死区该频差后使用0.10m/min，区间内按二次曲线降速。 */
+#define FREQUENCY_LEVEL_FINE_LOST_STEP_MIN_SPEED_M_MIN 0.0300f /* 低于该速度时现有0.5mm/s丢步阈值不再适用。 */
+#define FREQUENCY_LEVEL_FINE_SPEED_EPS_M_MIN    0.0000005f /* 精细速度重复下发判定精度，单位 m/min。 */
+#define FREQUENCY_LEVEL_FEEDBACK_WINDOW_S       4.0f /* 采样周期与传感器迟滞合计的保守反馈窗口，单位 s。 */
 #define FREQUENCY_LEVEL_STABLE_COUNT            3U /* 频率法液位控制参数：稳定 数量。 */
 #define FREQUENCY_LEVEL_SAMPLE_DELAY_MS         200U /* 频率法液位控制参数：SAMPLE 延时 毫秒。 */
 #define FREQUENCY_LEVEL_SEARCH_TIMEOUT_MS       600000U /* 频率法液位控制参数：搜索 超时 毫秒。 */
@@ -115,14 +121,19 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
                                                        uint32_t target_frequency_hz,
                                                        float deadband_override_hz,
                                                        uint8_t fixed_target_mode);
-static uint32_t FrequencyLevel_CheckMotionGuards(int dir);
-static uint32_t FrequencyLevel_ReadCurrentWithGuards(int active_dir);
+static uint32_t FrequencyLevel_CheckMotionGuards(int dir, uint8_t check_lost_step);
+static uint32_t FrequencyLevel_ReadCurrentWithGuards(int active_dir, uint8_t check_lost_step);
 static uint32_t FrequencyLevel_HandleLowLimit(uint32_t follow_mode,
                                               int *active_dir,
                                               uint32_t *active_speed_x100,
                                               uint32_t *stable_count,
                                               float deadband);
 static uint32_t FrequencyLevel_ComputeSpeedX100(float frequency_error, float deadband, uint32_t max_speed_x100);
+static float FrequencyLevel_ComputeFineSpeedMMin(float frequency_error, float deadband);
+static uint32_t FrequencyLevel_StartOrUpdateFineMotion(int dir,
+                                                           float speed_m_min,
+                                                           int *active_dir,
+                                                           float *active_speed_m_min);
 static float FrequencyLevel_GetDeadband(uint32_t raw_threshold);
 static uint32_t FrequencyLevel_GetCompatThresholdHz(uint32_t raw_threshold);
 static uint8_t FrequencyLevel_IsStableInsideBand(float frequency_error, float deadband);
@@ -1005,6 +1016,96 @@ static uint32_t FrequencyLevel_ComputeSpeedX100(float frequency_error, float dea
 }
 
 /**
+ * @brief 根据频差计算方法5首次换向后的精细连续速度。
+ *
+ * @param frequency_error 当前频率减目标频率的有符号偏差，单位 Hz。
+ * @param deadband 停机死区半宽，单位 Hz。
+ * @return 死区内返回0，死区外返回按频差比例计算并限制后的速度，单位 m/min。
+ */
+static float FrequencyLevel_ComputeFineSpeedMMin(float frequency_error, float deadband)
+{
+    float abs_error = fabsf(frequency_error);
+    float error_ratio;
+    float speed_m_min;
+
+    if (abs_error <= deadband) {
+        return 0.0f;
+    }
+
+    error_ratio = (abs_error - deadband) / FREQUENCY_LEVEL_FINE_FULL_SPEED_ERROR_HZ;
+    if (error_ratio > 1.0f) {
+        error_ratio = 1.0f;
+    }
+    speed_m_min = FREQUENCY_LEVEL_FINE_MIN_SPEED_M_MIN +
+                  (FREQUENCY_LEVEL_FINE_MAX_SPEED_M_MIN -
+                   FREQUENCY_LEVEL_FINE_MIN_SPEED_M_MIN) *
+                  error_ratio * error_ratio;
+    if (speed_m_min < FREQUENCY_LEVEL_FINE_MIN_SPEED_M_MIN) {
+        speed_m_min = FREQUENCY_LEVEL_FINE_MIN_SPEED_M_MIN;
+    }
+    if (speed_m_min > FREQUENCY_LEVEL_FINE_MAX_SPEED_M_MIN) {
+        speed_m_min = FREQUENCY_LEVEL_FINE_MAX_SPEED_M_MIN;
+    }
+    return speed_m_min;
+}
+
+/**
+ * @brief 启动或更新方法5的精细连续速度，换向前先慢停。
+ *
+ * @param dir 本轮运动方向。
+ * @param speed_m_min 本轮精细速度，单位 m/min；0表示停止。
+ * @param active_dir 当前实际运动方向输出。
+ * @param active_speed_m_min 当前实际精细速度输出，单位 m/min。
+ * @return NO_ERROR表示命令执行成功，其他值为停机或电机控制错误。
+ */
+static uint32_t FrequencyLevel_StartOrUpdateFineMotion(int dir,
+                                                       float speed_m_min,
+                                                       int *active_dir,
+                                                       float *active_speed_m_min)
+{
+    uint32_t ret;
+
+    if ((active_dir == NULL) || (active_speed_m_min == NULL)) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
+
+    if (speed_m_min <= 0.0f) {
+        if (*active_dir != DENSITY_LEVEL_DIR_NONE) {
+            ret = MotorCtrl_SlowStop();
+            if (ret != NO_ERROR) {
+                return ret;
+            }
+        }
+        *active_dir = DENSITY_LEVEL_DIR_NONE;
+        *active_speed_m_min = 0.0f;
+        return NO_ERROR;
+    }
+
+    if ((*active_dir != DENSITY_LEVEL_DIR_NONE) && (*active_dir != dir)) {
+        ret = MotorCtrl_SlowStop();
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+        *active_dir = DENSITY_LEVEL_DIR_NONE;
+        *active_speed_m_min = 0.0f;
+    }
+
+    if ((*active_dir == dir) &&
+        (fabsf(speed_m_min - *active_speed_m_min) < FREQUENCY_LEVEL_FINE_SPEED_EPS_M_MIN)) {
+        return NO_ERROR;
+    }
+
+    ret = MotorCtrl_StartFineVelocity(dir, speed_m_min);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    *active_dir = dir;
+    *active_speed_m_min = speed_m_min;
+    return NO_ERROR;
+}
+
+/**
  * @brief 判断频率是否已进入稳定区，相对频率法额外避开空气/油中端点。
  *
  * @param frequency_error 频率故障。
@@ -1100,10 +1201,11 @@ static uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode)
  * @brief 在频率闭环运动期间检查位置、称重碰撞和丢步。
  *
  * @param dir 当前已执行或即将执行的运动方向；无方向时只刷新位置。
+ * @param check_lost_step 非0表示执行常规丢步检测；精细速度低于0.03m/min时传0。
  * @return NO_ERROR 表示可继续；其他值为位置、称重通信/碰撞或丢步错误。
  * @note 位置边界只阻止继续向外越界，不阻止从罐顶或盲区向安全区退回。
  */
-static uint32_t FrequencyLevel_CheckMotionGuards(int dir)
+static uint32_t FrequencyLevel_CheckMotionGuards(int dir, uint8_t check_lost_step)
 {
     uint32_t ret = MotorCtrl_PollRuntimePosition();
     int64_t zero_weight_limit;
@@ -1144,22 +1246,25 @@ static uint32_t FrequencyLevel_CheckMotionGuards(int dir)
     }
 
     ret = CheckWeightCollision();
-    return (ret != NO_ERROR) ?
-           ret : MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.sensor_position);
+    if ((ret != NO_ERROR) || (check_lost_step == 0U)) {
+        return ret;
+    }
+    return MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.sensor_position);
 }
 
 /**
  * @brief 在运动保护通过后读取一次液位频率。
  *
  * @param active_dir 当前实际运动方向。
+ * @param check_lost_step 非0表示本轮执行常规丢步检测。
  * @return NO_ERROR 表示保护和频率读取均成功；其他值为安全保护或传感器错误。
  */
-static uint32_t FrequencyLevel_ReadCurrentWithGuards(int active_dir)
+static uint32_t FrequencyLevel_ReadCurrentWithGuards(int active_dir, uint8_t check_lost_step)
 {
     uint32_t ret = NO_ERROR;
 
     if (active_dir != DENSITY_LEVEL_DIR_NONE) {
-        ret = FrequencyLevel_CheckMotionGuards(active_dir);
+        ret = FrequencyLevel_CheckMotionGuards(active_dir, check_lost_step);
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -1229,7 +1334,7 @@ static uint32_t FrequencyLevel_HandleLowLimit(uint32_t follow_mode,
  * oilLevelThreshold，生产跟随使用 oilLevelHysteresisThreshold，LF 调试可通过 deadband_override_hz 只覆盖本次查找死区。
  * 每轮从传感器读取当前液位频率，以当前频率减目标频率的偏差决定下行、上行或停止；连续相对频率法在空气端或油端附近会修正方向，避免把端点误判为最终死区。
  * 频率满足死区及端点一致性条件时停止速度运动并累计稳定样本，达到门限后记录当前液位、同步密度分布液位及 AO 过程样本；查找模式随后返回，跟随模式继续监测。
- * 离开稳定区后按频率偏差计算并钳位 0.01 m/min 速度；首次查找到达盲区立即停止并返回低液位，持续跟随在盲区停机等待，只有频率要求上行时才撤回安全区，同时持续检查位置上限、扭力碰撞和丢步。
+ * 离开稳定区后按频率偏差调速；固定目标首次换向前沿用常规速度，换向后在0.0007~0.10m/min之间按频差二次降速。首次查找到达盲区立即停止并返回低液位，持续跟随在盲区停机等待，只有频率要求上行时才撤回安全区，同时持续检查位置上限、扭力碰撞和适用速度范围内的丢步。
  * 查找模式受 FREQUENCY_LEVEL_SEARCH_TIMEOUT_MS 限制，跟随模式持续运行直至命令切换或故障。所有异常出口都使 AO 过程样本失效并尝试慢停电机。
  *
  * @param follow_mode 0 表示执行一次频率液位查找并在稳定后返回；非 0 表示使用跟随滞回死区持续闭环，直至命令切换或故障。
@@ -1250,6 +1355,10 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
     uint32_t stable_count = 0U;
     int active_dir = DENSITY_LEVEL_DIR_NONE;
     uint32_t active_speed_x100 = 0U;
+    float active_fine_speed_m_min = 0.0f;
+    uint8_t fine_motion_active = 0U;
+    int initial_dir = DENSITY_LEVEL_DIR_NONE;
+    uint8_t slow_speed_latched = (follow_mode != 0U) ? 1U : 0U;
     float deadband;
     float follow_deadband;
     uint32_t method = (fixed_target_mode != 0U) ?
@@ -1304,7 +1413,11 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
         }
 
         if (fixed_target_mode != 0U) {
-            ret = FrequencyLevel_ReadCurrentWithGuards(active_dir);
+            ret = FrequencyLevel_ReadCurrentWithGuards(
+                    active_dir,
+                    ((fine_motion_active == 0U) ||
+                     (active_fine_speed_m_min >= FREQUENCY_LEVEL_FINE_LOST_STEP_MIN_SPEED_M_MIN)) ?
+                    1U : 0U);
             if (ret == MEASUREMENT_OILLEVEL_LOW) {
                 ret = FrequencyLevel_HandleLowLimit(follow_mode,
                                                     &active_dir,
@@ -1345,7 +1458,11 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
         }
 
         if (fixed_target_mode != 0U) {
-            ret = FrequencyLevel_CheckMotionGuards(dir);
+            ret = FrequencyLevel_CheckMotionGuards(
+                    dir,
+                    ((fine_motion_active == 0U) ||
+                     (active_fine_speed_m_min >= FREQUENCY_LEVEL_FINE_LOST_STEP_MIN_SPEED_M_MIN)) ?
+                    1U : 0U);
             if (ret == MEASUREMENT_OILLEVEL_LOW) {
                 ret = FrequencyLevel_HandleLowLimit(follow_mode,
                                                     &active_dir,
@@ -1368,6 +1485,8 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
             if (ret != NO_ERROR) {
                 return FrequencyLevel_StopAndReturn(ret, "停止确认失败");
             }
+            fine_motion_active = 0U;
+            active_fine_speed_m_min = 0.0f;
             stable_count++;
             printf("频率找液位\t进入死区\t稳定计数=%lu/%lu\r\n",
                    (unsigned long)stable_count,
@@ -1389,21 +1508,57 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
         stable_count = 0U;
         g_measurement.oil_measurement.probe_at_liquid_level = 0U;
         g_measurement.oil_measurement.liquid_stable = 0U;
-        speed_x100 = FrequencyLevel_ComputeSpeedX100(frequency_error, deadband, MotorCtrl_GetDefaultSpeedX100());
-        if (speed_x100 == 0U) {
-            speed_x100 = FREQUENCY_LEVEL_MIN_SPEED_X100;
+        /* 固定频率搜索首次跨越目标后进入精细比例调速；换向后速度仍随频差减小。 */
+        if (fixed_target_mode != 0U) {
+            if (initial_dir == DENSITY_LEVEL_DIR_NONE) {
+                initial_dir = dir;
+            } else if (dir != initial_dir) {
+                slow_speed_latched = 1U;
+            }
         }
-        printf("频率找液位\t速度闭环\t方向=%s\t速度=%.2f m/min\r\n",
-               MotorCtrl_DirectionText(dir),
-               (double)speed_x100 / 100.0);
 
-        ret = LevelVelocity_StartOrUpdateMotion(dir, speed_x100, &active_dir, &active_speed_x100);
-        if (ret != NO_ERROR) {
-            return FrequencyLevel_StopAndReturn(ret, "启动速度模式失败");
+        if ((fixed_target_mode != 0U) && (slow_speed_latched != 0U)) {
+            float fine_speed_m_min = FrequencyLevel_ComputeFineSpeedMMin(frequency_error, deadband);
+            float feedback_move_mm = fine_speed_m_min * 1000.0f *
+                                     FREQUENCY_LEVEL_FEEDBACK_WINDOW_S / 60.0f;
+
+            ret = FrequencyLevel_StartOrUpdateFineMotion(dir,
+                                                         fine_speed_m_min,
+                                                         &active_dir,
+                                                         &active_fine_speed_m_min);
+            if (ret != NO_ERROR) {
+                return FrequencyLevel_StopAndReturn(ret, "启动精细速度模式失败");
+            }
+            active_speed_x100 = 0U;
+            fine_motion_active = 1U;
+            printf("频率找液位\t精细比例闭环\t方向=%s\t速度=%.4f m/min\t4秒理论位移=%.3f mm\r\n",
+                   MotorCtrl_DirectionText(dir),
+                   (double)fine_speed_m_min,
+                   (double)feedback_move_mm);
+        } else {
+            speed_x100 = FrequencyLevel_ComputeSpeedX100(
+                    frequency_error,
+                    deadband,
+                    MotorCtrl_GetDefaultSpeedX100());
+            if (speed_x100 == 0U) {
+                speed_x100 = FREQUENCY_LEVEL_MIN_SPEED_X100;
+            }
+            printf("频率找液位\t速度闭环\t方向=%s\t速度=%.2f m/min\r\n",
+                   MotorCtrl_DirectionText(dir),
+                   (double)speed_x100 / 100.0);
+
+            ret = LevelVelocity_StartOrUpdateMotion(dir, speed_x100, &active_dir, &active_speed_x100);
+            if (ret != NO_ERROR) {
+                return FrequencyLevel_StopAndReturn(ret, "启动速度模式失败");
+            }
         }
 
         if (fixed_target_mode != 0U) {
-            ret = FrequencyLevel_CheckMotionGuards(active_dir);
+            ret = FrequencyLevel_CheckMotionGuards(
+                    active_dir,
+                    ((fine_motion_active == 0U) ||
+                     (active_fine_speed_m_min >= FREQUENCY_LEVEL_FINE_LOST_STEP_MIN_SPEED_M_MIN)) ?
+                    1U : 0U);
             if (ret == MEASUREMENT_OILLEVEL_LOW) {
                 ret = LevelVelocity_StartOrUpdateMotion(DENSITY_LEVEL_DIR_NONE,
                                                         0U,
