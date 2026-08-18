@@ -8,11 +8,13 @@
 #include <stdint.h>
 
 #define MULTIPARAM_V4_INTERACTIVE_FRAME_SIZE       8U
-#define MULTIPARAM_V4_ACTIVE_FRAME_SIZE            64U
-#define MULTIPARAM_V4_ACTIVE_PARAMETER_COUNT       13U
-#define MULTIPARAM_V4_ACTIVE_DATA_SIZE             52U
+#define MULTIPARAM_V4_ACTIVE_FRAME_SIZE            72U
+#define MULTIPARAM_V4_ACTIVE_PARAMETER_COUNT       15U
+#define MULTIPARAM_V4_ACTIVE_DATA_SIZE             60U
 #define MULTIPARAM_V4_ACTIVE_TIMEOUT_MS            1500U
-#define MULTIPARAM_V4_ACTIVE_COMMAND_GUARD_MS      20U
+#define MULTIPARAM_V4_ACTIVE_COMMAND_GUARD_MS      15U
+#define MULTIPARAM_V4_ABNORMAL_FRAME_MAX_SIZE      122U
+#define MULTIPARAM_V4_CONSECUTIVE_ERROR_LIMIT      3U
 #define MULTIPARAM_V4_ANY_ADDRESS                  0xFFU
 #define MULTIPARAM_V4_PROTOCOL_VERSION_VALUE       4.0f
 
@@ -55,8 +57,12 @@ typedef struct {
     float supply_voltage_v;
     float angle_x_deg;
     float angle_y_deg;
+    float sweep_period_square_mean_45;
+    float sweep_period_square_mean_22_5;
     multiparam_v4_measurement_mode_t measurement_mode;
     multiparam_v4_feature_state_t feature_state;
+    uint8_t magnetic_zero_valid;
+    uint8_t water_capacitance_valid;
 } multiparam_v4_snapshot_t;
 
 typedef struct {
@@ -64,6 +70,7 @@ typedef struct {
     uint32_t receive_events;
     uint32_t frames_seen;
     uint32_t valid_frames;
+    uint32_t wireless_zero_padding_frames;
     uint32_t crc_errors;
     uint32_t fixed_field_errors;
     uint32_t address_errors;
@@ -78,9 +85,22 @@ typedef struct {
     uint32_t uart_errors;
     uint32_t receive_restart_errors;
     uint32_t timeout_events;
+    uint32_t abnormal_frames;
+    uint32_t consecutive_abnormal_frames;
+    uint32_t max_consecutive_abnormal_frames;
+    uint32_t quality_alarm_events;
     uint32_t interactive_transactions;
     uint32_t interactive_errors;
 } multiparam_v4_diagnostics_t;
+
+typedef struct {
+    uint8_t valid;
+    uint8_t reserved;
+    uint16_t length;
+    uint32_t error_code;
+    uint32_t received_tick;
+    uint8_t data[MULTIPARAM_V4_ABNORMAL_FRAME_MAX_SIZE];
+} multiparam_v4_abnormal_frame_t;
 
 /*
  * 函数用途：初始化 V4.0 协议运行态和地址过滤条件。
@@ -154,7 +174,20 @@ void MULTIPARAM_V4_FeedBytes(const uint8_t *data, uint16_t length);
 uint32_t MULTIPARAM_V4_ParseActiveFrame(const uint8_t frame[MULTIPARAM_V4_ACTIVE_FRAME_SIZE],
                                         multiparam_v4_snapshot_t *snapshot);
 uint32_t MULTIPARAM_V4_CopyLatestSnapshot(multiparam_v4_snapshot_t *snapshot);
+/* 仅由自动识别任务调用，输出最近主动原帧或本次监听的空接收结果。 */
+void MULTIPARAM_V4_PrintActiveProbePacket(const char *operation, uint32_t result);
+/* 自动识别窗口内开启交互原包日志；正常测量阶段必须保持关闭。 */
+void MULTIPARAM_V4_SetProbeTraceEnabled(uint8_t enabled);
+/* 部件参数读取失败时输出最近一次交互事务的TX/RX原始包和校验阶段。 */
+void MULTIPARAM_V4_PrintLastTransactionPackets(const char *operation,
+                                               uint32_t result);
 void MULTIPARAM_V4_GetDiagnostics(multiparam_v4_diagnostics_t *diagnostics);
+/* 原子复制最近一次主动流异常及其原始包；无记录时valid为0。 */
+void MULTIPARAM_V4_GetLastAbnormalFrame(multiparam_v4_abnormal_frame_t *frame);
+/* 在线程态取走连续3个主动包异常产生的待锁存错误码。 */
+uint32_t MULTIPARAM_V4_TakeQualityError(void);
+/* 清零V4累计诊断、连续异常和异常包，但保留通信方式、主动接收和最近快照。 */
+void MULTIPARAM_V4_ClearDiagnostics(void);
 uint8_t MULTIPARAM_V4_IsSnapshotFresh(uint32_t maximum_age_ms);
 uint32_t MULTIPARAM_V4_GetSnapshotAgeMs(void);
 
@@ -174,7 +207,7 @@ uint32_t MULTIPARAM_V4_ReadFloatParam(uint8_t parameter, float *value);
 /*
  * 函数用途：读取 V4 协议 R67 传感器号。
  * 调用场景：协议版本识别完成且通信已进入交互模式后调用。
- * 关键约束：成功时只返回正整数编号，V4 不得使用 R22 读取编号。
+ * 关键约束：编号0表示未初始化且仍为合法编号，负数无效；V4不得使用R22读取编号。
  */
 uint32_t MULTIPARAM_V4_ReadSensorID(uint32_t *sensor_id);
 /*

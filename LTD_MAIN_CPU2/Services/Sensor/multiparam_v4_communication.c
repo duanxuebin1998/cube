@@ -5,6 +5,7 @@
 
 #include "multiparam_v4_communication.h"
 
+#include "error_log.h"
 #include "main.h"
 #include "my_crc.h"
 #include "sensor.h"
@@ -12,6 +13,7 @@
 #include "usart.h"
 
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 
 #define MULTIPARAM_V4_ACTIVE_HEADER0                 0x55U
@@ -19,6 +21,10 @@
 #define MULTIPARAM_V4_ACTIVE_FORMAT_VERSION          0x01U
 #define MULTIPARAM_V4_ACTIVE_FRAME_TYPE              0xA1U
 #define MULTIPARAM_V4_ACTIVE_DMA_BUFFER_SIZE         128U
+#define MULTIPARAM_V4_WIRELESS_ZERO_PADDING_OFFSET    50U
+#define MULTIPARAM_V4_WIRELESS_ZERO_PADDING_SIZE      50U
+#define MULTIPARAM_V4_WIRELESS_PADDED_FRAME_SIZE      \
+    (MULTIPARAM_V4_ACTIVE_FRAME_SIZE + MULTIPARAM_V4_WIRELESS_ZERO_PADDING_SIZE)
 #define MULTIPARAM_V4_STREAM_BUFFER_SIZE             256U
 #define MULTIPARAM_V4_PARSE_BUFFER_SIZE              256U
 #define MULTIPARAM_V4_DEFERRED_BYTE_BUDGET           128U
@@ -30,6 +36,9 @@
 #define MULTIPARAM_V4_RX_FORCE_ABORT_DELAY_MS         100U
 #define MULTIPARAM_V4_MAX_RETRY                       UART6_COMM_MAX_RETRY
 #define MULTIPARAM_V4_PARAM_PROTOCOL_VERSION          0x01U
+#define MULTIPARAM_V4_BROADCAST_ADDRESS               0x00U
+#define MULTIPARAM_V4_DEFAULT_ADDRESS                 0x01U
+#define MULTIPARAM_V4_TEMP_FORCE_BROADCAST_TX          1U
 #define MULTIPARAM_V4_PARAM_STATUS                    0x02U
 #define MULTIPARAM_V4_PARAM_COMMUNICATION_MODE        0x41U
 #define MULTIPARAM_V4_PARAM_SENSOR_ID                 0x43U
@@ -60,22 +69,112 @@ static uint8_t s_deferred_bytes[MULTIPARAM_V4_DEFERRED_BYTE_BUDGET];
 static volatile uint8_t s_deferred_parse_requested = 0U;
 static uint8_t s_parse_buffer[MULTIPARAM_V4_PARSE_BUFFER_SIZE];
 static uint16_t s_parse_length = 0U;
+static uint8_t s_latest_active_frame[MULTIPARAM_V4_ACTIVE_FRAME_SIZE];
+static volatile uint8_t s_latest_active_frame_valid = 0U;
+static multiparam_v4_abnormal_frame_t s_last_abnormal_frame;
 
 static multiparam_v4_snapshot_t s_latest_snapshot;
 static multiparam_v4_diagnostics_t s_diagnostics;
 static uint8_t s_sequence_valid = 0U;
 static uint16_t s_last_sequence = 0U;
 static uint8_t s_timeout_latched = 0U;
+static uint8_t s_quality_alarm_latched = 0U;
+static uint32_t s_active_receive_start_tick = 0U;
+static volatile uint32_t s_pending_quality_error = NO_ERROR;
 static multiparam_v4_communication_mode_t s_communication_mode = MULTIPARAM_V4_COMMUNICATION_UNKNOWN;
+static volatile uint32_t s_last_active_frame_end_tick = 0U;
+static volatile uint8_t s_last_active_frame_end_valid = 0U;
 
 /*
- * 函数用途：返回可用于交互请求的确定地址。
- * 调用场景：主动帧尚未锁定地址时的R01探测，以及地址锁定后的普通事务。
- * 关键约束：ANY只用于接收过滤，绝不能作为0xFF请求地址发到总线。
+ * 函数用途：区分普通V4事务和V3/V4公共R01探测的地址校验策略。
+ * 调用场景：8字节应答完成基础字段校验后决定是否检查应答地址。
+ * 关键约束：普通V4定向应答必须回显请求地址；广播R01允许设备返回自身地址。
+ */
+typedef enum {
+    MULTIPARAM_V4_REPLY_ADDRESS_STRICT = 0,
+    MULTIPARAM_V4_REPLY_ADDRESS_PROTOCOL_PROBE = 1
+} multiparam_v4_reply_address_policy_t;
+
+typedef enum {
+    MULTIPARAM_V4_ACTIVE_CANDIDATE_NEED_MORE = 0,
+    MULTIPARAM_V4_ACTIVE_CANDIDATE_INVALID = 1,
+    MULTIPARAM_V4_ACTIVE_CANDIDATE_VALID = 2
+} multiparam_v4_active_candidate_state_t;
+
+typedef struct {
+    uint8_t request[MULTIPARAM_V4_INTERACTIVE_FRAME_SIZE];
+    uint8_t reply[MULTIPARAM_V4_INTERACTIVE_FRAME_SIZE];
+    uint16_t received_length;
+    uint32_t elapsed_ms;
+    uint32_t uart_error;
+    uint32_t uart_state;
+    const char *stage;
+} multiparam_v4_transaction_diagnostic_t;
+
+static multiparam_v4_transaction_diagnostic_t s_last_transaction_diagnostic;
+static uint8_t s_probe_trace_enabled = 0U;
+static uint32_t s_probe_trace_transaction = 0U;
+
+/*
+ * 函数用途：输出探测阶段单个V4原始包的十六进制内容。
+ * 调用场景：传感器识别任务开启跟踪后，8字节交互事务实际发送或退出时。
+ * 关键约束：只能在任务上下文调用，禁止从UART中断、定时器中断或PendSV解析路径打印。
+ */
+static void MULTIPARAM_V4_PrintProbePacket(const uint8_t request[8],
+                                           const char *direction,
+                                           const uint8_t *bytes,
+                                           uint16_t length,
+                                           uint32_t result,
+                                           const char *stage)
+{
+    if ((s_probe_trace_enabled == 0U) || (request == NULL) ||
+        (direction == NULL) || (bytes == NULL)) {
+        return;
+    }
+
+    printf("探测包\t协议=V4\t操作=%c%02u\t序号=%lu\t方向=%s\t长度=%u\tHEX=",
+           (char)request[1],
+           (unsigned int)request[6],
+           (unsigned long)s_probe_trace_transaction,
+           direction,
+           (unsigned int)length);
+    for (uint16_t index = 0U; index < length; index++) {
+        printf((index == 0U) ? "%02X" : " %02X", bytes[index]);
+    }
+    if (direction[0] == 'R') {
+        printf("\t结果=0x%08lX\t阶段=%s",
+               (unsigned long)result,
+               (stage != NULL) ? stage : "未确定");
+    }
+    printf("\r\n");
+}
+
+/*
+ * 函数用途：控制V4交互探测原始包跟踪。
+ * 调用场景：自动识别进入和离开R01、R67及其通信方式切换窗口时。
+ * 关键约束：关闭时不影响任何正常测量事务；每次开启重新从序号1计数。
+ */
+void MULTIPARAM_V4_SetProbeTraceEnabled(uint8_t enabled)
+{
+    s_probe_trace_enabled = (enabled != 0U) ? 1U : 0U;
+    if (s_probe_trace_enabled != 0U) {
+        s_probe_trace_transaction = 0U;
+    }
+}
+
+/*
+ * 函数用途：返回V4交互请求使用的总线地址。
+ * 调用场景：普通V4读写、模式控制和识别阶段R67读取。
+ * 关键约束：当前为规避无线桥本地地址应答而临时强制广播；现场问题解决后把临时开关改为0恢复锁定地址。
  */
 static uint8_t MULTIPARAM_V4_GetRequestAddress(void)
 {
-    return (s_expected_address == MULTIPARAM_V4_ANY_ADDRESS) ? 0U : s_expected_address;
+#if (MULTIPARAM_V4_TEMP_FORCE_BROADCAST_TX != 0U)
+    return MULTIPARAM_V4_BROADCAST_ADDRESS;
+#else
+    return (s_expected_address == MULTIPARAM_V4_ANY_ADDRESS) ?
+        MULTIPARAM_V4_BROADCAST_ADDRESS : s_expected_address;
+#endif
 }
 
 /*
@@ -255,18 +354,87 @@ static void MULTIPARAM_V4_DecodeOperatingState(uint32_t status_word,
     }
 }
 
+/* 累计诊断计数时采用饱和加法，避免长时间运行后回卷为较小值。 */
+static uint32_t MULTIPARAM_V4_SaturatingAdd(uint32_t value, uint32_t increment)
+{
+    return (value > (UINT32_MAX - increment)) ? UINT32_MAX : (value + increment);
+}
+
+/*
+ * 函数用途：记录主动流异常、保存最近异常原包并产生连续3包故障请求。
+ * 调用场景：PendSV帧解析、停流窗口主动帧抢占和线程态主动流超时检查。
+ * 关键约束：只更新内存状态，不打印、不停机；故障由主循环取走后统一锁存。
+ */
+static void MULTIPARAM_V4_RecordQualityAnomaly(uint32_t error_code,
+                                               uint32_t count,
+                                               const uint8_t *data,
+                                               uint16_t length)
+{
+    uint32_t previous;
+    uint16_t capture_length = length;
+
+    if ((error_code == NO_ERROR) || (count == 0U)) {
+        return;
+    }
+    if (capture_length > MULTIPARAM_V4_ABNORMAL_FRAME_MAX_SIZE) {
+        capture_length = MULTIPARAM_V4_ABNORMAL_FRAME_MAX_SIZE;
+    }
+
+    memset(&s_last_abnormal_frame, 0, sizeof(s_last_abnormal_frame));
+    s_last_abnormal_frame.valid = 1U;
+    s_last_abnormal_frame.length = capture_length;
+    s_last_abnormal_frame.error_code = error_code;
+    s_last_abnormal_frame.received_tick = HAL_GetTick();
+    if ((data != NULL) && (capture_length != 0U)) {
+        memcpy(s_last_abnormal_frame.data, data, capture_length);
+    }
+
+    previous = s_diagnostics.consecutive_abnormal_frames;
+    s_diagnostics.abnormal_frames =
+        MULTIPARAM_V4_SaturatingAdd(s_diagnostics.abnormal_frames, count);
+    s_diagnostics.consecutive_abnormal_frames =
+        MULTIPARAM_V4_SaturatingAdd(previous, count);
+    if (s_diagnostics.consecutive_abnormal_frames >
+        s_diagnostics.max_consecutive_abnormal_frames) {
+        s_diagnostics.max_consecutive_abnormal_frames =
+            s_diagnostics.consecutive_abnormal_frames;
+    }
+    if ((s_quality_alarm_latched == 0U) &&
+        (previous < MULTIPARAM_V4_CONSECUTIVE_ERROR_LIMIT) &&
+        (s_diagnostics.consecutive_abnormal_frames >=
+         MULTIPARAM_V4_CONSECUTIVE_ERROR_LIMIT)) {
+        s_quality_alarm_latched = 1U;
+        s_diagnostics.quality_alarm_events = MULTIPARAM_V4_SaturatingAdd(
+            s_diagnostics.quality_alarm_events, 1U);
+        if (s_pending_quality_error == NO_ERROR) {
+            s_pending_quality_error = error_code;
+        }
+    }
+}
+
+/* 有效且序号连续的新帧结束当前连续异常段，但不撤销已经待上报的故障。 */
+static void MULTIPARAM_V4_RecordQualitySuccess(void)
+{
+    s_diagnostics.consecutive_abnormal_frames = 0U;
+    s_quality_alarm_latched = 0U;
+}
+
 /*
  * 函数用途：发布通过固定字段、地址、CRC和序号检查的主动快照。
  * 调用场景：PendSV有界流解析器完成一帧解析后。
  * 关键约束：重复帧和乱序帧只记诊断，不刷新新鲜度或业务代次。
  */
-static uint8_t MULTIPARAM_V4_PublishSnapshot(multiparam_v4_snapshot_t *candidate)
+static uint8_t MULTIPARAM_V4_PublishSnapshot(
+    multiparam_v4_snapshot_t *candidate,
+    const uint8_t frame[MULTIPARAM_V4_ACTIVE_FRAME_SIZE])
 {
     if (s_sequence_valid != 0U) {
         uint16_t delta = (uint16_t)(candidate->sequence - s_last_sequence);
 
         if (delta == 0U) {
             s_diagnostics.duplicate_frames++;
+            MULTIPARAM_V4_RecordQualityAnomaly(
+                SENSOR_REPLAY_DETECTED, 1U, frame, MULTIPARAM_V4_ACTIVE_FRAME_SIZE);
             return 0U;
         }
         if (delta >= 0x8000U) {
@@ -274,12 +442,21 @@ static uint8_t MULTIPARAM_V4_PublishSnapshot(multiparam_v4_snapshot_t *candidate
                 ((HAL_GetTick() - s_latest_snapshot.received_tick) <=
                  MULTIPARAM_V4_ACTIVE_TIMEOUT_MS)) {
                 s_diagnostics.out_of_order_frames++;
+                MULTIPARAM_V4_RecordQualityAnomaly(
+                    SENSOR_SEQUENCE_ERROR, 1U, frame, MULTIPARAM_V4_ACTIVE_FRAME_SIZE);
                 return 0U;
             }
             s_diagnostics.sequence_resets++;
+            MULTIPARAM_V4_RecordQualityAnomaly(
+                SENSOR_SEQUENCE_ERROR, 1U, frame, MULTIPARAM_V4_ACTIVE_FRAME_SIZE);
         }
         else if (delta > 1U) {
-            s_diagnostics.lost_frames += (uint32_t)(delta - 1U);
+            uint32_t lost = (uint32_t)(delta - 1U);
+
+            s_diagnostics.lost_frames =
+                MULTIPARAM_V4_SaturatingAdd(s_diagnostics.lost_frames, lost);
+            MULTIPARAM_V4_RecordQualityAnomaly(
+                SENSOR_SEQUENCE_ERROR, lost, frame, MULTIPARAM_V4_ACTIVE_FRAME_SIZE);
         }
     }
 
@@ -293,9 +470,126 @@ static uint8_t MULTIPARAM_V4_PublishSnapshot(multiparam_v4_snapshot_t *candidate
     candidate->received_tick = HAL_GetTick();
     candidate->valid = 1U;
     memcpy(&s_latest_snapshot, candidate, sizeof(s_latest_snapshot));
-    s_diagnostics.valid_frames++;
+    s_diagnostics.valid_frames =
+        MULTIPARAM_V4_SaturatingAdd(s_diagnostics.valid_frames, 1U);
     s_timeout_latched = 0U;
+    MULTIPARAM_V4_RecordQualitySuccess();
     return 1U;
+}
+
+/*
+ * 函数用途：记录完整主动帧接收结束时刻。
+ * 调用场景：主动流解析或停流事务识别出完整主动帧后。
+ * 关键约束：时间戳取在完整帧解析之后，15ms从不早于总线最后一个主动帧字节开始计算。
+ */
+static void MULTIPARAM_V4_MarkActiveFrameEnd(void)
+{
+    s_last_active_frame_end_tick = HAL_GetTick();
+    s_last_active_frame_end_valid = 1U;
+}
+
+/*
+ * 函数用途：阻塞等待完整主动帧后的半双工发送保护期结束。
+ * 调用场景：下发切换交互通信指令或失败恢复读回之前。
+ * 关键约束：仅在任务上下文调用，等待期间保持中断开启。
+ */
+static void MULTIPARAM_V4_WaitActiveFrameGuard(void)
+{
+    while ((s_last_active_frame_end_valid != 0U) &&
+           ((HAL_GetTick() - s_last_active_frame_end_tick) <
+            MULTIPARAM_V4_ACTIVE_COMMAND_GUARD_MS)) {
+        HAL_Delay(1U);
+    }
+}
+
+/*
+ * 函数用途：检查指定字节区间是否全部为0。
+ * 调用场景：识别无线主机半传输缺陷插入的固定50字节零填充。
+ */
+static uint8_t MULTIPARAM_V4_IsZeroRange(const uint8_t *data, uint16_t length)
+{
+    uint16_t index;
+
+    if (data == NULL) {
+        return 0U;
+    }
+    for (index = 0U; index < length; index++) {
+        if (data[index] != 0U) {
+            return 0U;
+        }
+    }
+    return 1U;
+}
+
+/*
+ * 函数用途：解析标准72字节主动帧，或严格还原第50字节后插入50个0的122字节无线异常帧。
+ * 调用场景：常驻流解析和交互停流窗口遇到主动帧抢占时共用。
+ * 关键约束：只有标准帧CRC失败、零区完整匹配且还原后的全部协议校验通过时才兼容。
+ */
+static multiparam_v4_active_candidate_state_t MULTIPARAM_V4_DecodeActiveCandidate(
+    const uint8_t *data,
+    uint16_t available_length,
+    multiparam_v4_snapshot_t *snapshot,
+    uint8_t canonical_frame[MULTIPARAM_V4_ACTIVE_FRAME_SIZE],
+    uint16_t *consumed_length,
+    uint8_t *wireless_padding_used,
+    uint32_t *parse_result)
+{
+    uint32_t result;
+
+    if ((data == NULL) || (snapshot == NULL) || (canonical_frame == NULL) ||
+        (consumed_length == NULL) || (wireless_padding_used == NULL) ||
+        (parse_result == NULL)) {
+        if (parse_result != NULL) {
+            *parse_result = SYSTEM_CALL_CONDITION_ERROR;
+        }
+        return MULTIPARAM_V4_ACTIVE_CANDIDATE_INVALID;
+    }
+    *consumed_length = 0U;
+    *wireless_padding_used = 0U;
+    if (available_length < MULTIPARAM_V4_ACTIVE_FRAME_SIZE) {
+        return MULTIPARAM_V4_ACTIVE_CANDIDATE_NEED_MORE;
+    }
+
+    result = MULTIPARAM_V4_ParseActiveFrame(data, snapshot);
+    if (result == NO_ERROR) {
+        memcpy(canonical_frame, data, MULTIPARAM_V4_ACTIVE_FRAME_SIZE);
+        *consumed_length = MULTIPARAM_V4_ACTIVE_FRAME_SIZE;
+        *parse_result = NO_ERROR;
+        return MULTIPARAM_V4_ACTIVE_CANDIDATE_VALID;
+    }
+    *parse_result = result;
+    if ((result != SENSOR_BCC_ERROR) ||
+        (MULTIPARAM_V4_IsZeroRange(
+             data + MULTIPARAM_V4_WIRELESS_ZERO_PADDING_OFFSET,
+             (uint16_t)(MULTIPARAM_V4_ACTIVE_FRAME_SIZE -
+                        MULTIPARAM_V4_WIRELESS_ZERO_PADDING_OFFSET)) == 0U)) {
+        return MULTIPARAM_V4_ACTIVE_CANDIDATE_INVALID;
+    }
+    if (available_length < MULTIPARAM_V4_WIRELESS_PADDED_FRAME_SIZE) {
+        return MULTIPARAM_V4_ACTIVE_CANDIDATE_NEED_MORE;
+    }
+    if (MULTIPARAM_V4_IsZeroRange(
+            data + MULTIPARAM_V4_WIRELESS_ZERO_PADDING_OFFSET,
+            MULTIPARAM_V4_WIRELESS_ZERO_PADDING_SIZE) == 0U) {
+        return MULTIPARAM_V4_ACTIVE_CANDIDATE_INVALID;
+    }
+
+    memcpy(canonical_frame, data, MULTIPARAM_V4_WIRELESS_ZERO_PADDING_OFFSET);
+    memcpy(canonical_frame + MULTIPARAM_V4_WIRELESS_ZERO_PADDING_OFFSET,
+           data + MULTIPARAM_V4_WIRELESS_ZERO_PADDING_OFFSET +
+               MULTIPARAM_V4_WIRELESS_ZERO_PADDING_SIZE,
+           MULTIPARAM_V4_ACTIVE_FRAME_SIZE -
+               MULTIPARAM_V4_WIRELESS_ZERO_PADDING_OFFSET);
+    result = MULTIPARAM_V4_ParseActiveFrame(canonical_frame, snapshot);
+    *parse_result = result;
+    if (result != NO_ERROR) {
+        return MULTIPARAM_V4_ACTIVE_CANDIDATE_INVALID;
+    }
+
+    *consumed_length = MULTIPARAM_V4_WIRELESS_PADDED_FRAME_SIZE;
+    *wireless_padding_used = 1U;
+    return MULTIPARAM_V4_ACTIVE_CANDIDATE_VALID;
 }
 
 /*
@@ -310,8 +604,12 @@ static uint8_t MULTIPARAM_V4_ProcessParseBuffer(uint8_t frame_budget)
 
     while (candidates_checked < frame_budget) {
         multiparam_v4_snapshot_t candidate;
+        uint8_t canonical_frame[MULTIPARAM_V4_ACTIVE_FRAME_SIZE];
         uint16_t header_offset = 0U;
-        uint32_t parse_result;
+        uint16_t consumed_length = 0U;
+        uint8_t wireless_padding_used = 0U;
+        uint32_t parse_result = SENSOR_RESP_FORMAT_ERROR;
+        multiparam_v4_active_candidate_state_t candidate_state;
 
         while ((header_offset + 1U) < s_parse_length) {
             if ((s_parse_buffer[header_offset] == MULTIPARAM_V4_ACTIVE_HEADER0) &&
@@ -337,17 +635,33 @@ static uint8_t MULTIPARAM_V4_ProcessParseBuffer(uint8_t frame_budget)
             MULTIPARAM_V4_DiscardParseBytes(header_offset);
             s_diagnostics.resync_events++;
         }
-        if (s_parse_length < MULTIPARAM_V4_ACTIVE_FRAME_SIZE) {
+
+        candidate_state = MULTIPARAM_V4_DecodeActiveCandidate(
+            s_parse_buffer, s_parse_length, &candidate, canonical_frame,
+            &consumed_length, &wireless_padding_used, &parse_result);
+        if (candidate_state == MULTIPARAM_V4_ACTIVE_CANDIDATE_NEED_MORE) {
             return published;
         }
 
+        /* 完整主动帧即使重复或校验失败也占用了半双工总线，必须刷新发送保护期。 */
+        MULTIPARAM_V4_MarkActiveFrameEnd();
         candidates_checked++;
         s_diagnostics.frames_seen++;
-        parse_result = MULTIPARAM_V4_ParseActiveFrame(s_parse_buffer, &candidate);
-        if (parse_result == NO_ERROR) {
-            MULTIPARAM_V4_DiscardParseBytes(MULTIPARAM_V4_ACTIVE_FRAME_SIZE);
-            published = (uint8_t)(published |
-                                 MULTIPARAM_V4_PublishSnapshot(&candidate));
+        if (candidate_state == MULTIPARAM_V4_ACTIVE_CANDIDATE_VALID) {
+            uint8_t accepted;
+
+            if (wireless_padding_used != 0U) {
+                s_diagnostics.wireless_zero_padding_frames++;
+            }
+            accepted = MULTIPARAM_V4_PublishSnapshot(&candidate, canonical_frame);
+            if (accepted != 0U) {
+                memcpy(s_latest_active_frame,
+                       canonical_frame,
+                       MULTIPARAM_V4_ACTIVE_FRAME_SIZE);
+                s_latest_active_frame_valid = 1U;
+            }
+            MULTIPARAM_V4_DiscardParseBytes(consumed_length);
+            published = (uint8_t)(published | accepted);
             continue;
         }
 
@@ -359,6 +673,18 @@ static uint8_t MULTIPARAM_V4_ProcessParseBuffer(uint8_t frame_budget)
             s_diagnostics.value_errors++;
         } else {
             s_diagnostics.fixed_field_errors++;
+        }
+        {
+            uint16_t abnormal_length = MULTIPARAM_V4_ACTIVE_FRAME_SIZE;
+
+            if ((s_parse_length >= MULTIPARAM_V4_WIRELESS_PADDED_FRAME_SIZE) &&
+                (MULTIPARAM_V4_IsZeroRange(
+                     s_parse_buffer + MULTIPARAM_V4_WIRELESS_ZERO_PADDING_OFFSET,
+                     MULTIPARAM_V4_WIRELESS_ZERO_PADDING_SIZE) != 0U)) {
+                abnormal_length = MULTIPARAM_V4_WIRELESS_PADDED_FRAME_SIZE;
+            }
+            MULTIPARAM_V4_RecordQualityAnomaly(
+                parse_result, 1U, s_parse_buffer, abnormal_length);
         }
         MULTIPARAM_V4_DiscardParseBytes(1U);
         s_diagnostics.resync_events++;
@@ -376,20 +702,36 @@ void MULTIPARAM_V4_Init(uint8_t expected_address)
     s_sequence_valid = 0U;
     s_last_sequence = 0U;
     s_timeout_latched = 0U;
+    s_quality_alarm_latched = 0U;
+    s_active_receive_start_tick = 0U;
+    s_pending_quality_error = NO_ERROR;
     s_deferred_parse_requested = 0U;
     s_receive_restart_in_progress = 0U;
     s_receive_restart_wait_started = 0U;
     s_receive_restart_wait_tick = 0U;
     s_receive_abort_requested = 0U;
     s_receive_abort_in_progress = 0U;
+    s_last_active_frame_end_tick = 0U;
+    s_last_active_frame_end_valid = 0U;
     s_communication_mode = MULTIPARAM_V4_COMMUNICATION_UNKNOWN;
     memset(&s_latest_snapshot, 0, sizeof(s_latest_snapshot));
+    memset(s_latest_active_frame, 0, sizeof(s_latest_active_frame));
+    s_latest_active_frame_valid = 0U;
+    memset(&s_last_abnormal_frame, 0, sizeof(s_last_abnormal_frame));
     memset(&s_diagnostics, 0, sizeof(s_diagnostics));
 }
 
 void MULTIPARAM_V4_Deinit(void)
 {
+    uint32_t primask;
+
     MULTIPARAM_V4_StopActiveReceive();
+    primask = __get_PRIMASK();
+    __disable_irq();
+    s_pending_quality_error = NO_ERROR;
+    if (primask == 0U) {
+        __enable_irq();
+    }
     s_communication_mode = MULTIPARAM_V4_COMMUNICATION_UNKNOWN;
 }
 
@@ -407,7 +749,12 @@ uint32_t MULTIPARAM_V4_StartActiveReceive(void)
     s_deferred_parse_requested = 0U;
     s_sequence_valid = 0U;
     s_timeout_latched = 0U;
+    s_quality_alarm_latched = 0U;
+    s_diagnostics.consecutive_abnormal_frames = 0U;
+    s_active_receive_start_tick = 0U;
     s_latest_snapshot.valid = 0U;
+    s_last_active_frame_end_tick = 0U;
+    s_last_active_frame_end_valid = 0U;
     if (primask == 0U) {
         __enable_irq();
     }
@@ -419,6 +766,7 @@ uint32_t MULTIPARAM_V4_StartActiveReceive(void)
         s_receive_restart_pending = 0U;
         s_receive_restart_wait_started = 0U;
         s_receive_abort_requested = 0U;
+        s_active_receive_start_tick = HAL_GetTick();
         s_communication_mode = MULTIPARAM_V4_COMMUNICATION_ACTIVE;
     } else {
         s_diagnostics.receive_restart_errors++;
@@ -449,6 +797,9 @@ void MULTIPARAM_V4_StopActiveReceive(void)
     s_stream_tail = 0U;
     s_parse_length = 0U;
     s_deferred_parse_requested = 0U;
+    s_active_receive_start_tick = 0U;
+    s_diagnostics.consecutive_abnormal_frames = 0U;
+    s_quality_alarm_latched = 0U;
     if (primask == 0U) {
         __enable_irq();
     }
@@ -646,22 +997,25 @@ uint32_t MULTIPARAM_V4_ParseActiveFrame(const uint8_t frame[MULTIPARAM_V4_ACTIVE
     snapshot->supply_voltage_v = MULTIPARAM_V4_RawToFloat(snapshot->raw_parameter[10]);
     snapshot->angle_x_deg = MULTIPARAM_V4_RawToFloat(snapshot->raw_parameter[11]);
     snapshot->angle_y_deg = MULTIPARAM_V4_RawToFloat(snapshot->raw_parameter[12]);
+    snapshot->sweep_period_square_mean_45 =
+        MULTIPARAM_V4_RawToFloat(snapshot->raw_parameter[13]);
+    snapshot->sweep_period_square_mean_22_5 =
+        MULTIPARAM_V4_RawToFloat(snapshot->raw_parameter[14]);
     MULTIPARAM_V4_DecodeOperatingState(snapshot->status_word,
                                        &snapshot->measurement_mode,
                                        &snapshot->feature_state);
+    snapshot->magnetic_zero_valid =
+        (uint8_t)(((snapshot->feature_state == MULTIPARAM_V4_FEATURE_MAGNETIC_ZERO) &&
+                   isfinite(snapshot->magnetic_zero_voltage)) ? 1U : 0U);
+    snapshot->water_capacitance_valid =
+        (uint8_t)(((snapshot->feature_state == MULTIPARAM_V4_FEATURE_WATER) &&
+                   isfinite(snapshot->water_capacitance_pf)) ? 1U : 0U);
 
+    /* 功能关闭或结果尚未生成时，测量字段允许为NaN；帧级只校验身份和状态语义。 */
     if ((!isfinite(snapshot->software_version)) ||
         (!isfinite(snapshot->protocol_version)) ||
-        (!isfinite(snapshot->magnetic_zero_voltage)) ||
-        (!isfinite(snapshot->water_capacitance_pf)) ||
-        (!isfinite(snapshot->temperature_c)) ||
-        (!isfinite(snapshot->density_kg_m3)) ||
-        (!isfinite(snapshot->dynamic_viscosity_cp)) ||
-        (!isfinite(snapshot->kinematic_viscosity_cst)) ||
-        (!isfinite(snapshot->supply_voltage_v)) ||
-        (!isfinite(snapshot->angle_x_deg)) ||
-        (!isfinite(snapshot->angle_y_deg)) ||
-        (snapshot->measurement_mode == MULTIPARAM_V4_MEASUREMENT_INVALID)) {
+        (snapshot->measurement_mode == MULTIPARAM_V4_MEASUREMENT_INVALID) ||
+        (snapshot->feature_state == MULTIPARAM_V4_FEATURE_INVALID)) {
         return SENSOR_RESP_FORMAT_ERROR;
     }
     if (fabsf(snapshot->protocol_version - MULTIPARAM_V4_PROTOCOL_VERSION_VALUE) > 0.01f) {
@@ -762,15 +1116,51 @@ void MULTIPARAM_V4_Service(void)
     primask = __get_PRIMASK();
     __disable_irq();
     if ((s_active_receive_requested != 0U) &&
-        (s_latest_snapshot.valid != 0U) &&
-        ((now - s_latest_snapshot.received_tick) >= MULTIPARAM_V4_ACTIVE_TIMEOUT_MS) &&
+        ((now - ((s_latest_snapshot.valid != 0U)
+                     ? s_latest_snapshot.received_tick
+                     : s_active_receive_start_tick)) >= MULTIPARAM_V4_ACTIVE_TIMEOUT_MS) &&
         (s_timeout_latched == 0U)) {
         s_timeout_latched = 1U;
-        s_diagnostics.timeout_events++;
+        s_diagnostics.timeout_events =
+            MULTIPARAM_V4_SaturatingAdd(s_diagnostics.timeout_events, 1U);
+        MULTIPARAM_V4_RecordQualityAnomaly(
+            SENSOR_DEVICE_COMM_TIMEOUT,
+            MULTIPARAM_V4_CONSECUTIVE_ERROR_LIMIT,
+            NULL,
+            0U);
     }
     if (primask == 0U) {
         __enable_irq();
     }
+}
+
+/*
+ * 函数用途：在任务上下文输出最近一次有效V4主动帧或本次监听的空接收结果。
+ * 调用场景：自动识别的两段主动帧监听窗口退出时。
+ * 关键约束：原帧在关中断区内复制，printf仅在恢复中断后执行。
+ */
+void MULTIPARAM_V4_PrintActiveProbePacket(const char *operation, uint32_t result)
+{
+    uint8_t frame[MULTIPARAM_V4_ACTIVE_FRAME_SIZE];
+    uint16_t length = 0U;
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    if ((result == NO_ERROR) && (s_latest_active_frame_valid != 0U)) {
+        memcpy(frame, s_latest_active_frame, sizeof(frame));
+        length = MULTIPARAM_V4_ACTIVE_FRAME_SIZE;
+    }
+    if (primask == 0U) {
+        __enable_irq();
+    }
+
+    printf("探测包\t协议=V4\t操作=%s\t方向=RX\t长度=%u\tHEX=",
+           (operation != NULL) ? operation : "主动帧",
+           (unsigned int)length);
+    for (uint16_t index = 0U; index < length; index++) {
+        printf((index == 0U) ? "%02X" : " %02X", frame[index]);
+    }
+    printf("\t结果=0x%08lX\r\n", (unsigned long)result);
 }
 
 uint32_t MULTIPARAM_V4_CopyLatestSnapshot(multiparam_v4_snapshot_t *snapshot)
@@ -805,6 +1195,54 @@ void MULTIPARAM_V4_GetDiagnostics(multiparam_v4_diagnostics_t *diagnostics)
     primask = __get_PRIMASK();
     __disable_irq();
     memcpy(diagnostics, &s_diagnostics, sizeof(*diagnostics));
+    if (primask == 0U) {
+        __enable_irq();
+    }
+}
+
+void MULTIPARAM_V4_GetLastAbnormalFrame(multiparam_v4_abnormal_frame_t *frame)
+{
+    uint32_t primask;
+
+    if (frame == NULL) {
+        return;
+    }
+    primask = __get_PRIMASK();
+    __disable_irq();
+    memcpy(frame, &s_last_abnormal_frame, sizeof(*frame));
+    if (primask == 0U) {
+        __enable_irq();
+    }
+}
+
+uint32_t MULTIPARAM_V4_TakeQualityError(void)
+{
+    uint32_t primask = __get_PRIMASK();
+    uint32_t error_code;
+
+    __disable_irq();
+    error_code = s_pending_quality_error;
+    s_pending_quality_error = NO_ERROR;
+    if (primask == 0U) {
+        __enable_irq();
+    }
+    return error_code;
+}
+
+/*
+ * 函数用途：清零V4累计通信诊断，建立新的现场观测窗口。
+ * 调用场景：串口V4C命令执行后，再用V4G比较后续主动帧和交互事务质量。
+ * 关键约束：保留通信方式、DMA接收状态、最近快照、序号基线和当前超时锁存。
+ */
+void MULTIPARAM_V4_ClearDiagnostics(void)
+{
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    memset(&s_diagnostics, 0, sizeof(s_diagnostics));
+    memset(&s_last_abnormal_frame, 0, sizeof(s_last_abnormal_frame));
+    s_quality_alarm_latched = 0U;
+    s_pending_quality_error = NO_ERROR;
     if (primask == 0U) {
         __enable_irq();
     }
@@ -859,30 +1297,116 @@ void MULTIPARAM_V4_BuildRequestFrame(uint8_t address,
     frame[7] = MULTIPARAM_V4_CalculateChecksum(frame);
 }
 
-uint32_t MULTIPARAM_V4_ValidateReply(const uint8_t request[MULTIPARAM_V4_INTERACTIVE_FRAME_SIZE],
-                                    const uint8_t reply[MULTIPARAM_V4_INTERACTIVE_FRAME_SIZE])
+/*
+ * 函数用途：开始记录一次8字节交互事务的诊断上下文。
+ * 调用场景：普通交互事务完成 UART 清理、准备启动 DMA 时。
+ * 关键约束：只在主循环事务上下文写入，不在 UART 中断中打印。
+ */
+static void MULTIPARAM_V4_BeginTransactionDiagnostic(const uint8_t request[8])
 {
+    memset(&s_last_transaction_diagnostic, 0, sizeof(s_last_transaction_diagnostic));
+    if (request != NULL) {
+        memcpy(s_last_transaction_diagnostic.request, request, 8U);
+    }
+}
+
+/*
+ * 函数用途：保存一次8字节交互事务退出时的原始响应和硬件状态。
+ * 调用场景：事务成功、短帧、UART错误、超时或命令切换的统一退出点。
+ * 关键约束：必须在停止 DMA 前调用，避免 HAL 收尾覆盖故障现场。
+ */
+static void MULTIPARAM_V4_RecordTransactionDiagnostic(const uint8_t reply[8],
+                                                       uint16_t received_length,
+                                                       uint32_t start_tick,
+                                                       const char *stage)
+{
+    uint16_t copy_length = received_length;
+
+    if (copy_length > MULTIPARAM_V4_INTERACTIVE_FRAME_SIZE) {
+        copy_length = MULTIPARAM_V4_INTERACTIVE_FRAME_SIZE;
+    }
+    memset(s_last_transaction_diagnostic.reply, 0,
+           sizeof(s_last_transaction_diagnostic.reply));
+    if ((reply != NULL) && (copy_length > 0U)) {
+        memcpy(s_last_transaction_diagnostic.reply, reply, copy_length);
+    }
+    s_last_transaction_diagnostic.received_length = copy_length;
+    s_last_transaction_diagnostic.elapsed_ms = HAL_GetTick() - start_tick;
+    s_last_transaction_diagnostic.uart_error = huart6.ErrorCode;
+    s_last_transaction_diagnostic.uart_state = (uint32_t)huart6.gState;
+    s_last_transaction_diagnostic.stage = (stage != NULL) ? stage : "未确定";
+}
+
+/*
+ * 函数用途：校验8字节交互应答并返回准确的失败阶段。
+ * 调用场景：公开V4校验接口、普通事务和V3/V4公共R01探测共用。
+ * 关键约束：先校验BCC、功能码和参数码，再按请求是否为广播决定地址校验。
+ */
+static uint32_t MULTIPARAM_V4_ValidateReplyInternal(
+    const uint8_t request[MULTIPARAM_V4_INTERACTIVE_FRAME_SIZE],
+    const uint8_t reply[MULTIPARAM_V4_INTERACTIVE_FRAME_SIZE],
+    multiparam_v4_reply_address_policy_t address_policy,
+    const char **stage)
+{
+    if (stage != NULL) {
+        *stage = "未确定";
+    }
     if ((request == NULL) || (reply == NULL)) {
         return SYSTEM_CALL_CONDITION_ERROR;
     }
     if (MULTIPARAM_V4_CalculateChecksum(reply) != reply[7]) {
+        if (stage != NULL) {
+            *stage = "BCC校验";
+        }
         return SENSOR_BCC_ERROR;
     }
-    if ((reply[0] != request[0]) ||
-        (reply[1] != (uint8_t)(request[1] | 0x80U))) {
+    if (reply[1] != (uint8_t)(request[1] | 0x80U)) {
+        if (stage != NULL) {
+            *stage = "功能码校验";
+        }
         return SENSOR_RESP_FORMAT_ERROR;
     }
     if (reply[6] == 0xFFU) {
+        if (stage != NULL) {
+            *stage = "远端错误";
+        }
         return SENSOR_REMOTE_INTERNAL_ERROR;
     }
     if (reply[6] != request[6]) {
+        if (stage != NULL) {
+            *stage = "参数码校验";
+        }
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+
+    /* 临时广播事务允许设备返回自身地址；关闭临时开关后仅公共R01保留该规则。 */
+    if ((reply[0] != request[0]) &&
+        !((request[0] == MULTIPARAM_V4_BROADCAST_ADDRESS) &&
+          ((address_policy == MULTIPARAM_V4_REPLY_ADDRESS_PROTOCOL_PROBE) ||
+           (MULTIPARAM_V4_TEMP_FORCE_BROADCAST_TX != 0U)))) {
+        if (stage != NULL) {
+            *stage = "V4地址校验";
+        }
         return SENSOR_RESP_FORMAT_ERROR;
     }
     if ((request[1] == MULTIPARAM_V4_FUNCTION_WRITE) &&
         (memcmp(request + 2U, reply + 2U, 4U) != 0)) {
+        if (stage != NULL) {
+            *stage = "写入回显校验";
+        }
         return SENSOR_RESP_FORMAT_ERROR;
     }
+    if (stage != NULL) {
+        *stage = "校验通过";
+    }
     return NO_ERROR;
+}
+
+uint32_t MULTIPARAM_V4_ValidateReply(const uint8_t request[MULTIPARAM_V4_INTERACTIVE_FRAME_SIZE],
+                                    const uint8_t reply[MULTIPARAM_V4_INTERACTIVE_FRAME_SIZE])
+{
+    return MULTIPARAM_V4_ValidateReplyInternal(
+        request, reply, MULTIPARAM_V4_REPLY_ADDRESS_STRICT, NULL);
 }
 
 /*
@@ -922,11 +1446,16 @@ static uint32_t MULTIPARAM_V4_TransceiveStopActiveOnce(const uint8_t request[8],
                                                         uint32_t timeout_ms,
                                                         uint8_t *active_preempted)
 {
-    uint8_t receive_buffer[MULTIPARAM_V4_ACTIVE_FRAME_SIZE];
+    uint8_t receive_buffer[MULTIPARAM_V4_WIRELESS_PADDED_FRAME_SIZE];
+    uint8_t canonical_frame[MULTIPARAM_V4_ACTIVE_FRAME_SIZE];
     multiparam_v4_snapshot_t candidate;
     uint32_t start_tick;
     uint32_t result;
     uint16_t received_length;
+    uint16_t active_consumed_length;
+    uint8_t wireless_padding_used;
+    multiparam_v4_active_candidate_state_t candidate_state;
+    const char *stage;
 
     if ((request == NULL) || (reply == NULL) || (active_preempted == NULL)) {
         return SYSTEM_CALL_CONDITION_ERROR;
@@ -937,46 +1466,87 @@ static uint32_t MULTIPARAM_V4_TransceiveStopActiveOnce(const uint8_t request[8],
     (void)HAL_UART_DMAStop(&huart6);
     __HAL_UART_CLEAR_OREFLAG(&huart6);
     huart6.ErrorCode = HAL_UART_ERROR_NONE;
+    start_tick = HAL_GetTick();
+    MULTIPARAM_V4_BeginTransactionDiagnostic(request);
 
     if (HAL_UART_Receive_DMA(&huart6, receive_buffer,
-                             MULTIPARAM_V4_ACTIVE_FRAME_SIZE) != HAL_OK) {
+                             MULTIPARAM_V4_WIRELESS_PADDED_FRAME_SIZE) != HAL_OK) {
+        MULTIPARAM_V4_RecordTransactionDiagnostic(
+            receive_buffer, 0U, start_tick, "接收DMA启动");
         return COMM_UART_TRANSFER_ERROR;
     }
     if (HAL_UART_Transmit_DMA(&huart6, (uint8_t *)request, 8U) != HAL_OK) {
+        MULTIPARAM_V4_RecordTransactionDiagnostic(
+            receive_buffer, 0U, start_tick, "发送DMA启动");
         (void)HAL_UART_DMAStop(&huart6);
         return COMM_UART_TRANSFER_ERROR;
+    }
+    if (s_probe_trace_enabled != 0U) {
+        s_probe_trace_transaction++;
+        MULTIPARAM_V4_PrintProbePacket(request, "TX", request, 8U,
+                                       NO_ERROR, "发送DMA已启动");
     }
 
     start_tick = HAL_GetTick();
     while ((HAL_GetTick() - start_tick) < timeout_ms) {
+        received_length = (huart6.hdmarx == NULL)
+                              ? 0U
+                              : (uint16_t)(MULTIPARAM_V4_WIRELESS_PADDED_FRAME_SIZE -
+                                           __HAL_DMA_GET_COUNTER(huart6.hdmarx));
         if (HasEffectiveCommandSwitchRequest()) {
+            stage = "命令切换";
+            MULTIPARAM_V4_RecordTransactionDiagnostic(
+                receive_buffer, received_length, start_tick, stage);
             (void)HAL_UART_DMAStop(&huart6);
+            MULTIPARAM_V4_PrintProbePacket(request, "RX", receive_buffer,
+                                           received_length, STATE_SWITCH, stage);
             return STATE_SWITCH;
         }
         if (huart6.ErrorCode != HAL_UART_ERROR_NONE) {
+            stage = "UART错误";
+            MULTIPARAM_V4_RecordTransactionDiagnostic(
+                receive_buffer, received_length, start_tick, stage);
             (void)HAL_UART_DMAStop(&huart6);
+            MULTIPARAM_V4_PrintProbePacket(
+                request, "RX", receive_buffer, received_length,
+                COMM_UART_TRANSFER_ERROR, stage);
             return COMM_UART_TRANSFER_ERROR;
         }
-        received_length = (huart6.hdmarx == NULL)
-                              ? 0U
-                              : (uint16_t)(MULTIPARAM_V4_ACTIVE_FRAME_SIZE -
-                                           __HAL_DMA_GET_COUNTER(huart6.hdmarx));
         if ((received_length >= 2U) &&
             (receive_buffer[0] == MULTIPARAM_V4_ACTIVE_HEADER0) &&
             (receive_buffer[1] == MULTIPARAM_V4_ACTIVE_HEADER1)) {
-            if (received_length < MULTIPARAM_V4_ACTIVE_FRAME_SIZE) {
+            candidate_state = MULTIPARAM_V4_DecodeActiveCandidate(
+                receive_buffer, received_length, &candidate, canonical_frame,
+                &active_consumed_length, &wireless_padding_used, &result);
+            if (candidate_state == MULTIPARAM_V4_ACTIVE_CANDIDATE_NEED_MORE) {
                 HAL_Delay(1U);
                 continue;
             }
+            /* 停流窗口收到完整主动帧时，以该帧结束时刻重新计算15ms保护期。 */
+            MULTIPARAM_V4_MarkActiveFrameEnd();
             (void)HAL_UART_DMAStop(&huart6);
-            result = MULTIPARAM_V4_ParseActiveFrame(receive_buffer, &candidate);
-            if (result != NO_ERROR) {
+            stage = (candidate_state == MULTIPARAM_V4_ACTIVE_CANDIDATE_VALID)
+                        ? ((wireless_padding_used != 0U)
+                               ? "主动帧抢占-无线补零已还原"
+                               : "主动帧抢占")
+                        : "主动帧校验失败";
+            MULTIPARAM_V4_RecordTransactionDiagnostic(
+                receive_buffer, received_length, start_tick, stage);
+            MULTIPARAM_V4_PrintProbePacket(request, "RX", receive_buffer,
+                                           received_length, result, stage);
+            if (candidate_state != MULTIPARAM_V4_ACTIVE_CANDIDATE_VALID) {
+                MULTIPARAM_V4_RecordQualityAnomaly(
+                    result, 1U, receive_buffer, received_length);
                 s_diagnostics.interactive_transactions++;
                 s_diagnostics.interactive_errors++;
                 return result;
             }
+            if (wireless_padding_used != 0U) {
+                s_diagnostics.wireless_zero_padding_frames++;
+            }
             result = MULTIPARAM_V4_ResumeActiveReceivePreservingSnapshot();
-            MULTIPARAM_V4_FeedBytes(receive_buffer, MULTIPARAM_V4_ACTIVE_FRAME_SIZE);
+            MULTIPARAM_V4_FeedBytes(canonical_frame,
+                                    MULTIPARAM_V4_ACTIVE_FRAME_SIZE);
             *active_preempted = 1U;
             s_diagnostics.interactive_transactions++;
             return result;
@@ -984,20 +1554,36 @@ static uint32_t MULTIPARAM_V4_TransceiveStopActiveOnce(const uint8_t request[8],
         if ((received_length >= 8U) && (huart6.gState == HAL_UART_STATE_READY)) {
             (void)HAL_UART_DMAStop(&huart6);
             memcpy(reply, receive_buffer, 8U);
+            result = MULTIPARAM_V4_ValidateReply(request, reply);
+            stage = (result == NO_ERROR) ? "校验通过" : "应答校验失败";
+            MULTIPARAM_V4_RecordTransactionDiagnostic(
+                reply, 8U, start_tick, stage);
+            MULTIPARAM_V4_PrintProbePacket(request, "RX", reply, 8U,
+                                           result, stage);
             s_diagnostics.interactive_transactions++;
-            return MULTIPARAM_V4_ValidateReply(request, reply);
+            if (result != NO_ERROR) {
+                s_diagnostics.interactive_errors++;
+            }
+            return result;
         }
         HAL_Delay(1U);
     }
 
     received_length = (huart6.hdmarx == NULL)
                           ? 0U
-                          : (uint16_t)(MULTIPARAM_V4_ACTIVE_FRAME_SIZE -
+                          : (uint16_t)(MULTIPARAM_V4_WIRELESS_PADDED_FRAME_SIZE -
                                        __HAL_DMA_GET_COUNTER(huart6.hdmarx));
+    stage = (received_length == 0U) ? "零字节超时" : "响应长度不足";
+    result = (received_length == 0U) ? SENSOR_DEVICE_COMM_TIMEOUT
+                                     : SENSOR_RESP_FORMAT_ERROR;
+    MULTIPARAM_V4_RecordTransactionDiagnostic(
+        receive_buffer, received_length, start_tick, stage);
     (void)HAL_UART_DMAStop(&huart6);
+    MULTIPARAM_V4_PrintProbePacket(request, "RX", receive_buffer,
+                                   received_length, result, stage);
     s_diagnostics.interactive_transactions++;
     s_diagnostics.interactive_errors++;
-    return (received_length == 0U) ? SENSOR_DEVICE_COMM_TIMEOUT : SENSOR_RESP_FORMAT_ERROR;
+    return result;
 }
 
 /*
@@ -1005,13 +1591,17 @@ static uint32_t MULTIPARAM_V4_TransceiveStopActiveOnce(const uint8_t request[8],
  * 调用场景：交互读取、明确值写入、模式选择和L/M单次翻转。
  * 关键约束：函数不自动重试；幂等性策略由上层按命令类别决定。
  */
-static uint32_t MULTIPARAM_V4_TransceiveOnceInternal(const uint8_t request[8],
-                                                     uint8_t reply[8],
-                                                     uint32_t timeout_ms,
-                                                     uint8_t check_command_switch)
+static uint32_t MULTIPARAM_V4_TransceiveOnceInternal(
+    const uint8_t request[8],
+    uint8_t reply[8],
+    uint32_t timeout_ms,
+    uint8_t check_command_switch,
+    multiparam_v4_reply_address_policy_t address_policy)
 {
     uint32_t start_tick;
+    uint32_t result;
     uint16_t received_length;
+    const char *stage;
 
     if ((request == NULL) || (reply == NULL)) {
         return SYSTEM_CALL_CONDITION_ERROR;
@@ -1020,32 +1610,60 @@ static uint32_t MULTIPARAM_V4_TransceiveOnceInternal(const uint8_t request[8],
     (void)HAL_UART_DMAStop(&huart6);
     __HAL_UART_CLEAR_OREFLAG(&huart6);
     huart6.ErrorCode = HAL_UART_ERROR_NONE;
+    start_tick = HAL_GetTick();
+    MULTIPARAM_V4_BeginTransactionDiagnostic(request);
 
     if (HAL_UART_Receive_DMA(&huart6, reply, 8U) != HAL_OK) {
+        MULTIPARAM_V4_RecordTransactionDiagnostic(
+            reply, 0U, start_tick, "接收DMA启动");
         return COMM_UART_TRANSFER_ERROR;
     }
     if (HAL_UART_Transmit_DMA(&huart6, (uint8_t *)request, 8U) != HAL_OK) {
+        MULTIPARAM_V4_RecordTransactionDiagnostic(
+            reply, 0U, start_tick, "发送DMA启动");
         (void)HAL_UART_DMAStop(&huart6);
         return COMM_UART_TRANSFER_ERROR;
+    }
+    if (s_probe_trace_enabled != 0U) {
+        s_probe_trace_transaction++;
+        MULTIPARAM_V4_PrintProbePacket(request, "TX", request, 8U,
+                                       NO_ERROR, "发送DMA已启动");
     }
 
     start_tick = HAL_GetTick();
     while ((HAL_GetTick() - start_tick) < timeout_ms) {
-        if ((check_command_switch != 0U) && HasEffectiveCommandSwitchRequest()) {
-            (void)HAL_UART_DMAStop(&huart6);
-            return STATE_SWITCH;
-        }
-        if (huart6.ErrorCode != HAL_UART_ERROR_NONE) {
-            (void)HAL_UART_DMAStop(&huart6);
-            return COMM_UART_TRANSFER_ERROR;
-        }
         received_length = (huart6.hdmarx == NULL)
                               ? 0U
                               : (uint16_t)(8U - __HAL_DMA_GET_COUNTER(huart6.hdmarx));
-        if ((received_length >= 8U) && (huart6.gState == HAL_UART_STATE_READY)) {
+        if ((check_command_switch != 0U) && HasEffectiveCommandSwitchRequest()) {
+            MULTIPARAM_V4_RecordTransactionDiagnostic(
+                reply, received_length, start_tick, "命令切换");
             (void)HAL_UART_DMAStop(&huart6);
+            MULTIPARAM_V4_PrintProbePacket(request, "RX", reply,
+                                           received_length, STATE_SWITCH,
+                                           "命令切换");
+            return STATE_SWITCH;
+        }
+        if (huart6.ErrorCode != HAL_UART_ERROR_NONE) {
+            MULTIPARAM_V4_RecordTransactionDiagnostic(
+                reply, received_length, start_tick, "UART错误");
+            (void)HAL_UART_DMAStop(&huart6);
+            MULTIPARAM_V4_PrintProbePacket(request, "RX", reply,
+                                           received_length,
+                                           COMM_UART_TRANSFER_ERROR,
+                                           "UART错误");
+            return COMM_UART_TRANSFER_ERROR;
+        }
+        if ((received_length >= 8U) && (huart6.gState == HAL_UART_STATE_READY)) {
+            result = MULTIPARAM_V4_ValidateReplyInternal(
+                request, reply, address_policy, &stage);
+            MULTIPARAM_V4_RecordTransactionDiagnostic(reply, received_length,
+                                                       start_tick, stage);
+            (void)HAL_UART_DMAStop(&huart6);
+            MULTIPARAM_V4_PrintProbePacket(request, "RX", reply,
+                                           received_length, result, stage);
             s_diagnostics.interactive_transactions++;
-            return MULTIPARAM_V4_ValidateReply(request, reply);
+            return result;
         }
         HAL_Delay(1U);
     }
@@ -1053,7 +1671,21 @@ static uint32_t MULTIPARAM_V4_TransceiveOnceInternal(const uint8_t request[8],
     received_length = (huart6.hdmarx == NULL)
                           ? 0U
                           : (uint16_t)(8U - __HAL_DMA_GET_COUNTER(huart6.hdmarx));
+    if (received_length == 0U) {
+        stage = "零字节超时";
+    } else if (received_length < 8U) {
+        stage = "响应长度不足";
+    } else {
+        stage = "事务等待超时";
+    }
+    MULTIPARAM_V4_RecordTransactionDiagnostic(reply, received_length,
+                                               start_tick, stage);
     (void)HAL_UART_DMAStop(&huart6);
+    MULTIPARAM_V4_PrintProbePacket(
+        request, "RX", reply, received_length,
+        (received_length == 0U) ? SENSOR_DEVICE_COMM_TIMEOUT
+                                : SENSOR_RESP_FORMAT_ERROR,
+        stage);
     s_diagnostics.interactive_transactions++;
     s_diagnostics.interactive_errors++;
     return (received_length == 0U) ? SENSOR_DEVICE_COMM_TIMEOUT : SENSOR_RESP_FORMAT_ERROR;
@@ -1068,7 +1700,8 @@ static uint32_t MULTIPARAM_V4_TransceiveOnce(const uint8_t request[8],
                                              uint8_t reply[8],
                                              uint32_t timeout_ms)
 {
-    return MULTIPARAM_V4_TransceiveOnceInternal(request, reply, timeout_ms, 1U);
+    return MULTIPARAM_V4_TransceiveOnceInternal(
+        request, reply, timeout_ms, 1U, MULTIPARAM_V4_REPLY_ADDRESS_STRICT);
 }
 
 static uint32_t MULTIPARAM_V4_TransceiveIdempotent(const uint8_t request[8], uint8_t reply[8])
@@ -1146,7 +1779,7 @@ uint32_t MULTIPARAM_V4_ReadIntParam(uint8_t parameter, int32_t *value)
 /*
  * 函数用途：读取多参数传感器通信协议 V4.0 的 R67 传感器号。
  * 调用场景：CPU2 已确认 V4 协议并处于交互通信后读取物理传感器编号。
- * 关键约束：V4 的 R22 是密度扫频原始量，不能沿用 V3.0 的 R22 编号语义；编号必须为正整数。
+ * 关键约束：V4 的 R22 是密度扫频原始量，不能沿用 V3.0 的 R22 编号语义；编号0表示未初始化且仍为合法编号，负数无效。
  */
 uint32_t MULTIPARAM_V4_ReadSensorID(uint32_t *sensor_id)
 {
@@ -1160,7 +1793,7 @@ uint32_t MULTIPARAM_V4_ReadSensorID(uint32_t *sensor_id)
     if (result != NO_ERROR) {
         return result;
     }
-    if (value <= 0) {
+    if (value < 0) {
         return SENSOR_RESP_FORMAT_ERROR;
     }
     *sensor_id = (uint32_t)value;
@@ -1178,6 +1811,10 @@ uint32_t MULTIPARAM_V4_ReadFloatParam(uint8_t parameter, float *value)
     result = MULTIPARAM_V4_ReadParamRaw(parameter, &raw);
     if (result == NO_ERROR) {
         float parsed = MULTIPARAM_V4_RawToFloat(raw);
+        if (isnan(parsed)) {
+            /* 传感器以NaN表示当前参数尚无有效值，按数据未就绪上报而不是协议格式错误。 */
+            return SENSOR_DATA_STALE;
+        }
         if (!isfinite(parsed)) {
             return SENSOR_RESP_FORMAT_ERROR;
         }
@@ -1277,8 +1914,132 @@ uint32_t MULTIPARAM_V4_WriteParamRaw(uint8_t parameter, uint32_t raw_value)
     return result;
 }
 
+/*
+ * 函数用途：把实际收到的交互响应转换为定长十六进制文字。
+ * 调用场景：R01 诊断日志需要保留原始总线内容时。
+ * 关键约束：最多输出固定8字节，不把未接收到的缓冲区零值伪装成响应。
+ */
+static void MULTIPARAM_V4_FormatReplyBytes(char *text, size_t text_size)
+{
+    size_t used = 0U;
+
+    if ((text == NULL) || (text_size == 0U)) {
+        return;
+    }
+    text[0] = '\0';
+    for (uint16_t index = 0U;
+         index < s_last_transaction_diagnostic.received_length;
+         index++) {
+        int written = snprintf(text + used, text_size - used,
+                               (index == 0U) ? "%02X" : " %02X",
+                               s_last_transaction_diagnostic.reply[index]);
+        if ((written < 0) || ((size_t)written >= (text_size - used))) {
+            text[text_size - 1U] = '\0';
+            break;
+        }
+        used += (size_t)written;
+    }
+}
+
+/*
+ * 函数用途：打印最近一次V4交互事务的请求包和实际接收包。
+ * 调用场景：部件参数读取已经失败，需要保留现场原始收发内容时。
+ * 关键约束：只在任务上下文调用；帧校验通过后发生的值域错误要明确标记为业务校验失败。
+ */
+void MULTIPARAM_V4_PrintLastTransactionPackets(const char *operation,
+                                               uint32_t result)
+{
+    const char *stage = s_last_transaction_diagnostic.stage;
+
+    if (operation == NULL) {
+        operation = "未指定";
+    }
+    if (stage == NULL) {
+        stage = "未确定";
+    } else if ((result != NO_ERROR) && (strcmp(stage, "校验通过") == 0)) {
+        stage = "帧校验通过，业务校验失败";
+    }
+
+    printf("通信包\t协议=V4\t场景=读取部件参数\t操作=%s\t指令=%c%02u"
+           "\t方向=TX\t长度=8\tHEX=",
+           operation,
+           (char)s_last_transaction_diagnostic.request[1],
+           (unsigned int)s_last_transaction_diagnostic.request[6]);
+    for (uint16_t index = 0U; index < MULTIPARAM_V4_INTERACTIVE_FRAME_SIZE; index++) {
+        printf((index == 0U) ? "%02X" : " %02X",
+               s_last_transaction_diagnostic.request[index]);
+    }
+    printf("\r\n");
+
+    printf("通信包\t协议=V4\t场景=读取部件参数\t操作=%s\t指令=%c%02u"
+           "\t方向=RX\t长度=%u\tHEX=",
+           operation,
+           (char)s_last_transaction_diagnostic.request[1],
+           (unsigned int)s_last_transaction_diagnostic.request[6],
+           (unsigned int)s_last_transaction_diagnostic.received_length);
+    for (uint16_t index = 0U;
+         index < s_last_transaction_diagnostic.received_length;
+         index++) {
+        printf((index == 0U) ? "%02X" : " %02X",
+               s_last_transaction_diagnostic.reply[index]);
+    }
+    printf("\t结果=0x%08lX\t阶段=%s\t耗时=%lu ms"
+           "\tUART状态=0x%08lX\tUART错误=0x%08lX\r\n",
+           (unsigned long)result,
+           stage,
+           (unsigned long)s_last_transaction_diagnostic.elapsed_ms,
+           (unsigned long)s_last_transaction_diagnostic.uart_state,
+           (unsigned long)s_last_transaction_diagnostic.uart_error);
+}
+
+/*
+ * 函数用途：输出一次收到非零异常内容的R01协议版本探测现场。
+ * 调用场景：R01短帧、坏帧、UART错误或完整帧字段校验失败后。
+ * 关键约束：零字节超时不打印，避免不支持V4协议的候选设备反复刷屏。
+ */
+static void MULTIPARAM_V4_LogProtocolProbeFailure(uint32_t error_code)
+{
+    char reply_text[3U * MULTIPARAM_V4_INTERACTIVE_FRAME_SIZE];
+    char detail[384];
+
+    if (s_last_transaction_diagnostic.received_length == 0U) {
+        return;
+    }
+    MULTIPARAM_V4_FormatReplyBytes(reply_text, sizeof(reply_text));
+    (void)snprintf(
+        detail,
+        sizeof(detail),
+        "TX=%02X %02X %02X %02X %02X %02X %02X %02X,"
+        "RX长度=%u,RX=%s,响应耗时=%lu ms,校验阶段=%s,"
+        "UART状态=0x%08lX,UART错误=0x%08lX",
+        s_last_transaction_diagnostic.request[0],
+        s_last_transaction_diagnostic.request[1],
+        s_last_transaction_diagnostic.request[2],
+        s_last_transaction_diagnostic.request[3],
+        s_last_transaction_diagnostic.request[4],
+        s_last_transaction_diagnostic.request[5],
+        s_last_transaction_diagnostic.request[6],
+        s_last_transaction_diagnostic.request[7],
+        (unsigned int)s_last_transaction_diagnostic.received_length,
+        reply_text,
+        (unsigned long)s_last_transaction_diagnostic.elapsed_ms,
+        (s_last_transaction_diagnostic.stage != NULL)
+            ? s_last_transaction_diagnostic.stage
+            : "未确定",
+        (unsigned long)s_last_transaction_diagnostic.uart_state,
+        (unsigned long)s_last_transaction_diagnostic.uart_error);
+    /* 错误 阶段：错误报警 模块：传感器 操作：读取R01协议版本 原因：本次错误码对应原因 处理：继续候选协议识别 详情：原始收发、耗时和校验阶段。 */
+    ErrorLog_WarnDetail(ERROR_LOG_MODULE_SENSOR,
+                        "读取R01协议版本",
+                        ErrorLog_GetReasonByCode(error_code),
+                        "继续候选协议识别",
+                        detail);
+}
+
 uint32_t MULTIPARAM_V4_ProbeProtocolVersion(float *protocol_version)
 {
+    uint8_t request[8];
+    uint8_t reply[8];
     uint32_t raw;
     uint32_t result;
     float value;
@@ -1289,15 +2050,25 @@ uint32_t MULTIPARAM_V4_ProbeProtocolVersion(float *protocol_version)
     if (s_active_receive_requested != 0U) {
         return SENSOR_STREAM_STATE_ERROR;
     }
-    result = MULTIPARAM_V4_ReadParamRawInternal(MULTIPARAM_V4_PARAM_PROTOCOL_VERSION,
-                                                &raw,
-                                                0U,
-                                                MULTIPARAM_V4_ACTIVE_RESPONSE_TIMEOUT_MS);
+    MULTIPARAM_V4_BuildRequestFrame(MULTIPARAM_V4_BROADCAST_ADDRESS,
+                                    MULTIPARAM_V4_FUNCTION_READ,
+                                    0U,
+                                    MULTIPARAM_V4_PARAM_PROTOCOL_VERSION,
+                                    request);
+    result = MULTIPARAM_V4_TransceiveOnceInternal(
+        request, reply, MULTIPARAM_V4_ACTIVE_RESPONSE_TIMEOUT_MS, 1U,
+        MULTIPARAM_V4_REPLY_ADDRESS_PROTOCOL_PROBE);
     if (result != NO_ERROR) {
+        if (result != STATE_SWITCH) {
+            MULTIPARAM_V4_LogProtocolProbeFailure(result);
+        }
         return result;
     }
+    raw = MULTIPARAM_V4_DecodeU32Le(reply + 2U);
     value = MULTIPARAM_V4_RawToFloat(raw);
     if (!isfinite(value)) {
+        s_last_transaction_diagnostic.stage = "R01数值校验";
+        MULTIPARAM_V4_LogProtocolProbeFailure(SENSOR_PROTOCOL_VERSION_INCOMPATIBLE);
         return SENSOR_PROTOCOL_VERSION_INCOMPATIBLE;
     }
     *protocol_version = value;
@@ -1305,13 +2076,16 @@ uint32_t MULTIPARAM_V4_ProbeProtocolVersion(float *protocol_version)
         /* 向自动识别层保留实际R01值，由其判断是否继续按V3.0读取R22。 */
         return SENSOR_PROTOCOL_VERSION_INCOMPATIBLE;
     }
+    /* V4广播R01应答携带实际设备地址；后续R67和普通交互必须定向到该地址。 */
+    s_expected_address = reply[0];
     s_communication_mode = MULTIPARAM_V4_COMMUNICATION_INTERACTIVE;
     return NO_ERROR;
 }
 
 /*
- * 函数用途：发送可重试的D/S模式选择并用状态字确认最终模式。
+ * 函数用途：把D/S测量模式调整到目标状态，并用状态字确认最终模式。
  * 调用场景：交互通信模式下切换密度或液位测量过程。
+ * 关键约束：已在密度模式时不得重复发送D，避免关闭已保持开启的L/M功能。
  */
 static uint32_t MULTIPARAM_V4_SelectMeasurementMode(uint8_t function,
                                                     multiparam_v4_measurement_mode_t expected_mode)
@@ -1325,6 +2099,15 @@ static uint32_t MULTIPARAM_V4_SelectMeasurementMode(uint8_t function,
 
     if (s_active_receive_requested != 0U) {
         return SENSOR_STREAM_STATE_ERROR;
+    }
+    result = MULTIPARAM_V4_ReadOperatingState(&status_word, &mode, &feature);
+    if (result != NO_ERROR) {
+        return result;
+    }
+    if ((mode == expected_mode) &&
+        ((expected_mode == MULTIPARAM_V4_MEASUREMENT_DENSITY) ||
+         (feature == MULTIPARAM_V4_FEATURE_NONE))) {
+        return NO_ERROR;
     }
     MULTIPARAM_V4_BuildRequestFrame(MULTIPARAM_V4_GetRequestAddress(), function, 0U, 0U, request);
     result = MULTIPARAM_V4_TransceiveIdempotent(request, reply);
@@ -1393,7 +2176,7 @@ static uint32_t MULTIPARAM_V4_EnsureFeature(uint8_t enabled,
                                            multiparam_v4_feature_state_t opposite_feature,
                                            uint8_t opposite_function)
 {
-    int32_t status_word;
+    uint32_t status_word;
     multiparam_v4_measurement_mode_t mode;
     multiparam_v4_feature_state_t feature;
     uint32_t result;
@@ -1401,13 +2184,24 @@ static uint32_t MULTIPARAM_V4_EnsureFeature(uint8_t enabled,
     if (s_active_receive_requested != 0U) {
         return SENSOR_STREAM_STATE_ERROR;
     }
-    result = MULTIPARAM_V4_ReadIntParam(MULTIPARAM_V4_PARAM_STATUS, &status_word);
+    result = MULTIPARAM_V4_ReadOperatingState(&status_word, &mode, &feature);
     if (result != NO_ERROR) {
         return result;
     }
-    MULTIPARAM_V4_DecodeOperatingState((uint32_t)status_word, &mode, &feature);
     if (mode != MULTIPARAM_V4_MEASUREMENT_DENSITY) {
-        return SENSOR_STREAM_STATE_ERROR;
+        if ((enabled == 0U) && (mode == MULTIPARAM_V4_MEASUREMENT_LEVEL)) {
+            /* 进入液位模式会自动关闭L/M，关闭请求已经满足。 */
+            return NO_ERROR;
+        }
+        if ((enabled == 0U) || (mode != MULTIPARAM_V4_MEASUREMENT_LEVEL)) {
+            return SENSOR_STREAM_STATE_ERROR;
+        }
+        /* L/M只能在密度模式开启；仅在确实需要时发送D，避免D关闭已开启功能。 */
+        result = MULTIPARAM_V4_SelectDensityMode();
+        if (result != NO_ERROR) {
+            return result;
+        }
+        feature = MULTIPARAM_V4_FEATURE_NONE;
     }
 
     if (enabled == 0U) {
@@ -1452,7 +2246,6 @@ uint32_t MULTIPARAM_V4_EnterInteractive(void)
 {
     uint8_t request[8];
     uint8_t reply[8];
-    multiparam_v4_snapshot_t snapshot;
     uint32_t result;
     uint32_t readback = 0U;
     uint32_t operation_start;
@@ -1472,11 +2265,13 @@ uint32_t MULTIPARAM_V4_EnterInteractive(void)
         uint32_t event_age;
 
         MULTIPARAM_V4_Service();
-        if (MULTIPARAM_V4_CopyLatestSnapshot(&snapshot) == NO_ERROR) {
-            event_age = HAL_GetTick() - snapshot.received_tick;
+        if (s_last_active_frame_end_valid != 0U) {
+            event_age = HAL_GetTick() - s_last_active_frame_end_tick;
             if ((event_age >= MULTIPARAM_V4_ACTIVE_COMMAND_GUARD_MS) &&
                 (event_age <= MULTIPARAM_V4_ACTIVE_WINDOW_LATEST_MS)) {
                 MULTIPARAM_V4_StopActiveReceive();
+                /* 停止DMA前可能刚完成另一帧解析，发送前再次执行15ms半双工门禁。 */
+                MULTIPARAM_V4_WaitActiveFrameGuard();
                 MULTIPARAM_V4_BuildRequestFrame(MULTIPARAM_V4_GetRequestAddress(),
                                                 MULTIPARAM_V4_FUNCTION_WRITE,
                                                 1U,
@@ -1489,7 +2284,7 @@ uint32_t MULTIPARAM_V4_EnterInteractive(void)
                     if (result != NO_ERROR) {
                         return result;
                     }
-                    /* 主动帧优先，保留该帧后等待它的20ms保护期再重试停流。 */
+                    /* 主动帧优先，保留该帧后等待它的15ms保护期再重试停流。 */
                     continue;
                 }
                 break;
@@ -1512,6 +2307,8 @@ uint32_t MULTIPARAM_V4_EnterInteractive(void)
         return (restore_result == NO_ERROR) ? STATE_SWITCH : restore_result;
     }
 
+    /* 失败事务若刚收到主动帧，读回通信方式前仍需满足同一半双工保护期。 */
+    MULTIPARAM_V4_WaitActiveFrameGuard();
     if ((MULTIPARAM_V4_ReadParamRawInternal(MULTIPARAM_V4_PARAM_COMMUNICATION_MODE,
                                             &readback,
                                             0U,
@@ -1551,7 +2348,8 @@ uint32_t MULTIPARAM_V4_EnterActive(void)
                                     request);
     /* 恢复原主动通信属于必要收尾，不能被已经到达的新命令在发送前打断。 */
     result = MULTIPARAM_V4_TransceiveOnceInternal(
-        request, reply, MULTIPARAM_V4_TRANSACTION_TIMEOUT_MS, 0U);
+        request, reply, MULTIPARAM_V4_TRANSACTION_TIMEOUT_MS, 0U,
+        MULTIPARAM_V4_REPLY_ADDRESS_STRICT);
     start_result = MULTIPARAM_V4_StartActiveReceive();
     if (start_result != NO_ERROR) {
         return start_result;

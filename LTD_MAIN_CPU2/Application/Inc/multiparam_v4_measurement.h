@@ -21,7 +21,7 @@ void MULTIPARAM_V4_MeasurementInit(void);
 uint32_t MULTIPARAM_V4_MeasurementProcessDeferred(void);
 
 /*
- * 函数用途：在交互通信方式下读取并刷新四项多参数V4附加调试量。
+ * 函数用途：在交互通信方式下读取并刷新三项多参数V4附加调试量。
  * 调用场景：密度、液位、水位或姿态交互读取成功后调用。
  * 关键约束：内部按500ms节流，各字段独立成功更新，使用单次短事务且不在中断中调用。
  */
@@ -32,6 +32,7 @@ uint32_t MULTIPARAM_V4_MeasurementReadDensity(float *frequency_hz,
                                                float *temperature_c);
 uint32_t MULTIPARAM_V4_MeasurementReadLevelFrequency(uint32_t *frequency_hz);
 uint32_t MULTIPARAM_V4_MeasurementReadWaterCapacitance(float *capacitance_pf);
+uint32_t MULTIPARAM_V4_MeasurementReadMagneticZeroVoltage(float *voltage_v);
 uint32_t MULTIPARAM_V4_MeasurementReadGyro(float *angle_x_deg, float *angle_y_deg);
 
 #endif /* MULTIPARAM_V4_MEASUREMENT_H */

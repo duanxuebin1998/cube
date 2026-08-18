@@ -881,13 +881,42 @@ static int UART6_SendCommand(const DsmCommandFrameSpec *frame_spec,
  * @param log_retry 非零时记录错误重试和恢复日志；零用于兼容性静默探测。
  * @return NO_ERROR 表示某次尝试完成有效收发；命令切换立即返回 STATE_SWITCH，全部尝试失败时返回最后一次错误。
  */
+/*
+ * 函数用途：输出DSM候选探测每次尝试的原始命令或实际响应。
+ * 调用场景：Cv、CV、CN自动识别命令的发送前和单次事务退出后。
+ * 关键约束：使用recvLen限制RX输出，不把响应缓冲区尾部的零填充打印成总线数据。
+ */
+static void UART6_PrintProbePacket(const char *cmd,
+                                   const char *direction,
+                                   uint32_t attempt,
+                                   uint32_t max_attempts,
+                                   const uint8_t *bytes,
+                                   uint16_t length,
+                                   uint32_t result)
+{
+    printf("探测包\t协议=DSM\t操作=%s\t尝试=%lu/%lu\t方向=%s\t长度=%u\tHEX=",
+           cmd,
+           (unsigned long)attempt,
+           (unsigned long)max_attempts,
+           direction,
+           (unsigned int)length);
+    for (uint16_t index = 0U; index < length; index++) {
+        printf((index == 0U) ? "%02X" : " %02X", bytes[index]);
+    }
+    if (direction[0] == 'R') {
+        printf("\t结果=0x%08lX", (unsigned long)result);
+    }
+    printf("\r\n");
+}
+
 static int UART6_SendWithPolicy(const char *cmd,
                                 char *response,
                                 uint16_t maxLen,
                                 uint16_t *recv_len_out,
                                 uint32_t timeout,
                                 uint32_t max_attempts,
-                                uint8_t log_retry) {
+                                uint8_t log_retry,
+                                uint8_t trace_probe) {
     uint32_t ret = SENSOR_DEVICE_COMM_TIMEOUT;
     uint16_t recvLen = 0;
     char detail[160];
@@ -937,7 +966,16 @@ static int UART6_SendWithPolicy(const char *cmd,
         if (i > 0U) {
             HAL_Delay(DSM_PRE_SEND_DELAY);
         }
+        if (trace_probe != 0U) {
+            UART6_PrintProbePacket(cmd, "TX", i + 1U, max_attempts,
+                                   (const uint8_t *)cmd,
+                                   (uint16_t)strlen(cmd), NO_ERROR);
+        }
         ret = UART6_SendCommand(frame_spec, response, maxLen, &recvLen, timeout);
+        if (trace_probe != 0U) {
+            UART6_PrintProbePacket(cmd, "RX", i + 1U, max_attempts,
+                                   (const uint8_t *)response, recvLen, ret);
+        }
         if (ret == STATE_SWITCH) {
             return STATE_SWITCH;
         }
@@ -1010,6 +1048,24 @@ static int UART6_SendWithRetry(const char *cmd,
                                 recv_len_out,
                                 timeout,
                                 DSM_UART_MAX_RETRY,
+                                1U,
+                                0U);
+}
+
+/* 自动识别使用与正式读取相同的重试策略，同时逐次打印原始收发包。 */
+static int UART6_SendProbeWithRetry(const char *cmd,
+                                    char *response,
+                                    uint16_t maxLen,
+                                    uint16_t *recv_len_out,
+                                    uint32_t timeout)
+{
+    return UART6_SendWithPolicy(cmd,
+                                response,
+                                maxLen,
+                                recv_len_out,
+                                timeout,
+                                DSM_UART_MAX_RETRY,
+                                1U,
                                 1U);
 }
 
@@ -1066,7 +1122,8 @@ uint32_t DSM_ReadVersionContext(void)
     s_dsm_session_context.profile = DSM_VERSION_PROFILE_UNREAD;
 
     /* V3.02 以前不支持 Cv；只静默探测一次，避免旧设备产生三轮超时和错误日志。 */
-    cpu1_ret = UART6_SendWithPolicy("Cv", resp, RX_BUF_LEN, NULL, 500U, 1U, 0U);
+    cpu1_ret = UART6_SendWithPolicy("Cv", resp, RX_BUF_LEN, NULL,
+                                    500U, 1U, 0U, 1U);
     if (cpu1_ret == STATE_SWITCH) {
         return STATE_SWITCH;
     }
@@ -1086,7 +1143,7 @@ uint32_t DSM_ReadVersionContext(void)
 
     /* Cv 失败时仍读取所有历史版本都支持的 CV，保留可用的 CPU0 组合版本。 */
     memset(resp, 0, sizeof(resp));
-    ret = UART6_SendWithRetry("CV", resp, RX_BUF_LEN, NULL, 500U);
+    ret = UART6_SendProbeWithRetry("CV", resp, RX_BUF_LEN, NULL, 500U);
     if (ret != NO_ERROR) {
         if (cpu1_ret != NO_ERROR) {
             s_dsm_session_context.profile = DSM_VERSION_PROFILE_UNKNOWN;
@@ -1368,7 +1425,7 @@ uint32_t Read_VibrationTube_ID(char *id_out, size_t id_out_size)
     char resp[RX_BUF_LEN] = {0};
 
     /* 发送 CN 指令 */
-    uint32_t ret = UART6_SendWithRetry("CN", resp, RX_BUF_LEN, NULL, 500);
+    uint32_t ret = UART6_SendProbeWithRetry("CN", resp, RX_BUF_LEN, NULL, 500U);
     if (ret != NO_ERROR) {
         return ret;
     }

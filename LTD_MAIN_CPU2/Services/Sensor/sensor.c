@@ -405,7 +405,9 @@ static uint32_t Sensor_ProbeDsmSensor(uint32_t *sensor_id_out)
  * 调用场景：蓝牙链路建立后、任何同步协议探测之前。
  * 关键约束：识别成功后保留V4常驻接收；未命中或命令切换时释放UART6。
  */
-static uint32_t Sensor_ProbeV4Active(uint8_t *address_out, uint32_t timeout_ms)
+static uint32_t Sensor_ProbeV4Active(const char *operation,
+                                     uint8_t *address_out,
+                                     uint32_t timeout_ms)
 {
     multiparam_v4_snapshot_t snapshot;
     uint32_t start_tick;
@@ -415,6 +417,7 @@ static uint32_t Sensor_ProbeV4Active(uint8_t *address_out, uint32_t timeout_ms)
     MULTIPARAM_V4_MeasurementInit();
     result = MULTIPARAM_V4_StartActiveReceive();
     if (result != NO_ERROR) {
+        MULTIPARAM_V4_PrintActiveProbePacket(operation, result);
         MULTIPARAM_V4_Deinit();
         return result;
     }
@@ -422,6 +425,7 @@ static uint32_t Sensor_ProbeV4Active(uint8_t *address_out, uint32_t timeout_ms)
     start_tick = HAL_GetTick();
     while ((HAL_GetTick() - start_tick) < timeout_ms) {
         if (HasEffectiveCommandSwitchRequest()) {
+            MULTIPARAM_V4_PrintActiveProbePacket(operation, STATE_SWITCH);
             MULTIPARAM_V4_Deinit();
             return STATE_SWITCH;
         }
@@ -432,11 +436,13 @@ static uint32_t Sensor_ProbeV4Active(uint8_t *address_out, uint32_t timeout_ms)
             if (address_out != NULL) {
                 *address_out = snapshot.address;
             }
+            MULTIPARAM_V4_PrintActiveProbePacket(operation, NO_ERROR);
             return NO_ERROR;
         }
         HAL_Delay(1U);
     }
 
+    MULTIPARAM_V4_PrintActiveProbePacket(operation, SENSOR_DEVICE_COMM_TIMEOUT);
     MULTIPARAM_V4_Deinit();
     return SENSOR_DEVICE_COMM_TIMEOUT;
 }
@@ -453,7 +459,9 @@ static uint32_t Sensor_ProbeMultiparamVersion(float *protocol_version_out)
 
     MULTIPARAM_V4_Init(0U);
     MULTIPARAM_V4_MeasurementInit();
+    MULTIPARAM_V4_SetProbeTraceEnabled(1U);
     result = MULTIPARAM_V4_ProbeProtocolVersion(&protocol_version);
+    MULTIPARAM_V4_SetProbeTraceEnabled(0U);
     if ((protocol_version_out != NULL) && isfinite(protocol_version)) {
         *protocol_version_out = protocol_version;
     }
@@ -526,9 +534,13 @@ static uint32_t Sensor_CompleteV4Detection(const char *communication,
 {
     char detail[96] = {0};
     uint32_t sensor_id = 0U;
-    uint32_t result = Sensor_ReadV4SensorIdPreservingMode(&sensor_id,
-                                                          detail,
-                                                          sizeof(detail));
+    uint32_t result;
+
+    MULTIPARAM_V4_SetProbeTraceEnabled(1U);
+    result = Sensor_ReadV4SensorIdPreservingMode(&sensor_id,
+                                                 detail,
+                                                 sizeof(detail));
+    MULTIPARAM_V4_SetProbeTraceEnabled(0U);
 
     if (result != NO_ERROR) {
         MULTIPARAM_V4_Deinit();
@@ -576,8 +588,32 @@ static uint32_t Sensor_RunV4ModeCommand(uint32_t (*command)(void))
 }
 
 /*
+ * 函数用途：用新鲜主动快照判断目标V4功能状态是否已经满足。
+ * 调用场景：主动通信下的高频水电容或零点霍尔读取前。
+ * 关键约束：快照过期时不得短路，必须取得交互窗口读取R02恢复事实。
+ */
+static uint8_t Sensor_V4ActiveFeatureMatches(multiparam_v4_feature_state_t target_feature,
+                                             uint8_t enabled)
+{
+    multiparam_v4_snapshot_t snapshot;
+
+    if (MULTIPARAM_V4_GetCommunicationMode() != MULTIPARAM_V4_COMMUNICATION_ACTIVE) {
+        return 0U;
+    }
+    if ((MULTIPARAM_V4_CopyLatestSnapshot(&snapshot) != NO_ERROR) ||
+        ((HAL_GetTick() - snapshot.received_tick) > MULTIPARAM_V4_ACTIVE_TIMEOUT_MS)) {
+        return 0U;
+    }
+    if (enabled != 0U) {
+        return (uint8_t)(((snapshot.measurement_mode == MULTIPARAM_V4_MEASUREMENT_DENSITY) &&
+                          (snapshot.feature_state == target_feature)) ? 1U : 0U);
+    }
+    return (uint8_t)((snapshot.feature_state != target_feature) ? 1U : 0U);
+}
+
+/*
  * 函数用途：在多参数V4主动通信下集中取得交互窗口并执行一个目标状态命令。
- * 调用场景：业务明确使能或关闭测水、磁零点功能时。
+ * 调用场景：业务明确使能或关闭测水、零点霍尔功能时。
  * 关键约束：L/M翻转的应答丢失恢复由协议层先读状态完成，业务层不得盲目重发。
  */
 static uint32_t Sensor_RunV4FeatureCommand(uint32_t (*command)(uint8_t), uint8_t enabled)
@@ -670,7 +706,8 @@ uint32_t DetectSensorType(void) {
 
     printf("========== 传感器识别开始 ==========\r\n");
     printf("[1/6] 蓝牙查询前监听多参数V4主动帧\r\n");
-    active_v4_before_link_ret = Sensor_ProbeV4Active(&sensor_address,
+    active_v4_before_link_ret = Sensor_ProbeV4Active("主动帧-蓝牙查询前",
+                                                     &sensor_address,
                                                      SENSOR_V4_ACTIVE_FAST_PROBE_MS);
     if (active_v4_before_link_ret == NO_ERROR) {
         return Sensor_CompleteV4Detection("主动上报", sensor_address);
@@ -689,7 +726,8 @@ uint32_t DetectSensorType(void) {
 
     /* AT 查询并恢复透传后再次监听，吸收链路恢复期间尚未处理完的主动帧。 */
     printf("[3/6] 蓝牙恢复透传后再次监听多参数V4主动帧\r\n");
-    active_v4_after_link_ret = Sensor_ProbeV4Active(&sensor_address,
+    active_v4_after_link_ret = Sensor_ProbeV4Active("主动帧-透传恢复后",
+                                                    &sensor_address,
                                                     MULTIPARAM_V4_ACTIVE_TIMEOUT_MS);
     if (active_v4_after_link_ret == NO_ERROR) {
         return Sensor_CompleteV4Detection("主动上报", sensor_address);
@@ -1151,7 +1189,7 @@ uint32_t Read_Density(float *frequency, float *density, float *temp) {
  */
 uint32_t Sensor_ReadWaterCapacitance(float *cap_out)
 {
-    uint32_t ret;
+    uint32_t ret = NO_ERROR;
 
     if (cap_out == NULL) {
         return SYSTEM_CALL_CONDITION_ERROR;
@@ -1166,7 +1204,27 @@ uint32_t Sensor_ReadWaterCapacitance(float *cap_out)
     } else if (g_deviceParams.sensorType == DSM_SENSOR) {
         ret = Read_Water_Capacitance(cap_out);
     } else if (g_deviceParams.sensorType == MULTIPARAM_V4_SENSOR) {
-        ret = MULTIPARAM_V4_MeasurementReadWaterCapacitance(cap_out);
+        if (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_ACTIVE) {
+            ret = Sensor_SetWaterEnabled(1U);
+        }
+        if (ret == NO_ERROR) {
+            uint32_t start_tick = HAL_GetTick();
+
+            do {
+                ret = MULTIPARAM_V4_MeasurementReadWaterCapacitance(cap_out);
+                if (ret != SENSOR_DATA_STALE) {
+                    break;
+                }
+                if (HasEffectiveCommandSwitchRequest()) {
+                    ret = STATE_SWITCH;
+                    break;
+                }
+                if ((HAL_GetTick() - start_tick) >= MULTIPARAM_V4_ACTIVE_TIMEOUT_MS) {
+                    break;
+                }
+                HAL_Delay(MULTIPARAM_V4_ACTIVE_COMMAND_GUARD_MS);
+            } while (1);
+        }
     } else {
         ret = SENSOR_STREAM_STATE_ERROR;
     }
@@ -1211,11 +1269,17 @@ uint32_t Sensor_ReadGyroAngle(float *angle_x_deg, float *angle_y_deg)
  */
 uint32_t Sensor_SetWaterEnabled(uint8_t enabled)
 {
+    uint8_t target_enabled = (enabled != 0U) ? 1U : 0U;
+
     if (g_deviceParams.sensorType != MULTIPARAM_V4_SENSOR) {
         return SENSOR_CAPABILITY_UNSUPPORTED;
     }
+    if (Sensor_V4ActiveFeatureMatches(MULTIPARAM_V4_FEATURE_WATER,
+                                      target_enabled) != 0U) {
+        return NO_ERROR;
+    }
     return Sensor_RunV4FeatureCommand(MULTIPARAM_V4_EnsureWaterEnabled,
-                                      (enabled != 0U) ? 1U : 0U);
+                                      target_enabled);
 }
 
 /*
@@ -1224,11 +1288,57 @@ uint32_t Sensor_SetWaterEnabled(uint8_t enabled)
  */
 uint32_t Sensor_SetMagneticZeroEnabled(uint8_t enabled)
 {
+    uint8_t target_enabled = (enabled != 0U) ? 1U : 0U;
+
     if (g_deviceParams.sensorType != MULTIPARAM_V4_SENSOR) {
         return SENSOR_CAPABILITY_UNSUPPORTED;
     }
+    if (Sensor_V4ActiveFeatureMatches(MULTIPARAM_V4_FEATURE_MAGNETIC_ZERO,
+                                      target_enabled) != 0U) {
+        return NO_ERROR;
+    }
     return Sensor_RunV4FeatureCommand(MULTIPARAM_V4_EnsureMagneticZeroEnabled,
-                                      (enabled != 0U) ? 1U : 0U);
+                                      target_enabled);
+}
+
+/*
+ * 函数用途：读取V4零点霍尔电压并等待功能开启后的首个有效值。
+ * 调用场景：零点流程明确需要R03磁零点电压时。
+ * 关键约束：自动进入密度模式并切换到M功能，读取结束后保持M开启。
+ */
+uint32_t Sensor_ReadMagneticZeroVoltage(float *voltage_v)
+{
+    uint32_t start_tick;
+    uint32_t ret = NO_ERROR;
+
+    if (voltage_v == NULL) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
+    if (g_deviceParams.sensorType != MULTIPARAM_V4_SENSOR) {
+        return SENSOR_CAPABILITY_UNSUPPORTED;
+    }
+    if (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_ACTIVE) {
+        ret = Sensor_SetMagneticZeroEnabled(1U);
+    }
+    if (ret != NO_ERROR) {
+        return Sensor_DiagnoseCommTimeout(ret, "开启零点霍尔");
+    }
+
+    start_tick = HAL_GetTick();
+    do {
+        ret = MULTIPARAM_V4_MeasurementReadMagneticZeroVoltage(voltage_v);
+        if (ret != SENSOR_DATA_STALE) {
+            break;
+        }
+        if (HasEffectiveCommandSwitchRequest()) {
+            return STATE_SWITCH;
+        }
+        if ((HAL_GetTick() - start_tick) >= MULTIPARAM_V4_ACTIVE_TIMEOUT_MS) {
+            break;
+        }
+        HAL_Delay(MULTIPARAM_V4_ACTIVE_COMMAND_GUARD_MS);
+    } while (1);
+    return Sensor_DiagnoseCommTimeout(ret, "读取零点霍尔");
 }
 
 /**
@@ -1366,6 +1476,22 @@ static uint32_t Sensor_UpdateWirelessRssiForPartParams(uint8_t force_update)
     last_update_tick = now_tick;
     return WirelessPairing_UpdateConnectionStatusSnapshot();
 }
+/*
+ * 函数用途：在V4交互部件参数读取失败时打印最后一组原始收发包。
+ * 调用场景：姿态角、密度组合量或水位电容读取返回错误后、错误码上抛前。
+ * 关键约束：主动上报路径没有对应交互事务，禁止打印可能属于旧事务的缓存包。
+ */
+static uint32_t Sensor_ReportV4PartParamsFailure(const char *operation,
+                                                 uint32_t result)
+{
+    if ((result != NO_ERROR) &&
+        (g_deviceParams.sensorType == MULTIPARAM_V4_SENSOR) &&
+        (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_INTERACTIVE)) {
+        MULTIPARAM_V4_PrintLastTransactionPackets(operation, result);
+    }
+    return result;
+}
+
 /* ================== CMD：读取部件参数 ================== */
 /**
  * @brief 读取部件参数的共用实现。
@@ -1386,6 +1512,7 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
     float ax = 0.0f, ay = 0.0f;
     float freq = 0.0f, dens = 0.0f, temp = 0.0f;
     float cap = 0.0f;
+    float magnetic_zero_voltage = 0.0f;
     float supply_voltage = 0.0f;
     float period_225 = 0.0f, period_45 = 0.0f;
     float dynamic_viscosity = 0.0f;
@@ -1445,8 +1572,15 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
 
     if (Sensor_SupportsGyroChannel()) {
         ret = Sensor_ReadGyroAngle(&ax, &ay);
-        if (ret != NO_ERROR) {
-            return ret;
+        if ((g_deviceParams.sensorType == MULTIPARAM_V4_SENSOR) &&
+            (ret == SENSOR_DATA_STALE)) {
+            /* V4姿态角尚未生成或当前无效时，仅跳过诊断项，不覆盖已有快照。 */
+            (void)Sensor_ReportV4PartParamsFailure("读取姿态角", ret);
+            printf("读取部件参数\tV4姿态角当前无有效值，跳过本项且不置错误状态 | 结果=0x%08lX\r\n",
+                   (unsigned long)ret);
+            ret = NO_ERROR;
+        } else if (ret != NO_ERROR) {
+            return Sensor_ReportV4PartParamsFailure("读取姿态角", ret);
         } else {
             /* 你 Read_Gyro_Angle() 里已经写了 debug_data.angle_x/y，这里再确保一遍 */
             g_measurement.debug_data.angle_x = (int32_t)(ax * 100.0f);
@@ -1483,8 +1617,15 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
             printf("读取部件参数\tLTD密度/频率暂未读到，按部分成功处理，其他部件参数保留有效。错误码=0x%08lX\r\n",
                    (unsigned long)ret);
             ret = NO_ERROR;
+        } else if ((g_deviceParams.sensorType == MULTIPARAM_V4_SENSOR) &&
+                   (ret == SENSOR_DATA_STALE)) {
+            /* V4测量值尚未生成或当前无效时，仅跳过诊断项，避免维护读取进入全局错误态。 */
+            (void)Sensor_ReportV4PartParamsFailure("读取密度/温度/频率", ret);
+            printf("读取部件参数\tV4密度/温度/频率当前无有效值，跳过本项且不置错误状态 | 结果=0x%08lX\r\n",
+                   (unsigned long)ret);
+            ret = NO_ERROR;
         } else {
-            return ret;
+            return Sensor_ReportV4PartParamsFailure("读取密度/温度/频率", ret);
         }
     } else {
         /* 你 Read_Density() 里已写 debug_data.temperature/frequency，这里保证一致 */
@@ -1528,15 +1669,38 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
                    dynamic_viscosity);
         }
     }
-    /* ---------- 7) 水位电容 ---------- */
+    /* ---------- 7) V4零点霍尔 ---------- */
+    if (g_deviceParams.sensorType == MULTIPARAM_V4_SENSOR) {
+        ret = Sensor_ReadMagneticZeroVoltage(&magnetic_zero_voltage);
+        if (ret == SENSOR_DATA_STALE) {
+            (void)Sensor_ReportV4PartParamsFailure("读取零点霍尔", ret);
+            printf("读取部件参数\tV4零点霍尔当前无有效值，跳过本项且不置错误状态 | 结果=0x%08lX\r\n",
+                   (unsigned long)ret);
+            ret = NO_ERROR;
+        } else if (ret != NO_ERROR) {
+            return Sensor_ReportV4PartParamsFailure("读取零点霍尔", ret);
+        } else {
+            printf("V4零点霍尔 | 磁零点电压=%.6f V\r\n",
+                   (double)magnetic_zero_voltage);
+        }
+    }
+
+    /* ---------- 8) 水位电容 ---------- */
     if ((!update_command_state) && HasEffectiveCommandSwitchRequest()) {
         return STATE_SWITCH;
     }
 
     if (Sensor_SupportsWaterCapChannel()) {
         ret = Sensor_ReadWaterCapacitance(&cap);
-        if (ret != NO_ERROR) {
-            return ret;
+        if ((g_deviceParams.sensorType == MULTIPARAM_V4_SENSOR) &&
+            (ret == SENSOR_DATA_STALE)) {
+            /* V4水位电容尚未生成或当前无效时，仅跳过诊断项，不覆盖已有快照。 */
+            (void)Sensor_ReportV4PartParamsFailure("读取水位电容", ret);
+            printf("读取部件参数\tV4水位电容当前无有效值，跳过本项且不置错误状态 | 结果=0x%08lX\r\n",
+                   (unsigned long)ret);
+            ret = NO_ERROR;
+        } else if (ret != NO_ERROR) {
+            return Sensor_ReportV4PartParamsFailure("读取水位电容", ret);
         } else {
             /* 水位电容快照按 0.1pF 保存，避免和历史“电压”语义混淆
                若传感器返回单位变化，需要同步调整字段名和显示小数位。 */
@@ -1547,7 +1711,7 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
         printf("读取部件参数\t当前传感器类型不支持水位电容读取，已跳过\r\n");
     }
 
-    /* ---------- 8) 蓝牙连接 RSSI ---------- */
+    /* ---------- 9) 蓝牙连接 RSSI ---------- */
     if ((!update_command_state) && HasEffectiveCommandSwitchRequest()) {
         return STATE_SWITCH;
     }
@@ -1564,7 +1728,7 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
         return STATE_SWITCH;
     }
 
-    /* ---------- 9) 预留接口：后续新增部件参数统一挂这里 ---------- */
+    /* ---------- 10) 预留接口：后续新增部件参数统一挂这里 ---------- */
     /* TODO:
        - 读非DSM传感器电源电压/驱动电压
        - 读TMC5130错误寄存器(GSTAT/DRV_STATUS)

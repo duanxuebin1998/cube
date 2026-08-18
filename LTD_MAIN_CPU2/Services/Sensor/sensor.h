@@ -121,6 +121,12 @@ uint32_t Read_Density(float *frequency, float *density, float *temp);
  */
 uint32_t Sensor_ReadWaterCapacitance(float *cap_out);
 /**
+ * @brief 读取V4零点霍尔对应的磁零点电压。
+ * @param voltage_v 用于返回R03电压值，单位V。
+ * @return NO_ERROR表示有效；非V4传感器返回能力不支持，其他值表示状态、通信或数据异常。
+ */
+uint32_t Sensor_ReadMagneticZeroVoltage(float *voltage_v);
+/**
  * @brief 读取传感器陀螺仪姿态角。
  *
  * @param angle_x_deg 用于返回陀螺仪 X 轴角度的输出参数，单位度。

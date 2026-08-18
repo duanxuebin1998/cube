@@ -244,6 +244,7 @@ void App_Init(void) {
 void App_MainLoop(void) {
     CommandType pending_command = CMD_NONE;
     uint32_t power_fault_code;
+    uint32_t v4_quality_error;
 
 	/* 测试指令 */
 	/* MULTIPARAM_V3_Test_AllParams(); / / 多参数传感器 V3.0 测试函数 */
@@ -262,6 +263,11 @@ void App_MainLoop(void) {
 	/* 后台轻量检查：这里只做一次快速轮询，不在主循环里展开复杂处理。 */
 	/* 主动帧由PendSV解包并更新运行数据；主循环只处理UART恢复和超时诊断。 */
 	MULTIPARAM_V4_Service();
+    v4_quality_error = MULTIPARAM_V4_TakeQualityError();
+    if ((v4_quality_error != NO_ERROR) &&
+        (g_measurement.device_status.error_code == NO_ERROR)) {
+        FaultManager_LatchAsyncError(v4_quality_error);
+    }
 	/* 先输出PendSV已完成的紧急保存快照，确保所有printf仍在线程态。 */
 	SerialCommand_ProcessDeferredReports();
 	(void)MotorCtrl_PollRuntimePosition();

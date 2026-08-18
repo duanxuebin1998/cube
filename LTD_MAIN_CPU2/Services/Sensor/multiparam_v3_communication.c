@@ -103,6 +103,35 @@ static void MULTIPARAM_V3_RecordDiagnostic(const char *stage, uint16_t received_
     s_multiparam_v3_last_received_length = received_length;
 }
 
+/*
+ * 函数用途：输出V3候选探测每次尝试的原始请求或实际响应。
+ * 调用场景：自动识别以无错误重试日志方式读取R22时。
+ * 关键约束：只打印实际接收长度，短帧后的零填充字节不得伪装成响应。
+ */
+static void MULTIPARAM_V3_PrintProbePacket(const char *direction,
+                                           uint32_t attempt,
+                                           const uint8_t frame[8],
+                                           uint16_t length,
+                                           uint32_t result)
+{
+    uint16_t print_length = (length > 8U) ? 8U : length;
+
+    printf("探测包\t协议=V3\t操作=R22\t尝试=%lu/%u\t方向=%s\t长度=%u\tHEX=",
+           (unsigned long)attempt,
+           (unsigned int)MULTIPARAM_V3_MAX_RETRY,
+           direction,
+           (unsigned int)print_length);
+    for (uint16_t index = 0U; index < print_length; index++) {
+        printf((index == 0U) ? "%02X" : " %02X", frame[index]);
+    }
+    if (direction[0] == 'R') {
+        printf("\t结果=0x%08lX\t阶段=%s",
+               (unsigned long)result,
+               s_multiparam_v3_last_stage);
+    }
+    printf("\r\n");
+}
+
 /**
  * @brief 在统一重试日志中附带完整的 8 字节请求和当前应答。
  *
@@ -296,6 +325,9 @@ static uint32_t MULTIPARAM_V3_WaitFixedReceiveDma(uint8_t rx[8], uint32_t timeou
  * @return NO_ERROR 表示固定帧发送、接收和前 7 字节累加和校验均成功；其他值为接收启动或等待错误、UART6 发送错误或 SENSOR_BCC_ERROR。
  */
 static int MULTIPARAM_V3_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
+    s_multiparam_v3_last_stage = "事务开始";
+    s_multiparam_v3_last_uart_error = HAL_UART_ERROR_NONE;
+    s_multiparam_v3_last_received_length = 0U;
 #ifdef DEBUG_DSM
 	printf("[多参数协议V3.0] 发送: ");
 	for (int i = 0; i < 8; i++)
@@ -325,6 +357,7 @@ static int MULTIPARAM_V3_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 	if (rx_ret != NO_ERROR) {
 		return (int)rx_ret;
 	}
+    MULTIPARAM_V3_RecordDiagnostic("接收完成", 8U);
 #ifdef DEBUG_DSM
 	printf("[多参数协议V3.0] 接收: ");
 	for (int i = 0; i < 8; i++)
@@ -579,12 +612,28 @@ static int MULTIPARAM_V3_Read_IntParamInternal(uint8_t param, int32_t *out_value
 		}
 		/* 读取整数参数前等待 DSM_PRE_SEND_DELAY，确保 UART6 和传感器均已退出上一事务。 */
 		HAL_Delay(DSM_PRE_SEND_DELAY);
+        if (log_retry == 0U) {
+            MULTIPARAM_V3_PrintProbePacket("TX", (uint32_t)(attempt + 1),
+                                           tx, 8U, NO_ERROR);
+        }
 		int ret = MULTIPARAM_V3_Transceive(tx, rx);
 		if (ret == STATE_SWITCH) {
+            if (log_retry == 0U) {
+                MULTIPARAM_V3_PrintProbePacket("RX", (uint32_t)(attempt + 1),
+                                               rx,
+                                               s_multiparam_v3_last_received_length,
+                                               (uint32_t)ret);
+            }
 			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
 			return STATE_SWITCH;
 		}
 		if (ret != NO_ERROR) {
+            if (log_retry == 0U) {
+                MULTIPARAM_V3_PrintProbePacket("RX", (uint32_t)(attempt + 1),
+                                               rx,
+                                               s_multiparam_v3_last_received_length,
+                                               (uint32_t)ret);
+            }
 			last_err = ret;
 			if (log_retry != 0U) {
 				MULTIPARAM_V3_LogRetry(ERROR_LOG_OP_READ_INT_PARAM,
@@ -597,6 +646,12 @@ static int MULTIPARAM_V3_Read_IntParamInternal(uint8_t param, int32_t *out_value
 		}
 
 		ret = MULTIPARAM_V3_CheckReply(tx, rx);
+        if (log_retry == 0U) {
+            MULTIPARAM_V3_PrintProbePacket("RX", (uint32_t)(attempt + 1),
+                                           rx,
+                                           s_multiparam_v3_last_received_length,
+                                           (uint32_t)ret);
+        }
 		if (ret == STATE_SWITCH) {
 			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
 			return STATE_SWITCH;
@@ -778,7 +833,7 @@ int MULTIPARAM_V3_Read_SensorID(uint32_t *sensor_id) {
 }
 
 /**
- * @brief 在传感器自动识别阶段静默读取 多参数传感器通信协议 V3.0 的 R22 设备编号。
+ * @brief 在传感器自动识别阶段读取并逐次打印 多参数传感器通信协议 V3.0 的 R22 原始收发包。
  *
  * 函数以参数码 R22 调用无日志版本的整数读取接口，只有完整通信和应答校验成功时才写入 sensor_id。
  *

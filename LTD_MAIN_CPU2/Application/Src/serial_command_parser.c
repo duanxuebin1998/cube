@@ -385,6 +385,47 @@ static uint8_t SerialCommandParser_ParseSp(const uint8_t *command)
 }
 
 /**
+ * @brief 校验多参数 V4 传感器串口调试命令族。
+ *
+ * @param command 以 NUL 结尾的 V4 调试命令候选文本。
+ * @return 1 表示命令完整合法，0 表示操作码、参数范围或尾随字符不合法。
+ */
+static uint8_t SerialCommandParser_ParseV4(const uint8_t *command)
+{
+    const char *cursor;
+    unsigned long parameter;
+
+    if ((SerialCommandParser_IsExact(command, "V4?") != 0U) ||
+        (SerialCommandParser_IsExact(command, "V4P") != 0U) ||
+        (SerialCommandParser_IsExact(command, "V4I") != 0U) ||
+        (SerialCommandParser_IsExact(command, "V4A") != 0U) ||
+        (SerialCommandParser_IsExact(command, "V4D") != 0U) ||
+        (SerialCommandParser_IsExact(command, "V4S") != 0U) ||
+        (SerialCommandParser_IsExact(command, "V4O") != 0U) ||
+        (SerialCommandParser_IsExact(command, "V4F") != 0U) ||
+        (SerialCommandParser_IsExact(command, "V4G") != 0U) ||
+        (SerialCommandParser_IsExact(command, "V4C") != 0U)) {
+        return 1U;
+    }
+    if (((command[2] == 'L') || (command[2] == 'M')) &&
+        (command[3] == '=') &&
+        ((command[4] == '0') || (command[4] == '1')) &&
+        (command[5] == '\0')) {
+        return 1U;
+    }
+    if ((command[2] != 'R') || (command[3] != '=')) {
+        return 0U;
+    }
+
+    cursor = (const char *)&command[4];
+    if ((SerialCommandParser_ParseUnsigned(&cursor, 0UL, 159UL, &parameter) == 0U) ||
+        (*cursor != '\0')) {
+        return 0U;
+    }
+    return (uint8_t)(((parameter <= 25UL) || (parameter >= 65UL)) ? 1U : 0U);
+}
+
+/**
  * @brief 对完整命令执行分类和严格语法校验，拒绝前缀误匹配。
  *
  * 函数先识别 STOP、HELP、版本、状态、错误、电源和编码器查询等必须完整匹配的控制命令，再接受单字节正式业务命令，禁止以合法首字母开头的多余尾随字符被误当成正式命令。
@@ -479,6 +520,11 @@ SerialCommandParseResult SerialCommandParser_Parse(const uint8_t *command)
     }
     if ((command[0] == 'S') && (command[1] == 'P')) {
         result.kind = (SerialCommandParser_ParseSp(command) != 0U) ?
+                      SERIAL_COMMAND_KIND_TEST : SERIAL_COMMAND_KIND_INVALID;
+        return result;
+    }
+    if ((command[0] == 'V') && (command[1] == '4')) {
+        result.kind = (SerialCommandParser_ParseV4(command) != 0U) ?
                       SERIAL_COMMAND_KIND_TEST : SERIAL_COMMAND_KIND_INVALID;
         return result;
     }
