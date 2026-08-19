@@ -17,8 +17,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "test.h"
-#include "sensor.h"
-#include "wireless_pairing.h"
+#include "sensor_service.h"
+#include "part_diagnostics.h"
+#include "Wireless/wireless_pairing.h"
 #include "encoder.h"
 #include "measure_water_level.h"
 #include "error_log.h"
@@ -228,7 +229,6 @@ static void CMD_RunToPosition(void);
 /**
  * @brief 执行部件参数读取命令并更新测量快照。
  */
-void CMD_ReadPartParams(void);
 
 /*
  * 函数用途：判断正式命令是否必须依赖本次运行期确认的传感器身份。
@@ -311,8 +311,8 @@ void ProcessMeasureCmd(CommandType command)
     }
 
     if ((Measure_CommandRequiresDetectedSensor(command) != 0U) &&
-        (Sensor_IsDetectionValid() == 0U)) {
-        uint32_t sensor_detect_ret = Sensor_GetDetectionResult();
+        (SensorService_IsDetectionValid() == 0U)) {
+        uint32_t sensor_detect_ret = SensorService_GetDetectionResult();
 
         if ((sensor_detect_ret == NO_ERROR) || (sensor_detect_ret == STATE_SWITCH)) {
             sensor_detect_ret = SENSOR_DEVICE_COMM_TIMEOUT;
@@ -443,7 +443,7 @@ void ProcessMeasureCmd(CommandType command)
     /* --- 新增：读取部件参数 --- */
     case CMD_READ_PART_PARAMS:
         printf("执行读取部件参数指令\r\n");
-        CMD_ReadPartParams();
+        PartDiagnostics_HandleCommand();
         break;
 
     /* ================== 调试 / 标定 / 系统类指令 ================== */
@@ -1486,7 +1486,7 @@ static void CMD_SyntheticMeasurement(void) {
     printf("密度分布\t液位搜索成功\r\n");
 
     /* 2. 切换到密度测量模式 */
-    EnableDensityMode();
+    SensorService_EnableDensityMode();
 
     /* 3. 按参数选择分布密度测量模式, 结果写入 temp */
     printf("综合测量\t分布测模式参数=%lu, 内核模式=%u\r\n",

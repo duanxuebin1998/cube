@@ -5,8 +5,9 @@
  *      Author: Duan Xuebin
  */
 
-#include <multiparam_v3_communication.h>
-#include "multiparam_v4_communication.h"
+#include "Protocols/MultiparamV3/multiparam_v3_communication.h"
+#include "Protocols/Dsm/dsm_sensor_communication.h"
+#include "Protocols/Dm4/V4/multiparam_v4_communication.h"
 #include "test.h"
 #include "serial_command_parser.h"
 #include "fixed_frequency_level_search.h"
@@ -20,12 +21,11 @@
 #include "measure_tank_height.h"
 #include "measure_zero.h"
 #include "measure_oilLevel.h"
-#include "wireless_pairing.h"
+#include "Wireless/wireless_pairing.h"
 #include "error_log.h"
 #include "weight.h"
 #include "system_parameter.h"
-#include "sensor.h"
-#include "sensor_safe_legacy_adapter.h"
+#include "sensor_service.h"
 #include <mb85rs2m.h>
 #include "my_crc.h"
 #include "ad5421.h"
@@ -2840,15 +2840,15 @@ static void __attribute__((unused)) Sensor_CommCheckAndLog(const char *tag)
         return;
     }
 
-    if (g_deviceParams.sensorType == SAFE_SENSOR) {
-        printf("[传感器] %s 类型=安全协议(%lu)，单次通信=读取频率/密度/温度\r\n",
+    if (g_deviceParams.sensorType == DM4_SENSOR) {
+        printf("[传感器] %s 类型=DM4(%lu)，单次通信=读取频率/密度/温度\r\n",
                tag,
                (unsigned long)g_deviceParams.sensorType);
 
-        ret = SensorSafeAdapter_ReadDensity(&frequency, &density, &temp);
-        Test_SensorCommPrintResult(tag, "安全协议读取频率/密度/温度", ret, &comm_fail_cnt);
+        ret = SensorService_ReadDensity(&frequency, &density, &temp);
+        Test_SensorCommPrintResult(tag, "DM4读取频率/密度/温度", ret, &comm_fail_cnt);
         if (ret == NO_ERROR) {
-            printf("[传感器][正常] %s 安全协议 频率=%.3f Hz 密度=%.3f 温度=%.3f C\r\n",
+            printf("[传感器][正常] %s DM4 频率=%.3f Hz 密度=%.3f 温度=%.3f C\r\n",
                    tag,
                    frequency,
                    density,
@@ -3299,7 +3299,8 @@ void motor_text_encoder(float run_distance_mm,
         Test_MotorTextClearIgnoredError();
     }
 }
-#include <multiparam_v3_communication.h>
+#include "Protocols/MultiparamV3/multiparam_v3_communication.h"
+#include "Protocols/Dsm/dsm_sensor_communication.h"
 #include <stdio.h>
 
 /**
@@ -3384,7 +3385,7 @@ void SensorWireless_CommTest(void)
         return;
     }
 
-    ret = DetectSensorType();
+    ret = SensorService_Detect();
     if (!Test_CommRecordResult("传感器协议识别", ret, &ok_count, &fail_count)) {
         printf("协议识别失败，跳过传感器参数读取\r\n");
         printf("===== 通信测试结束，成功=%lu 失败=%lu =====\r\n\r\n",
@@ -3402,10 +3403,10 @@ void SensorWireless_CommTest(void)
         if (Test_CommRecordResult("DSM一代单次读取频率/密度/温度", ret, &ok_count, &fail_count)) {
             printf("DSM一代密度数据: 频率=%.3f Hz 密度=%.3f 温度=%.3f\r\n", frequency, density, temp);
         }
-    } else if (g_deviceParams.sensorType == SAFE_SENSOR) {
-        ret = SensorSafeAdapter_ReadDensity(&frequency, &density, &temp);
-        if (Test_CommRecordResult("安全协议单次读取频率/密度/温度", ret, &ok_count, &fail_count)) {
-            printf("安全协议密度数据: 频率=%.3f Hz 密度=%.3f 温度=%.3f\r\n", frequency, density, temp);
+    } else if (g_deviceParams.sensorType == DM4_SENSOR) {
+        ret = SensorService_ReadDensity(&frequency, &density, &temp);
+        if (Test_CommRecordResult("DM4单次读取频率/密度/温度", ret, &ok_count, &fail_count)) {
+            printf("DM4密度数据: 频率=%.3f Hz 密度=%.3f 温度=%.3f\r\n", frequency, density, temp);
         }
     } else if (g_deviceParams.sensorType == LTD_SENSOR) {
         ret = (uint32_t)MULTIPARAM_V3_Read_Density(&density);

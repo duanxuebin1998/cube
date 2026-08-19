@@ -23,7 +23,8 @@
 /* USER CODE BEGIN 0 */
 #include "stdio.h"
 #include "hostcommu.h"
-#include "multiparam_v4_communication.h"
+#include "Protocols/Dm4/V4/multiparam_v4_communication.h"
+#include "sensor_uart6_owner.h"
 #ifdef __GNUC__
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
 PUTCHAR_PROTOTYPE {
@@ -195,8 +196,7 @@ void CPU2_UartRecoveryPollFromTim4Isr(void)
 	if (service_due != 0U) {
 		SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
 	}
-	/* USART6由V4协议层管理，只复用TIM4节拍推进其非阻塞恢复状态机。 */
-	MULTIPARAM_V4_PollRecoveryFromTimerISR();
+
 }
 
 /*
@@ -290,7 +290,8 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
  */
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
 {
-	if ((huart != NULL) && (huart->Instance == USART6)) {
+	if ((huart != NULL) && (huart->Instance == USART6) &&
+		(SensorUart6Owner_Is(SENSOR_UART6_OWNER_DM4_V4_ACTIVE) != 0U)) {
 		MULTIPARAM_V4_OnUartRxEventISR(size);
 	}
 }
@@ -304,7 +305,8 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 		(huart->Instance == UART5)) {
 		(void)CPU2_UartRestartRxDMA(huart);
 	}
-	if (huart->Instance == USART6) {
+	if ((huart->Instance == USART6) &&
+		(SensorUart6Owner_Is(SENSOR_UART6_OWNER_DM4_V4_ACTIVE) != 0U)) {
 		MULTIPARAM_V4_OnUartErrorISR(huart->ErrorCode);
 	}
 }
@@ -312,7 +314,8 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 /* USART6异步终止完成后由协议层在PendSV中恢复，不依赖阻塞主循环。 */
 void HAL_UART_AbortReceiveCpltCallback(UART_HandleTypeDef *huart)
 {
-	if ((huart != NULL) && (huart->Instance == USART6)) {
+	if ((huart != NULL) && (huart->Instance == USART6) &&
+		(SensorUart6Owner_Is(SENSOR_UART6_OWNER_DM4_V4_ACTIVE) != 0U)) {
 		MULTIPARAM_V4_OnUartAbortReceiveCompleteISR();
 	}
 }

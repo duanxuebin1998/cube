@@ -32,8 +32,10 @@
 #include "encoder.h"
 #include "adc.h"
 #include "power_monitor.h"
-#include "multiparam_v4_communication.h"
-#include "multiparam_v4_measurement.h"
+#include "fault_manager.h"
+#include "system_parameter.h"
+#include "Protocols/Dm4/V4/multiparam_v4_communication.h"
+#include "Protocols/Dm4/V4/multiparam_v4_measurement.h"
 #include "../../Services/Relay/relay_output.h"
 #include "../../Services/AoOutput/ao_output.h"
 /* USER CODE END Includes */
@@ -387,6 +389,7 @@ void DebugMon_Handler(void)
   */
 void PendSV_Handler(void)
 {
+  uint32_t v4_quality_error;
   /* USER CODE BEGIN PendSV_IRQn 0 */
 
   /* USER CODE END PendSV_IRQn 0 */
@@ -400,6 +403,12 @@ void PendSV_Handler(void)
   Encoder_ProcessDeferredPersistence();
   if (MULTIPARAM_V4_ProcessDeferredPendSV() != 0U) {
     (void)MULTIPARAM_V4_MeasurementProcessDeferred();
+  }
+  /* 三连异常和主动流超时在PendSV立即锁存，不能等待阻塞主循环再次获得执行权。 */
+  v4_quality_error = MULTIPARAM_V4_TakeQualityError();
+  if ((v4_quality_error != NO_ERROR) &&
+      (g_measurement.device_status.error_code == NO_ERROR)) {
+    FaultManager_LatchAsyncError(v4_quality_error);
   }
   (void)AoOutput_ProcessPendingTimerRefresh();
   CPU2_ProcessDeferredUartFrames();
@@ -419,6 +428,8 @@ void SysTick_Handler(void)
   /* USER CODE BEGIN SysTick_IRQn 1 */
   /* 1ms周期只检查寄存器和RAM状态、执行硬门禁及挂起延后任务。 */
   PowerMonitor_TickFromISR();
+  /* V4节拍只检查到期条件并挂起PendSV，不在SysTick中停止DMA、解包或打印。 */
+  MULTIPARAM_V4_TickFromISR();
   /* USER CODE END SysTick_IRQn 1 */
 }
 

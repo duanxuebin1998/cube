@@ -15,7 +15,7 @@
 #include <stdlib.h>
 #include "measure_zero.h"
 #include "motor_ctrl.h"
-#include "sensor.h"
+#include "sensor_service.h"
 #include "encoder.h"
 #include "error_log.h"
 /* 全局变量：存储最终确定的罐底位置（编码器计数值） */
@@ -681,7 +681,7 @@ static uint32_t CaptureGyroZeroRefAverage(const char *tag, uint8_t allow_first_s
     float min_y = 0.0f, max_y = 0.0f;
 
     for (uint32_t i = 0; i < BOTTOM_GYRO_REF_SAMPLE_COUNT; i++) {
-        ret = Sensor_ReadGyroAngle(&ax, &ay);
+        ret = SensorService_ReadGyroAngle(&ax, &ay);
         if (ret != NO_ERROR) {
             g_gyro_zero_ref.valid = 0;
             return ret;
@@ -871,7 +871,7 @@ uint32_t check_bottom_status(Weight_StateTypeDef *status)
     }
 
     float ax = 0.0f, ay = 0.0f;
-    uint32_t ret = Sensor_ReadGyroAngle(&ax, &ay);
+    uint32_t ret = SensorService_ReadGyroAngle(&ax, &ay);
     if (ret != NO_ERROR) {
         printf("罐底检测(陀螺仪) | 读取失败 错误码：%lu\r\n", (unsigned long)ret);
         return ret;

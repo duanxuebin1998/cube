@@ -10,7 +10,7 @@
 #include "encoder.h"
 #include "power_monitor.h"
 
-#include "sensor.h"    /* 传感器相关接口（如扭力、防撞检测等） */
+#include "sensor_service.h"    /* 传感器相关接口（如扭力、防撞检测等） */
 #include "motor_ctrl.h" /* 电机控制上层接口 */
 
 /* 保持电流固定为同一口径，运行时修改 motor_current 只改变 IRUN。 */

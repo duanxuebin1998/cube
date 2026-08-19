@@ -21,14 +21,13 @@ volatile DeviceParameters g_deviceParams = { 0 };
 /*
  * 函数用途：校验CPU2共享的传感器类型枚举。
  * 调用场景：CPU3接收参数快照或准备把参数同步回CPU2之前。
- * 关键约束：类型15明确表示通用多参数V4传感器，未知值不能按既有类型解释。
+ * 关键约束：类型14表示DM4物理传感器，Safe只属于运行模式；未知值不能按既有类型解释。
  */
 bool DeviceParam_IsSensorTypeSupported(uint32_t value)
 {
     return (value == (uint32_t)DSM_SENSOR) ||
            (value == (uint32_t)LTD_SENSOR) ||
-           (value == (uint32_t)SAFE_SENSOR) ||
-           (value == (uint32_t)MULTIPARAM_V4_SENSOR);
+           (value == (uint32_t)DM4_SENSOR);
 }
 
 /*
@@ -43,10 +42,8 @@ static const char * sensor_type_str(uint32_t value)
         return "一体机传感器";
     case LTD_SENSOR:
         return "多参数V3传感器";
-    case SAFE_SENSOR:
-        return "安全协议传感器";
-    case MULTIPARAM_V4_SENSOR:
-        return "多参数V4传感器";
+    case DM4_SENSOR:
+        return "DM4传感器";
     default:
         return "非法配置";
     }

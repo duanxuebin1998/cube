@@ -30,7 +30,7 @@
 /* 历史有线温度无效哨兵值 0；保留用于旧接口兼容，不能与无线温度无效值 UNVALID_TEMPERATURE_WIRELESS 混用。 */
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
-#define DEVICE_PROTOCOL_VERSION 34u /* CPU2/CPU3共享协议版本；协议34启用编码器上电和运行位置跳变故障，保留线性度诊断映射。 */
+#define DEVICE_PROTOCOL_VERSION 35u /* CPU2/CPU3共享协议版本；协议35统一DM4物理类型为14，Safe仅作为运行模式保留。 */
 /* 故障自动恢复的默认重试次数 3；仅在参数缺省、越界或旧版本迁移时作为归一化值。 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 /* 故障自动恢复重试次数的配置硬上限 10；CPU3 菜单和参数校验不得允许写入超过该值的重试次数。 */
@@ -74,8 +74,7 @@
 typedef enum {
     DSM_SENSOR = 12, /* 一体机传感器 */
     LTD_SENSOR = 13, /* 多参数传感器通信协议V3.0设备 */
-    SAFE_SENSOR = 14, /* 安全协议传感器 */
-    MULTIPARAM_V4_SENSOR = 15 /* 多参数V4传感器，不绑定具体产品型号 */
+    DM4_SENSOR = 14 /* DM4物理传感器；普通运行走V4，安全模式走Safe协议 */
 } SENSOR_TYPE;
 
 /*

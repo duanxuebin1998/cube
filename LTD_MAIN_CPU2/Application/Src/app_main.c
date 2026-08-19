@@ -20,12 +20,12 @@
 #include "test.h"
 #include "ad5421.h"
 #include "AoOutput/ao_output.h"
-#include "sensor.h"
-#include "ch9141_at.h"
+#include "sensor_service.h"
+
+#include "Wireless/ch9141_at.h"
 #include "fault_recovery.h"
 #include "power_monitor.h"
 #include "serial_command.h"
-#include "multiparam_v4_communication.h"
 #include "../../Services/Relay/relay_output.h"
 
 /**
@@ -196,7 +196,7 @@ void App_Init(void) {
 		FaultManager_LatchAsyncError(startup_init_error);
 	}
 	CH9141_AT_NotifySensorPowerOn();
-	sensor_detect_ret = DetectSensorType(); /* 检测传感器类型 */
+	sensor_detect_ret = SensorService_Detect(); /* 检测传感器类型 */
 	g_measurement.device_status.zero_point_status=1; /* 设置零点状态为需要回零点 */
 	power_on_command = DefaultCmd_To_MeasureCmd(g_deviceParams.powerOnDefaultCommand);
 	if (power_on_command != CMD_NONE) {
@@ -208,7 +208,7 @@ void App_Init(void) {
 			/* 探测被新命令打断时保留新命令优先级，不能再排入上电默认命令。 */
 			printf("上电默认命令被拦截：传感器识别已被新命令打断\r\n");
 		} else if ((Measure_CommandRequiresDetectedSensor(power_on_command) != 0U) &&
-		           (Sensor_IsDetectionValid() == 0U)) {
+		           (SensorService_IsDetectionValid() == 0U)) {
 			/* 只有依赖传感器数据的默认命令才要求本次识别有效。 */
 			printf("上电默认命令被拦截：传感器识别失败 0x%08lX\r\n",
 			       (unsigned long)sensor_detect_ret);
@@ -244,7 +244,6 @@ void App_Init(void) {
 void App_MainLoop(void) {
     CommandType pending_command = CMD_NONE;
     uint32_t power_fault_code;
-    uint32_t v4_quality_error;
 
 	/* 测试指令 */
 	/* MULTIPARAM_V3_Test_AllParams(); / / 多参数传感器 V3.0 测试函数 */
@@ -253,21 +252,14 @@ void App_MainLoop(void) {
 	/* printf("位置%d", g_measurement.debug_data.sensor_position); */
 	/* HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET); */
 	/* HAL_UART_Transmit_DMA(&huart2, "123456", 6); / / 通过UART发送响应 */
-	// DSM_EnableDensityMode();
+	/* DSM_EnableDensityMode(); */
 
 	/* 电源监控故障先在线程态发布；恢复服务每轮最多执行一次局部ADC/DMA重启。 */
     power_fault_code = PowerMonitor_ProcessDeferred();
     if (power_fault_code != NO_ERROR) {
         FaultManager_LatchAsyncError(power_fault_code);
     }
-	/* 后台轻量检查：这里只做一次快速轮询，不在主循环里展开复杂处理。 */
-	/* 主动帧由PendSV解包并更新运行数据；主循环只处理UART恢复和超时诊断。 */
-	MULTIPARAM_V4_Service();
-    v4_quality_error = MULTIPARAM_V4_TakeQualityError();
-    if ((v4_quality_error != NO_ERROR) &&
-        (g_measurement.device_status.error_code == NO_ERROR)) {
-        FaultManager_LatchAsyncError(v4_quality_error);
-    }
+	/* V4主动流解析、超时确认和质量故障锁存均由定时节拍/PendSV处理，不依赖阻塞主循环。 */
 	/* 先输出PendSV已完成的紧急保存快照，确保所有printf仍在线程态。 */
 	SerialCommand_ProcessDeferredReports();
 	(void)MotorCtrl_PollRuntimePosition();

@@ -77,7 +77,6 @@ target_include_directories(${TARGET} PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/Services/MotorControl
     ${CMAKE_CURRENT_LIST_DIR}/Services/ParamStorage
     ${CMAKE_CURRENT_LIST_DIR}/Services/Sensor
-    ${CMAKE_CURRENT_LIST_DIR}/Services/Sensor/SafeProtocol
     ${CMAKE_CURRENT_LIST_DIR}/Services/Utilities
     ${CMAKE_CURRENT_LIST_DIR}/Services/Weight
 )

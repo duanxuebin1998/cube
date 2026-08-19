@@ -3,7 +3,8 @@
 #include <stdio.h>
 #include "main.h"
 #include "motor_ctrl.h"
-#include "sensor.h"
+#include "sensor_service.h"
+#include "part_diagnostics.h"
 #include "fault_manager.h"
 #include "error_log.h"
 
@@ -491,7 +492,7 @@ FaultRecoveryResult FaultRecovery_Poll(void)
     }
 
     /* 部件参数读取作为统一恢复确认点：命令可继续、传感器可通信、电机位置可被刷新。 */
-    check_ret = Sensor_CheckAllPartParams();
+    check_ret = PartDiagnostics_CheckAll();
     if ((check_ret == STATE_SWITCH) || HasEffectiveCommandSwitchRequest()) {
         FaultRecovery_Cancel("command switch");
         return result;

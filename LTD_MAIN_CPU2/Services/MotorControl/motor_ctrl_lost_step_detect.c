@@ -236,12 +236,12 @@ void MotorLostStep_NoDetectRuntimeLogUpdate(void)
     /* 3) 密度/温度/频率 */
     if ((now - last_den_tick) >= NODETECT_DENS_PERIOD_MS) {
         float f = 0.0f, d = 0.0f, t = 0.0f;
-        uint32_t ret = Read_Density(&f, &d, &t);
+        uint32_t ret = SensorService_ReadDensity(&f, &d, &t);
         /* 下一周期从本次阻塞读取结束后计时，避免慢事务结束后立即再次占用 UART6。 */
         last_den_tick = HAL_GetTick();
         (void)f; (void)d; (void)t;
         if (ret == NO_ERROR) {
-            /* Read_Density 内部写 debug_data.temperature/frequency 等 */
+            /* SensorService_ReadDensity 内部写 debug_data.temperature/frequency 等 */
         }
     }
 

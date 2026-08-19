@@ -8,8 +8,8 @@
 
 #include "wartsila_density_measurement.h"
 #include "measure_oilLevel.h"
-#include "multiparam_v3_communication.h"
-#include "sensor.h"
+#include "Protocols/MultiparamV3/multiparam_v3_communication.h"
+#include "sensor_service.h"
 #include "measure_density.h"
 #include "abortable_delay.h"
 
@@ -214,7 +214,7 @@ static uint32_t Wartsila_ReadPointAndClassify(WartsilaPointSample *sample)
         return SYSTEM_CALL_CONDITION_ERROR;
     }
 
-    ret = EnableDensityMode();
+    ret = SensorService_EnableDensityMode();
     if (ret == STATE_SWITCH) {
         return STATE_SWITCH;
     }
@@ -247,7 +247,7 @@ static uint32_t Wartsila_ReadPointAndClassify(WartsilaPointSample *sample)
             return NO_ERROR;
         }
 
-        ret = Read_Density(&cur_freq, &cur_density, &cur_temp);
+        ret = SensorService_ReadDensity(&cur_freq, &cur_density, &cur_temp);
         if (ret == STATE_SWITCH) {
             return STATE_SWITCH;
         }
@@ -338,7 +338,7 @@ static uint32_t Wartsila_MoveDownToLiquidAfterAirPoint(float air_point_mm, float
         return SYSTEM_CALL_CONDITION_ERROR;
     }
 
-    ret = EnableLevelMode();
+    ret = SensorService_EnableLevelMode();
     if (ret == STATE_SWITCH) {
         return STATE_SWITCH;
     }

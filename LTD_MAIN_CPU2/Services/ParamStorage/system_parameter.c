@@ -1265,6 +1265,22 @@ int prepare_ao_params_for_write(const DeviceParameters *current,
     return (ao_config_is_valid(candidate, &candidate->ao_output) != 0) ? 0 : -1;
 }
 
+/*
+ * 函数用途：把协议32至34曾使用的DM4类型15迁移为统一物理类型14。
+ * 调用场景：FRAM参数加载到运行态后、通用参数归一化之前调用。
+ * 关键约束：只修改既有sensorType槽位，不改变结构大小、参数版本或CRC范围。
+ */
+static int migrate_dm4_sensor_type_runtime(void)
+{
+    const uint32_t legacy_dm4_sensor_type = 15U;
+
+    if (g_deviceParams.sensorType != legacy_dm4_sensor_type) {
+        return 0;
+    }
+    g_deviceParams.sensorType = (uint32_t)DM4_SENSOR;
+    return 1;
+}
+
 /**
  * @brief 修正新增参数的非法值。
  *
@@ -1274,6 +1290,7 @@ int prepare_ao_params_for_write(const DeviceParameters *current,
  *
  * @return 1 表示至少一个新增设备参数非法值已修正；全部合法时返回 0。
  */
+
 static int normalize_device_params_runtime(void)
 {
     int changed = 0;
@@ -1941,7 +1958,9 @@ int load_device_params(void)
     params_normalized |= migrate_ao_params_runtime();
     params_normalized |= migrate_ao_fault_action_runtime();
     params_normalized |= migrate_ao_current_correction_scale_runtime();
+    params_normalized |= migrate_dm4_sensor_type_runtime();
     params_normalized |= normalize_device_params_runtime();
+
     params_normalized |= apply_firmware_version_runtime();
     params_normalized |= apply_protocol_version_runtime();
 
@@ -2580,11 +2599,8 @@ static const char *device_param_value_desc(const ParamPrintItem *item, uint32_t 
         if (value == (uint32_t)LTD_SENSOR) {
             return "LTD传感器";
         }
-        if (value == (uint32_t)SAFE_SENSOR) {
-            return "安全协议传感器";
-        }
-        if (value == (uint32_t)MULTIPARAM_V4_SENSOR) {
-            return "多参数V4传感器";
+        if (value == (uint32_t)DM4_SENSOR) {
+            return "DM4传感器";
         }
         return "非法配置";
     case (uint16_t)offsetof(DeviceParameters, command):

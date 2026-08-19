@@ -28,7 +28,7 @@
 #define UNVALID_GSW 0                      /* 质量无效值 */
 
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数。 */
-#define DEVICE_PROTOCOL_VERSION 34u /* CPU2/CPU3共享协议版本；协议34启用编码器上电和运行位置跳变故障，保留线性度诊断映射。 */
+#define DEVICE_PROTOCOL_VERSION 35u /* CPU2/CPU3共享协议版本；协议35统一DM4物理类型为14，Safe仅作为运行模式保留。 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u /* 故障自动恢复默认重试次数。 */
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u /* 故障自动恢复最大重试次数。 */
 
@@ -215,8 +215,7 @@ typedef struct {
 typedef enum {
 	DSM_SENSOR = 12,   /* 一体机传感器 */
 	LTD_SENSOR = 13,   /* LTD传感器 */
-	SAFE_SENSOR = 14,  /* 新一代安全协议传感器 */
-	MULTIPARAM_V4_SENSOR = 15, /* 多参数V4传感器，不绑定具体产品型号 */
+	DM4_SENSOR = 14,   /* DM4物理传感器；普通运行走V4，安全模式走Safe协议 */
 } SENSOR_TYPE;
 
 #define TEMP_TO_RAW(t)  ((uint32_t)((t) * 100.0f + 20000.0f)) /* 温度存储到寄存器 */

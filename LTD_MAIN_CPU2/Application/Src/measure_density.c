@@ -10,7 +10,7 @@
  *
  * 业务流程概述（共同主链路）：
  *   A. 搜索液位（SearchOilLevel）
- *   B. 切换到密度测量模式（EnableDensityMode）
+ *   B. 切换到密度测量模式（SensorService_EnableDensityMode）
  *   C. 按模式生成取点数组（单位：0.1mm）
  *   D. 按点位依次移动并单点测量（MotorCtrl_JogMoveToPosition + SinglePoint_ReadSensor）
  *   E. 计算平均值并输出（Print_DensitySpreadResult）
@@ -22,7 +22,7 @@
  *
  * 外部依赖（工程需提供）：
  *   - SearchOilLevel()
- *   - EnableDensityMode()
+ *   - SensorService_EnableDensityMode()
  *   - MotorCtrl_JogMoveToPosition(float pos_mm, uint32_t speed_x100)
  *   - SinglePoint_ReadSensor(volatile DensityMeasurement *result)
  *   - g_measurement / g_deviceParams
@@ -35,7 +35,7 @@
  */
 
 #include "measure_density.h"
-#include "sensor.h"
+#include "sensor_service.h"
 #include "measure_oilLevel.h"
 #include "measure_tank_height.h"
 #include "motor_ctrl.h"
@@ -1001,7 +1001,7 @@ uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistributi
     }
 
     /* 2) 切密度模式 */
-    EnableDensityMode();
+    SensorService_EnableDensityMode();
 
     int32_t oil_level_01mm = (int32_t)g_measurement.oil_measurement.oil_level; /* 0.1mm */
 
@@ -1577,7 +1577,7 @@ static uint32_t SiProfile_ReadPointAndClassify(SiProfilePointSample *sample,
         return SYSTEM_CALL_CONDITION_ERROR;
     }
 
-    ret = EnableDensityMode();
+    ret = SensorService_EnableDensityMode();
     if (ret == STATE_SWITCH) {
         return STATE_SWITCH;
     }
@@ -1619,7 +1619,7 @@ static uint32_t SiProfile_ReadPointAndClassify(SiProfilePointSample *sample,
             return NO_ERROR;
         }
 
-        ret = Read_Density(&cur_freq, &cur_density, &cur_temp);
+        ret = SensorService_ReadDensity(&cur_freq, &cur_density, &cur_temp);
         if (ret == STATE_SWITCH) {
             return STATE_SWITCH;
         }
@@ -2369,7 +2369,7 @@ static uint32_t SinglePoint_ReadSensorWithStableWindow(volatile DensityMeasureme
     }
 
     /* ---------- 切换到密度测量模式（防御性调用） ---------- */
-    ret = EnableDensityMode();
+    ret = SensorService_EnableDensityMode();
     if (ret == STATE_SWITCH) {
         return STATE_SWITCH;
     }
@@ -2473,7 +2473,7 @@ static uint32_t SinglePoint_ReadSensorWithStableWindow(volatile DensityMeasureme
         /* ======================================================
          * 2) 读取传感器
          * ====================================================== */
-        ret = Read_Density(&cur_freq, &cur_density, &cur_temp);
+        ret = SensorService_ReadDensity(&cur_freq, &cur_density, &cur_temp);
         if (ret == STATE_SWITCH) {
             /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
             return STATE_SWITCH;
@@ -2486,7 +2486,7 @@ static uint32_t SinglePoint_ReadSensorWithStableWindow(volatile DensityMeasureme
                            1U,
                            1U,
                            ret);
-            /* Read_Density() 底层已经完成协议重试和链路诊断；这里必须向上返回错误码，
+            /* SensorService_ReadDensity() 底层已经完成协议重试和链路诊断；这里必须向上返回错误码，
              * 让固定点监测外层 SET_ERROR(ret) 置错误状态，而不是在内部循环吞掉故障。 */
             return ret;
         }
@@ -2644,7 +2644,7 @@ void CMD_SinglePointMeasurement(void)
 
     g_measurement.device_status.device_state = STATE_SPTESTING;
 
-    ret = EnableDensityMode();
+    ret = SensorService_EnableDensityMode();
     if (ret == STATE_SWITCH) {
         return;
     }
@@ -2698,7 +2698,7 @@ void CMD_SinglePointMonitoring(void)
     }
     SET_ERROR(ret);
 #else
-    ret = EnableDensityMode();
+    ret = SensorService_EnableDensityMode();
     if (ret == STATE_SWITCH) {
         printf("固定点监测切换密度模式时检测到命令切换请求，退出\r\n");
         return;

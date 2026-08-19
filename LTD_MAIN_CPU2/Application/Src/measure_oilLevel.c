@@ -17,8 +17,9 @@
 #include "main.h"
 #include "measure_oilLevel.h"
 #include "motor_ctrl.h"
-#include "sensor.h"
-#include "sensor_safe_legacy_adapter.h"
+#include "sensor_service.h"
+#include "sensor_comm_diagnostics.h"
+#include "Protocols/Dm4/Safe/sensor_safe_legacy_adapter.h"
 #include "weight.h"
 #include "measure_zero.h"
 #include "system_parameter.h"
@@ -63,6 +64,12 @@ static uint32_t OilLevel_GetFollowChangeConfirmTimeMs(void);
 static uint8_t OilLevel_ConfirmFollowDeviation(uint32_t *ret_code);
 static void OilLevel_PublishFollowPosition(int32_t oil_level);
 static uint32_t OilLevel_CheckPositionLimit(int32_t oil_level);
+static uint32_t OilLevel_ReadValidatedFrequency(volatile uint32_t *frequency_out);
+static uint32_t OilLevel_ReadAverageFrequency(volatile uint32_t *frequency_out);
+/* 液位频率异常恢复时的上行距离，单位mm；仅液位业务使用。 */
+#define OIL_LEVEL_FREQ_RECOVERY_LIFT_MM 1.0f
+/* 液位异常恢复切回密度模式后的稳定等待，单位ms。 */
+#define OIL_LEVEL_DENSITY_MODE_SETTLE_MS 3000U
 #define OIL_LEVEL_METHOD_RELATIVE_FREQ 0U /* 液位测量方法枚举值：相对频率步进法，粗找后按中点步进精找。 */
 #define OIL_LEVEL_METHOD_FIXED_FREQ    1U /* 液位测量方法枚举值：固定频率步进法，目标为 oilLevelFrequency。 */
 #define OIL_LEVEL_METHOD_DENSITY       2U /* 液位测量方法枚举值：密度速度闭环法，目标为 oilLevelDensity。 */
@@ -207,7 +214,7 @@ static uint8_t OilLevel_ConfirmFollowDeviation(uint32_t *ret_code)
             return 0U;
         }
 
-        *ret_code = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
+        *ret_code = OilLevel_ReadValidatedFrequency(&g_measurement.oil_measurement.current_frequency);
         if (*ret_code != NO_ERROR) {
             return 0U;
         }
@@ -454,7 +461,7 @@ static uint32_t DensityLevel_ReadCurrent(float *density, float *frequency, float
         return SYSTEM_CALL_CONDITION_ERROR;
     }
 
-    ret = Read_Density(frequency, density, temperature);
+    ret = SensorService_ReadDensity(frequency, density, temperature);
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -631,7 +638,7 @@ static uint32_t DensityLevel_RunClosedLoop(uint32_t follow_mode)
     g_measurement.oil_measurement.probe_at_liquid_level = 0U;
     g_measurement.oil_measurement.liquid_stable = 0U;
 
-    ret = EnableDensityMode();
+    ret = SensorService_EnableDensityMode();
     if (ret != NO_ERROR) {
         return DensityLevel_StopAndReturn(ret, "切换密度模式失败");
     }
@@ -884,6 +891,191 @@ uint32_t OilLevel_RunFixedFrequencySearch(uint32_t target_frequency_hz,
     g_measurement.oil_measurement.follow_frequency = saved_follow_frequency;
     return ret;
 }
+/* 读取一次并以整数 Hz 返回。 */
+/* 这里的循环是业务层“等待有效频率”，不是底层串口通信重试； */
+/* 真正的通信重试统一收敛在各协议层，所有 UART6 传感器/无线协议统一使用 UART6_COMM_MAX_RETRY。 */
+/* 如果频率连续 3 次为 0 或大于 6500Hz，且电机静止，则上行 1mm 后切密度/液位模式恢复； */
+/* 若多轮恢复后仍无有效频率，则返回 SONIC_FREQ_ABNORMAL。 */
+
+/*
+ * 函数用途：综合显示状态和TMC5130运动状态判断电机是否已经停止。
+ * 调用场景：液位频率连续异常后决定是否允许执行1mm恢复微动。
+ * 关键约束：会访问电机驱动，只能在线程态调用；读取失败按“仍在运动”处理。
+ */
+static uint8_t OilLevel_IsMotorStopped(void)
+{
+    uint32_t motor_state = MotorCtrl_GetDisplayState();
+    bool is_moving = true;
+    uint32_t ret;
+
+    if ((motor_state == 1U) || (motor_state == 2U)) {
+        return 0U;
+    }
+
+    ret = MotorCtrl_IsDriverMoving(&stepper, &is_moving);
+    if (ret != NO_ERROR) {
+        return 0U;
+    }
+    return is_moving ? 0U : 1U;
+}
+
+/*
+ * 函数用途：在液位频率连续异常后执行受电机状态约束的模式恢复。
+ * 调用场景：可靠液位频率读取完成三次无效值重试后。
+ * 关键约束：静止时上行1mm并按密度稳定、液位稳定顺序恢复；等待可被命令切换打断。
+ */
+static uint32_t OilLevel_RecoverLevelFrequencyWhenStopped(void)
+{
+	uint32_t ret;
+
+	if (!OilLevel_IsMotorStopped()) {
+		ret = SensorService_EnableLevelMode();
+		if (ret != NO_ERROR) {
+			return ret;
+		}
+		return NO_ERROR;
+	}
+
+	ret = MotorCtrl_MoveAndWait(OIL_LEVEL_FREQ_RECOVERY_LIFT_MM,
+	                            MOTOR_DIRECTION_UP,
+	                            MotorCtrl_GetDefaultSpeedX100());
+	if (ret != NO_ERROR) {
+		return ret;
+	}
+
+	ret = SensorService_EnableDensityMode();
+	if (ret != NO_ERROR) {
+		return ret;
+	}
+
+	ret = AbortableDelay_CommandSwitch(OIL_LEVEL_DENSITY_MODE_SETTLE_MS, 100U);
+	if (ret != NO_ERROR) {
+		return ret;
+	}
+
+	ret = SensorService_EnableLevelMode();
+	if (ret != NO_ERROR) {
+		return ret;
+	}
+
+	return NO_ERROR;
+}
+
+/*
+ * 函数用途：读取并校验液位频率，在连续无效时执行最多三轮受控恢复。
+ * 调用场景：液位搜索和跟随需要一个可靠整数Hz频率时。
+ * 关键约束：每轮三次无效值不等同串口重试；通信错误立即传播，恢复耗尽返回频率异常。
+ */
+static uint32_t OilLevel_ReadValidatedFrequency(volatile uint32_t *frequency_out) {
+	if (frequency_out == NULL) {
+		return SYSTEM_CALL_CONDITION_ERROR;   /* 比设备通信错误更合理 */
+	}
+
+	uint32_t ret;
+	uint32_t hz = 0;
+	const int MAX_INVALID_FREQ_RETRY = 3;
+	const int MAX_MODE_SWITCH_RECOVERY = 3;
+	int mode_switch_recovery_count = 0;
+
+	while (1) {
+		for (int attempt = 0; attempt < MAX_INVALID_FREQ_RETRY; attempt++) {
+			ret = SensorService_ReadLevelFrequency(&hz);
+
+			if (ret != NO_ERROR) {
+				return SensorComm_DiagnoseTimeout(ret, "读取液位频率");  /* 读取失败直接返回错误码 */
+			}
+
+			if (hz != 0 && hz <= 6500) {
+				*frequency_out = hz;
+				printf("液位频率: %lu Hz\r\n", (unsigned long)*frequency_out);
+				return NO_ERROR;
+			}
+
+            ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
+                           ERROR_LOG_OP_READ_LEVEL_FREQ,
+                           ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL),
+                           (uint32_t)(attempt + 1),
+                           MAX_INVALID_FREQ_RETRY,
+                           SONIC_FREQ_ABNORMAL);
+			ret = AbortableDelay_CommandSwitch(1000U, 100U);
+			if (ret != NO_ERROR) {
+				return ret;
+			}
+		}
+
+		if (mode_switch_recovery_count >= MAX_MODE_SWITCH_RECOVERY) {
+			return SONIC_FREQ_ABNORMAL;
+		}
+
+		mode_switch_recovery_count++;
+        ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
+                       ERROR_LOG_OP_SWITCH_MODE,
+                       ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL),
+                       (uint32_t)mode_switch_recovery_count,
+                       MAX_MODE_SWITCH_RECOVERY,
+                       SONIC_FREQ_ABNORMAL);
+		ret = OilLevel_RecoverLevelFrequencyWhenStopped();
+		if (ret != NO_ERROR) {
+			return ret;
+		}
+        ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
+                         ERROR_LOG_OP_SWITCH_MODE,
+                         ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL),
+                         (uint32_t)mode_switch_recovery_count,
+                         MAX_MODE_SWITCH_RECOVERY);
+	}
+}
+
+/*
+ * 函数用途：对十次可靠液位频率去除两大两小后计算中间六次平均值。
+ * 调用场景：液位跟随建立抗瞬态干扰的基准频率。
+ * 关键约束：采样间隔可被新命令打断；任一次可靠读取失败即停止并传播错误。
+ */
+static uint32_t OilLevel_ReadAverageFrequency(volatile uint32_t *frequency_out) {
+	if (frequency_out == NULL) {
+		return SYSTEM_CALL_CONDITION_ERROR;
+	}
+
+	uint32_t values[10];
+	uint32_t ret;
+
+	for (int i = 0; i < 10; i++) {
+		ret = OilLevel_ReadValidatedFrequency(&values[i]);
+		if (ret != NO_ERROR) {
+			return ret;
+		}
+		printf("第 %d 次液位频率: %lu Hz\r\n", i + 1, (unsigned long) values[i]);
+		ret = AbortableDelay_CommandSwitch(2000U, 100U); /* 2 秒间隔，可被命令切换打断 */
+		if (ret != NO_ERROR) {
+			return ret;
+		}
+	}
+
+	/* 冒泡排序（升序） */
+	for (int i = 0; i < 9; i++) {
+		for (int j = 0; j < 9 - i; j++) {
+			if (values[j] > values[j + 1]) {
+				uint32_t tmp = values[j];
+				values[j] = values[j + 1];
+				values[j + 1] = tmp;
+			}
+		}
+	}
+
+	/* 去掉两个最大与两个最小 */
+	float sum = 0.0f;
+	for (int i = 2; i < 8; i++) {
+		sum += (float) values[i];
+	}
+
+	float avg = sum / 6.0f;
+	uint32_t avg_u32 = (avg >= 0.0f) ? (uint32_t) (avg + 0.5f) : 0u;
+	*frequency_out = avg_u32;
+
+	printf("液位频率平均值(去极值): %lu Hz\r\n", (unsigned long) *frequency_out);
+	return NO_ERROR;
+}
+
 /**
  * @brief 端点频率需要写入油中/空气基准，读取失败时做局部重试。
  *
@@ -905,7 +1097,7 @@ static uint32_t OilLevel_ReadAverageFrequencyWithRetry(volatile uint32_t *freque
     }
 
     for (try_times = 1U; try_times <= 3U; try_times++) {
-        uint32_t read_ret = DSM_Get_LevelMode_Frequence_Avg(frequency_out);
+        uint32_t read_ret = OilLevel_ReadAverageFrequency(frequency_out);
         if (read_ret == NO_ERROR) {
             if (try_times > 1U) {
                 ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
@@ -1269,7 +1461,7 @@ static uint32_t FrequencyLevel_ReadCurrentWithGuards(int active_dir, uint8_t che
             return ret;
         }
     }
-    return DSM_Get_LevelMode_Frequence(
+    return OilLevel_ReadValidatedFrequency(
             &g_measurement.oil_measurement.current_frequency);
 }
 
@@ -1310,7 +1502,7 @@ static uint32_t FrequencyLevel_HandleLowLimit(uint32_t follow_mode,
         if (HasEffectiveCommandSwitchRequest()) {
             return STATE_SWITCH;
         }
-        ret = DSM_Get_LevelMode_Frequence(
+        ret = OilLevel_ReadValidatedFrequency(
                 &g_measurement.oil_measurement.current_frequency);
         if (ret != NO_ERROR) {
             return ret;
@@ -1390,7 +1582,7 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
     g_measurement.oil_measurement.probe_at_liquid_level = 0U;
     g_measurement.oil_measurement.liquid_stable = 0U;
 
-    ret = EnableLevelMode();
+    ret = SensorService_EnableLevelMode();
     if (ret != NO_ERROR) {
         return FrequencyLevel_StopAndReturn(ret, "切换液位模式失败");
     }
@@ -1432,7 +1624,7 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
                 return FrequencyLevel_StopAndReturn(ret, "读取频率或运动保护失败");
             }
         } else {
-            ret = DSM_Get_LevelMode_Frequence(
+            ret = OilLevel_ReadValidatedFrequency(
                     &g_measurement.oil_measurement.current_frequency);
             if (ret != NO_ERROR) {
                 return FrequencyLevel_StopAndReturn(ret, "读取液位频率失败");
@@ -1790,7 +1982,7 @@ static uint32_t OilLevel_EnableLevelModeWithRetry(void)
     while (mode_try_times < 3) {
         mode_try_times++;
 
-        ret = EnableLevelMode();
+        ret = SensorService_EnableLevelMode();
         if (ret == NO_ERROR) {
             if (mode_try_times > 1) {
                 ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
@@ -1839,7 +2031,7 @@ static uint32_t OilLevel_RunFrequencyCoarseSearch(void)
     while (coarse_try_times < 3) {
         coarse_try_times++;
         fault_info_init();
-        ret = DSM_Get_LevelMode_Frequence_Avg(&g_measurement.oil_measurement.current_frequency);
+        ret = OilLevel_ReadAverageFrequency(&g_measurement.oil_measurement.current_frequency);
         if (ret == STATE_SWITCH) {
             /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
             return STATE_SWITCH;
@@ -2086,7 +2278,7 @@ uint32_t FollowOilLevel(void) {
 		printf("液位跟随\t");
 
 		/* 获取当前频率 */
-		ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
+		ret = OilLevel_ReadValidatedFrequency(&g_measurement.oil_measurement.current_frequency);
 		CHECK_ERROR(ret);  /* 检查开启液位模式是否成功 */
 		/* 稳定性判断（频率波动在阈值内） */
 		if (fabs(OilLevel_GetFrequencyDifference()) < FrequencyLevel_GetCompatThresholdHz(g_deviceParams.oilLevelHysteresisThreshold)) {
@@ -2143,7 +2335,7 @@ uint32_t FollowOilLevel(void) {
  *       - MotorCtrl_MoveDown(): 电机下行
  *       - MotorCtrl_CheckLostStepAutoTiming(): 丢步检测
  *       - CheckWeightCollision(): 碰撞检测
- *       - DSM_Get_LevelMode_Frequence_Avg(): 获取油中频率
+ *       - OilLevel_ReadAverageFrequency(): 获取油中频率
  *       - SearchAir(): 向上寻找空气
  *
  * @note 输出信息包括：
@@ -2227,7 +2419,7 @@ static int SearchOil() {
  *       - CheckWeightCollision(): 检测扭力碰撞
  *       - MotorCtrl_SlowStop(): 慢速停止电机
  *       - MotorCtrl_MoveAndWait(): 移动电机并等待停止
- *       - DSM_Get_LevelMode_Frequence_Avg(): 获取平均频率值
+ *       - OilLevel_ReadAverageFrequency(): 获取平均频率值
  *
  * @note 输出信息包括：
  *       - 初始扭力值
@@ -2291,7 +2483,7 @@ static int SearchAir() {
  * @param state_out 用于返回液位频率相对上下阈值的判定状态。
  * @param allow_mode_recovery 允许模式。
  * @return Level_StateTypeDef 返回液位状态。
- * @note 函数内部会调用 DSM_Get_LevelMode_Frequence 获取当前频率值。
+ * @note 函数内部会调用 OilLevel_ReadValidatedFrequency 获取当前频率值。
  * @note 输出信息包括当前频率值和传感器状态（空气中或油中）。
  */
 static uint32_t determine_level_status_internal(Level_StateTypeDef *state_out, uint8_t allow_mode_recovery) {
@@ -2305,10 +2497,10 @@ static uint32_t determine_level_status_internal(Level_StateTypeDef *state_out, u
 
     mode_text = allow_mode_recovery ? "静态" : "运动";
     if (allow_mode_recovery) {
-        ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
+        ret = OilLevel_ReadValidatedFrequency(&g_measurement.oil_measurement.current_frequency);
     } else {
         /* 运动中不执行模式恢复；统一入口会按V4主动快照或交互R04读取，并拒绝未知类型。 */
-        ret = Sensor_ReadLevelFrequency(&current_frequency);
+        ret = SensorService_ReadLevelFrequency(&current_frequency);
     }
 
     CHECK_COMMAND_SWITCH(ret);
@@ -2492,7 +2684,7 @@ static int SearchOilPrecise(float per_mm_Frequency)
             return STATE_SWITCH;
         }
 
-        ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
+        ret = OilLevel_ReadValidatedFrequency(&g_measurement.oil_measurement.current_frequency);
         if (ret != NO_ERROR) {
             return OilLevel_StopBeforeReturn((uint32_t)ret, "液位流程故障");
         }
@@ -2634,7 +2826,7 @@ static int waitForTheLiquidLevelToExceedTheBlindZone(void) {
             /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
             return STATE_SWITCH;
         }
-        ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
+        ret = OilLevel_ReadValidatedFrequency(&g_measurement.oil_measurement.current_frequency);
         CHECK_COMMAND_SWITCH(ret);
         CHECK_ERROR(ret);    /* 检查开启液位模式是否成功 */
         printf("盲区等待\t频率阈值\t%ld\t当前频率\t%ld\t阈值差\t%f\r\n", g_measurement.oil_measurement.follow_frequency, g_measurement.oil_measurement.current_frequency,

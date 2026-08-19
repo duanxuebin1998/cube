@@ -15,7 +15,7 @@
 #include "fault_manager.h"
 #include "spi.h"
 #include "measure_tank_height.h"
-#include "sensor.h"
+#include "sensor_service.h"
 #include "encoder.h"
 #include "mb85rs2m.h"
 #include "my_crc.h"

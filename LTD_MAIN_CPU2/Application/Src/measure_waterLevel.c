@@ -15,7 +15,7 @@
 #include "measure.h"
 #include "motor_ctrl.h"
 #include "measure_zero.h"
-#include "sensor.h"
+#include "sensor_service.h"
 #include "error_log.h"
 #include "AoOutput/ao_output.h"
 /* TODO: 这里替换为你的水位检测头文件 */
@@ -211,7 +211,7 @@ static uint32_t WaterSensorTestScanDirection(const char *phase_name,
         CHECK_COMMAND_SWITCH(ret);
         CHECK_ERROR(ret);
 
-        ret = Sensor_ReadWaterCapacitance(&points[i].capacitance);
+        ret = SensorService_ReadWaterCapacitance(&points[i].capacitance);
         CHECK_COMMAND_SWITCH(ret);
         CHECK_ERROR(ret);
 
@@ -682,7 +682,7 @@ uint32_t read_zero_capacitance(void)
     uint32_t ret;
     float    cap = 0.0f;
 
-    ret = Sensor_ReadWaterCapacitance(&cap);
+    ret = SensorService_ReadWaterCapacitance(&cap);
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -712,7 +712,7 @@ uint32_t check_water_status(uint8_t *water_state)
         return SYSTEM_CALL_CONDITION_ERROR;
     }
 
-    ret = Sensor_ReadWaterCapacitance(&cap);
+    ret = SensorService_ReadWaterCapacitance(&cap);
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -1051,7 +1051,7 @@ static uint32_t MonitorWaterFollowChange(float target_cap)
 
     while (1)
     {
-        ret = Sensor_ReadWaterCapacitance(&cap);
+        ret = SensorService_ReadWaterCapacitance(&cap);
         CHECK_ERROR(ret);
 
         g_measurement.water_measurement.current_capacitance = cap;
@@ -1145,7 +1145,7 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
     while (1)
     {
         /* ---------- 1. 读取当前水位电容 ---------- */
-        ret = Sensor_ReadWaterCapacitance(&cap);
+        ret = SensorService_ReadWaterCapacitance(&cap);
         if (ret != NO_ERROR)
         {
             printf("水位跟随\t读取电容失败 错误码=0x%lX\r\n", ret);
