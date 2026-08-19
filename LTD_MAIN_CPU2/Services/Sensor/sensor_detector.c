@@ -290,10 +290,12 @@ static uint32_t Sensor_ProbeV4Active(const char *operation,
 
     MULTIPARAM_V4_Init(MULTIPARAM_V4_ANY_ADDRESS);
     MULTIPARAM_V4_MeasurementInit();
+    MULTIPARAM_V4_SetIdentificationProbeMode(1U);
     result = MULTIPARAM_V4_StartActiveReceive();
     if (result != NO_ERROR) {
         MULTIPARAM_V4_PrintActiveProbePacket(operation, result);
         MULTIPARAM_V4_Deinit();
+        MULTIPARAM_V4_SetIdentificationProbeMode(0U);
         return result;
     }
 
@@ -302,6 +304,7 @@ static uint32_t Sensor_ProbeV4Active(const char *operation,
         if (HasEffectiveCommandSwitchRequest()) {
             MULTIPARAM_V4_PrintActiveProbePacket(operation, STATE_SWITCH);
             MULTIPARAM_V4_Deinit();
+            MULTIPARAM_V4_SetIdentificationProbeMode(0U);
             return STATE_SWITCH;
         }
         MULTIPARAM_V4_Service();
@@ -312,6 +315,7 @@ static uint32_t Sensor_ProbeV4Active(const char *operation,
                 *address_out = snapshot.address;
             }
             MULTIPARAM_V4_PrintActiveProbePacket(operation, NO_ERROR);
+            MULTIPARAM_V4_SetIdentificationProbeMode(0U);
             return NO_ERROR;
         }
         HAL_Delay(1U);
@@ -319,6 +323,7 @@ static uint32_t Sensor_ProbeV4Active(const char *operation,
 
     MULTIPARAM_V4_PrintActiveProbePacket(operation, SENSOR_DEVICE_COMM_TIMEOUT);
     MULTIPARAM_V4_Deinit();
+    MULTIPARAM_V4_SetIdentificationProbeMode(0U);
     return SENSOR_DEVICE_COMM_TIMEOUT;
 }
 

@@ -10,6 +10,8 @@
 
 #include <stdint.h>
 
+typedef uint32_t (*WirelessPairingPostPairingValidator)(void);
+
 /* 无线模块连接状态快照；将连接有效性、对端 MAC、RSSI 及最近错误作为同一份可发布数据保存。 */
 typedef struct {
     /* 无线连接、MAC、RSSI 和错误码的一致性状态快照。 */
@@ -36,6 +38,9 @@ uint32_t WirelessPairing_DebugScan(void);
  * 串口调试命令 SPR 使用该接口；多候选时必须满足最强 RSSI 阈值和差值条件。
  */
 uint32_t WirelessPairing_RunByRssi(void);
+
+uint32_t WirelessPairing_RunByRssiWithValidator(
+    WirelessPairingPostPairingValidator validator);
 
 /**
  * @brief 按扫描结果中的蓝牙名称选择从机并保存为默认连接。

@@ -2153,7 +2153,8 @@ uint32_t WirelessPairing_DebugScan(void)
  * @brief 按 RSSI 规则选择候选设备，执行配对并完成收尾处理。
  * @return 返回无线维护结果码；NO_ERROR 表示 RSSI 候选已成功配对，其他值区分扫描、选择、配对或收尾失败。
  */
-uint32_t WirelessPairing_RunByRssi(void)
+static uint32_t WirelessPairing_RunByRssiInternal(
+    WirelessPairingPostPairingValidator validator)
 {
     WirelessPairingScanResult scan;
     const WirelessPairingCandidate *selected = NULL;
@@ -2176,6 +2177,14 @@ uint32_t WirelessPairing_RunByRssi(void)
             ret = WirelessPairing_ConnectAndSave(selected);
         }
     }
+    if ((ret == NO_ERROR) && (selected != NULL) && (validator != NULL)) {
+        uint32_t validator_ret = validator();
+
+        if (validator_ret != NO_ERROR) {
+            ret = validator_ret;
+        }
+    }
+
     WirelessPairing_Finish("无线滑环RSSI匹配", ret);
     /* RSSI 匹配必须同时满足流程成功和存在已选设备，否则统一发布失败，避免成功状态携带空设备信息。 */
     if ((ret == NO_ERROR) && (selected != NULL)) {
@@ -2184,6 +2193,20 @@ uint32_t WirelessPairing_RunByRssi(void)
         WirelessPairing_PublishStatus(WIRELESS_PAIRING_RESULT_FAILED, NULL, ret);
     }
     return ret;
+}
+
+uint32_t WirelessPairing_RunByRssi(void)
+{
+    return WirelessPairing_RunByRssiInternal(NULL);
+}
+
+uint32_t WirelessPairing_RunByRssiWithValidator(
+    WirelessPairingPostPairingValidator validator)
+{
+    if (validator == NULL) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
+    return WirelessPairing_RunByRssiInternal(validator);
 }
 
 /**

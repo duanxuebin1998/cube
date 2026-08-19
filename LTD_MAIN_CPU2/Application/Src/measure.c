@@ -306,23 +306,28 @@ void ProcessMeasureCmd(CommandType command)
     }
     if (command == CMD_PAIR_NEAREST_WIRELESS_SLIPRING) {
         printf("无线滑环匹配\t触发=正式命令\r\n");
-        (void)WirelessPairing_RunByRssi();
+        (void)WirelessPairing_RunByRssiWithValidator(SensorService_Detect);
         return;
     }
 
     if ((Measure_CommandRequiresDetectedSensor(command) != 0U) &&
         (SensorService_IsDetectionValid() == 0U)) {
-        uint32_t sensor_detect_ret = SensorService_GetDetectionResult();
+        uint32_t sensor_detect_ret = SensorService_Detect();
 
-        if ((sensor_detect_ret == NO_ERROR) || (sensor_detect_ret == STATE_SWITCH)) {
-            sensor_detect_ret = SENSOR_DEVICE_COMM_TIMEOUT;
+        if (SensorService_IsDetectionValid() == 0U) {
+            if (sensor_detect_ret == STATE_SWITCH) {
+                return;
+            }
+            if (sensor_detect_ret == NO_ERROR) {
+                sensor_detect_ret = SENSOR_DEVICE_COMM_TIMEOUT;
+            }
+            /* 识别无效时不得让 FRAM 中的上次 sensorType 进入新的测量流程。 */
+            printf("测量命令被拒绝：本次传感器识别无效，错误码=0x%08lX\r\n",
+                   (unsigned long)sensor_detect_ret);
+            SiProfile_HandleFailure();
+            SET_ERROR(sensor_detect_ret);
+            return;
         }
-        /* 识别无效时不得让 FRAM 中的上次 sensorType 进入新的测量流程。 */
-        printf("测量命令被拒绝：本次传感器识别无效，错误码=0x%08lX\r\n",
-               (unsigned long)sensor_detect_ret);
-        SiProfile_HandleFailure();
-        SET_ERROR(sensor_detect_ret);
-        return;
     }
 
     /*

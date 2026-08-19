@@ -130,6 +130,9 @@ void MULTIPARAM_V4_Init(uint8_t expected_address);
  */
 void MULTIPARAM_V4_Deinit(void);
 
+/* Identification probes may expect a non-V4 device to stay silent. */
+void MULTIPARAM_V4_SetIdentificationProbeMode(uint8_t enabled);
+
 /*
  * 函数用途：启动 UART6 的 V4.0 主动上报常驻接收。
  * 调用场景：识别到主动模式或写参数65为0并收到应答后。

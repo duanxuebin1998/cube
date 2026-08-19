@@ -17,6 +17,23 @@
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
+
+static uint8_t s_identification_probe_mode = 0U;
+
+void MULTIPARAM_V4_SetIdentificationProbeMode(uint8_t enabled)
+{
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    s_identification_probe_mode = (enabled != 0U) ? 1U : 0U;
+    s_quality_alarm_latched = 0U;
+    s_pending_quality_error = NO_ERROR;
+    s_diagnostics.consecutive_abnormal_frames = 0U;
+    if (primask == 0U) {
+        __enable_irq();
+    }
+}
+
 /*
  * 函数用途：输出探测阶段单个V4原始包的十六进制内容。
  * 调用场景：传感器识别任务开启跟踪后，8字节交互事务实际发送或退出时。
@@ -113,7 +130,8 @@ void MULTIPARAM_V4_RecordQualityAnomaly(uint32_t error_code,
         s_diagnostics.max_consecutive_abnormal_frames =
             s_diagnostics.consecutive_abnormal_frames;
     }
-    if ((s_quality_alarm_latched == 0U) &&
+    if ((s_identification_probe_mode == 0U) &&
+        (s_quality_alarm_latched == 0U) &&
         (previous < MULTIPARAM_V4_CONSECUTIVE_ERROR_LIMIT) &&
         (s_diagnostics.consecutive_abnormal_frames >=
          MULTIPARAM_V4_CONSECUTIVE_ERROR_LIMIT)) {
