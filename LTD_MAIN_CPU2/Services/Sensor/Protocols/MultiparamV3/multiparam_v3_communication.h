@@ -220,6 +220,14 @@ int MULTIPARAM_V3_Read_FloatParam(uint8_t param, float *out_value);
 int MULTIPARAM_V3_Read_IntParam  (uint8_t param, int32_t *out_value);
 
 /**
+ * @brief Write one V3 parameter using the raw 32-bit wire value.
+ * @param param Parameter code from the V3 writable register table.
+ * @param raw_value Four-byte value encoded little-endian on the wire.
+ * @return NO_ERROR on an acknowledged write; otherwise the communication error.
+ */
+int MULTIPARAM_V3_WriteRawParam(uint8_t param, uint32_t raw_value);
+
+/**
  * @brief 读取 多参数传感器通信协议 V3.0 传感器软件版本参数。
  *
  * @param v 用于返回 多参数传感器通信协议 V3.0 应答中的软件版本浮点值。

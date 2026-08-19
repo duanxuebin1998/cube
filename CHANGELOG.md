@@ -3233,3 +3233,24 @@ CPU3通信和界面：
 - CPU2 `cmake --build build\\LTD_MAIN_CPU2`通过，最终构建统计为`text=354108`、`data=2352`、`bss=59608`。
 - `test_identification_probe_quality_gate.py`、`check_sensor_service_architecture.py`、`check_wireless_rssi_contract.py`和`git diff --check`通过；CPU2源码编码/CRLF检查和根目录布局Compare通过。
 - 已有设备日志证明`SPC`连接查询、`SC`传感器识别以及命令117在首次无候选失败后复位恢复、第二次匹配成功并完成DSM识别；尚未执行连续多轮目标板、断链重连、故障注入、现场或SIL验证。
+
+## 2026-08-19 - 增加V3/V4串口写寄存器调试与通信安全保护
+
+版本：
+- CPU2：`V1.41.1.0 -> V1.42.0.0`（MINOR）。
+- CPU3：保持`V1.40.1.0`。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION`保持35；未修改CPU2/CPU3共享寄存器、共享命令和参数存储结构。
+- CPU2 `DEVICE_PARAM_VERSION`保持3，`DeviceParameters`结构大小、字段偏移、CRC范围和FRAM布局不变；升级不恢复出厂、不清除现场参数。
+- 新增的`V3W`和`V4W`是串口调试命令，不改变正式测量命令流程。V4的P65通信方式仍由`V4I/V4A`专用时序处理；普通V4写入使用已学习的单播地址。
+
+本次修改：
+- V3写寄存器复用既有V3请求帧构造器，统一写入字节序，并保留ACK、重试、TX/RX原包和类型读回校验。
+- 增加V4原始寄存器写入命令，限制为P66-P159；执行前要求已识别为V4且处于交互通信，拒绝未知地址和广播写入。
+- 同步串口解析、帮助文本、V3/V4命令文档和验证矩阵；不改变电机、测量、传感器识别和主循环业务流程。
+
+验证：
+- CPU2`cmake --build build/LTD_MAIN_CPU2 --clean-first`通过，107个目标成功编译链接，生成ELF/HEX/BIN。
+- `git diff --check`、GBK/936源码编码检查、V4/V3命令范围检查和根目录布局Compare通过；最终版本验证清单为`tmp/v4-write-commit-20260819/build-validation.json`。
+- 尚未执行真实V3写入、V4写入、参数66改地址后的重新识别、掉电保存、多设备总线、无线滑环和目标板台架验证；当前已知风险是V4W修改P66后本地运行态地址尚未同步，暂不应在现场使用该参数。

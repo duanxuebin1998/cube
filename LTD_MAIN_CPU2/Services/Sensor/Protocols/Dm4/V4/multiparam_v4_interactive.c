@@ -558,12 +558,22 @@ uint32_t MULTIPARAM_V4_WriteParamRaw(uint8_t parameter, uint32_t raw_value)
     uint32_t readback = 0U;
     uint32_t result;
 
+    /*
+     * Raw register writes are valid only inside an established interactive window.
+     * R65 and active-stream timing remain owned by EnterInteractive/EnterActive.
+     */
+    if (s_communication_mode != MULTIPARAM_V4_COMMUNICATION_INTERACTIVE) {
+        return SENSOR_STREAM_STATE_ERROR;
+    }
     if ((parameter < 65U) || (parameter > MULTIPARAM_V4_PARAM_MAX) ||
         (parameter == MULTIPARAM_V4_PARAM_COMMUNICATION_MODE) ||
-        (s_active_receive_requested != 0U)) {
+        (s_active_receive_requested != 0U) ||
+        (s_expected_address == MULTIPARAM_V4_ANY_ADDRESS) ||
+        (s_expected_address == MULTIPARAM_V4_BROADCAST_ADDRESS)) {
         return SYSTEM_CALL_CONDITION_ERROR;
     }
-    MULTIPARAM_V4_BuildRequestFrame(MULTIPARAM_V4_GetRequestAddress(),
+    /* Force writes to the learned unicast address even while reads use broadcast. */
+    MULTIPARAM_V4_BuildRequestFrame(s_expected_address,
                                     MULTIPARAM_V4_FUNCTION_WRITE,
                                     raw_value,
                                     parameter,

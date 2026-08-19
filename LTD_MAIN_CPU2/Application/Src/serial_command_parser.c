@@ -395,6 +395,8 @@ static uint8_t SerialCommandParser_ParseV4(const uint8_t *command)
     const char *cursor;
     unsigned long parameter;
 
+    unsigned long raw_value;
+
     if ((SerialCommandParser_IsExact(command, "V4?") != 0U) ||
         (SerialCommandParser_IsExact(command, "V4P") != 0U) ||
         (SerialCommandParser_IsExact(command, "V4I") != 0U) ||
@@ -413,6 +415,19 @@ static uint8_t SerialCommandParser_ParseV4(const uint8_t *command)
         (command[5] == '\0')) {
         return 1U;
     }
+    if ((command[2] == 'W') && (command[3] == '=')) {
+        cursor = (const char *)&command[4];
+        if ((SerialCommandParser_ParseUnsigned(&cursor, 66UL, 159UL, &parameter) == 0U) ||
+            (*cursor != ',')) {
+            return 0U;
+        }
+        cursor++;
+        if ((SerialCommandParser_ParseUnsigned(&cursor, 0UL, 4294967295UL, &raw_value) == 0U) ||
+            (*cursor != '\0')) {
+            return 0U;
+        }
+        return 1U;
+    }
     if ((command[2] != 'R') || (command[3] != '=')) {
         return 0U;
     }
@@ -423,6 +438,67 @@ static uint8_t SerialCommandParser_ParseV4(const uint8_t *command)
         return 0U;
     }
     return (uint8_t)(((parameter <= 25UL) || (parameter >= 65UL)) ? 1U : 0U);
+}
+
+/* Validate the V3 debug command family. */
+static uint8_t SerialCommandParser_ParseV3(const uint8_t *command)
+{
+    const char *cursor;
+    unsigned long parameter;
+
+    if ((SerialCommandParser_IsExact(command, "V3?") != 0U) ||
+        (SerialCommandParser_IsExact(command, "V3P") != 0U) ||
+        (SerialCommandParser_IsExact(command, "V3D") != 0U) ||
+        (SerialCommandParser_IsExact(command, "V3L") != 0U) ||
+        (SerialCommandParser_IsExact(command, "V3A") != 0U)) {
+        return 1U;
+    }
+    if ((command[2] == 'W') && (command[3] == '=')) {
+        uint8_t digit_seen = 0U;
+        uint8_t fraction_seen = 0U;
+
+        cursor = (const char *)&command[4];
+        if ((SerialCommandParser_ParseUnsigned(&cursor, 20UL, 114UL, &parameter) == 0U) ||
+            (*cursor++ != ',')) {
+            return 0U;
+        }
+        if (*cursor == '-') {
+            cursor++;
+        }
+        while ((*cursor >= '0') && (*cursor <= '9')) {
+            digit_seen = 1U;
+            cursor++;
+        }
+        if (*cursor == '.') {
+            fraction_seen = 1U;
+            cursor++;
+            while ((*cursor >= '0') && (*cursor <= '9')) {
+                digit_seen = 1U;
+                cursor++;
+            }
+        }
+        return (uint8_t)((digit_seen != 0U) &&
+                         ((fraction_seen == 0U) || (digit_seen != 0U)) &&
+                         (*cursor == '\0'));
+    }
+    if ((command[2] != 'R') || (command[3] != '=')) {
+        return 0U;
+    }
+
+    cursor = (const char *)&command[4];
+    if ((SerialCommandParser_ParseUnsigned(&cursor, 0UL, 255UL, &parameter) == 0U) ||
+        (*cursor != '\0')) {
+        return 0U;
+    }
+    return (uint8_t)((parameter == 0UL) ||
+                     (parameter == 4UL) ||
+                     (parameter == 6UL) ||
+                     (parameter == 7UL) ||
+                     (parameter == 8UL) ||
+                     (parameter == 9UL) ||
+                     (parameter == 17UL) ||
+                     (parameter == 18UL) ||
+                     (parameter == 22UL));
 }
 
 /**
@@ -525,6 +601,11 @@ SerialCommandParseResult SerialCommandParser_Parse(const uint8_t *command)
     }
     if ((command[0] == 'V') && (command[1] == '4')) {
         result.kind = (SerialCommandParser_ParseV4(command) != 0U) ?
+                      SERIAL_COMMAND_KIND_TEST : SERIAL_COMMAND_KIND_INVALID;
+        return result;
+    }
+    if ((command[0] == 'V') && (command[1] == '3')) {
+        result.kind = (SerialCommandParser_ParseV3(command) != 0U) ?
                       SERIAL_COMMAND_KIND_TEST : SERIAL_COMMAND_KIND_INVALID;
         return result;
     }

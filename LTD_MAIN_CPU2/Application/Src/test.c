@@ -17,6 +17,7 @@
 #include "motor_ctrl_internal.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 #include "system_parameter.h"
 #include "measure_tank_height.h"
 #include "measure_zero.h"
@@ -26,6 +27,7 @@
 #include "weight.h"
 #include "system_parameter.h"
 #include "sensor_service.h"
+#include "sensor_runtime.h"
 #include <mb85rs2m.h>
 #include "my_crc.h"
 #include "ad5421.h"
@@ -1844,7 +1846,7 @@ static void TestCommand_PrintV4Help(void)
 {
     printf("V4调试\tV4P=广播探测R01，V4I/V4A=交互/主动通信，V4D/V4S=密度/液位模式\r\n");
     printf("V4调试\tV4L=0|1=测水关闭/开启，V4M=0|1=磁零点关闭/开启，V4O=解码R02\r\n");
-    printf("V4调试\tV4R=<0..25|65..159>=原始参数读取，V4F=主动帧原包与P0-P14解包\r\n");
+    printf("V4调试\tV4R=<0..25|65..159>=原始参数读取，V4W=<66..159>,<raw32> V4F=主动帧原包与P0-P14解包\r\n");
     printf("V4调试\tV4G=通信质量与最近异常包，V4C=清零质量诊断；交互操作会打印每次TX/RX原包\r\n");
 }
 
@@ -1852,6 +1854,309 @@ static void TestCommand_PrintV4Help(void)
  * 处理多参数V4传感器串口调试命令，不启动电机且不修改整机全局故障状态。
  * V4P会显式重建V4通信上下文；其余交互操作保持当前模式并通过原包跟踪输出每次事务。
  */
+/* Check the runtime identity before executing protocol-specific diagnostics. */
+static uint8_t TestCommand_RequireSensorProtocol(const uint8_t *command,
+                                                  uint8_t require_v4)
+{
+    if (SensorRuntime_IsDetectionValid() == 0U) {
+        printf("ERR cmd=%s reason=DETECTION_INVALID\r\n",
+               (const char *)command);
+        return 0U;
+    }
+
+    if (require_v4 == 0U) {
+        if (g_deviceParams.sensorType != LTD_SENSOR) {
+            printf("ERR cmd=%s reason=NOT_V3_SENSOR type=%lu\r\n",
+                   (const char *)command,
+                   (unsigned long)g_deviceParams.sensorType);
+            return 0U;
+        }
+        return 1U;
+    }
+
+    /* DM4 uses one persisted type for V4 and Safe; the session selects the protocol. */
+    if (g_deviceParams.sensorType != DM4_SENSOR) {
+        printf("ERR cmd=%s reason=NOT_V4_SENSOR type=%lu\r\n",
+               (const char *)command,
+               (unsigned long)g_deviceParams.sensorType);
+        return 0U;
+    }
+    if (SensorRuntime_GetDm4ProtocolMode() != SENSOR_DM4_PROTOCOL_V4) {
+        printf("ERR cmd=%s reason=SAFE_SESSION_ACTIVE\r\n",
+               (const char *)command);
+        return 0U;
+    }
+    return 1U;
+}
+
+static int TestCommand_ReadV3Parameter(unsigned long parameter)
+{
+    int result = SYSTEM_CALL_CONDITION_ERROR;
+    float float_value = 0.0f;
+    int32_t int_value = 0;
+    uint32_t frequency = 0U;
+
+    switch (parameter) {
+    case 0UL:
+        result = MULTIPARAM_V3_Read_SoftwareVersion(&float_value);
+        break;
+    case 4UL:
+        result = MULTIPARAM_V3_Read_LevelFrequency(&frequency);
+        break;
+    case 6UL:
+        result = MULTIPARAM_V3_Read_Temperature(&float_value);
+        break;
+    case 7UL:
+        result = MULTIPARAM_V3_Read_Density(&float_value);
+        break;
+    case 8UL:
+        result = MULTIPARAM_V3_Read_DynamicViscosity(&float_value);
+        break;
+    case 9UL:
+        result = MULTIPARAM_V3_Read_KinematicViscosity(&float_value);
+        break;
+    case 17UL:
+        result = MULTIPARAM_V3_Read_MeanSquare45(&float_value);
+        break;
+    case 18UL:
+        result = MULTIPARAM_V3_Read_MeanSquare22p5(&float_value);
+        break;
+    case 22UL:
+        /* Keep zero as a valid debug value; this is a raw compatibility read. */
+        result = MULTIPARAM_V3_Read_IntParam(0x16U, &int_value);
+        break;
+    default:
+        break;
+    }
+
+    printf("V3 result R%02lu=0x%08lX",
+           parameter,
+           (unsigned long)result);
+    if (result == NO_ERROR) {
+        if (parameter == 4UL) {
+            printf(" VALUE=%lu", (unsigned long)frequency);
+        } else if (parameter == 22UL) {
+            printf(" VALUE=%ld", (long)int_value);
+        } else {
+            printf(" VALUE=%.9g", (double)float_value);
+        }
+    }
+    printf("\r\n");
+    return result;
+}
+
+static uint8_t TestCommand_V3ParamIsInteger(unsigned long parameter)
+{
+    return (uint8_t)(((parameter >= 20UL) && (parameter <= 24UL)) ||
+                     (parameter == 107UL) ||
+                     (parameter == 108UL));
+}
+
+static int TestCommand_VerifyV3Write(unsigned long parameter)
+{
+    int result;
+    uint32_t raw_value = 0U;
+
+    if (TestCommand_V3ParamIsInteger(parameter) != 0U) {
+        int32_t value = 0;
+        result = MULTIPARAM_V3_Read_IntParam((uint8_t)parameter, &value);
+        raw_value = (uint32_t)value;
+        printf("V3 verify param=%lu type=int value=%ld raw=0x%08lX result=0x%08lX\r\n",
+               parameter,
+               (long)value,
+               (unsigned long)raw_value,
+               (unsigned long)result);
+    } else {
+        float value = 0.0f;
+        result = MULTIPARAM_V3_Read_FloatParam((uint8_t)parameter, &value);
+        memcpy(&raw_value, &value, sizeof(raw_value));
+        printf("V3 verify param=%lu type=float value=%.9g raw=0x%08lX result=0x%08lX\r\n",
+               parameter,
+               (double)value,
+               (unsigned long)raw_value,
+               (unsigned long)result);
+    }
+    return result;
+}
+
+static uint8_t TestCommand_HandleV3Write(const uint8_t *command)
+{
+    const char *cursor;
+    char *end;
+    unsigned long parameter;
+    double parsed_value;
+    uint32_t raw_value;
+    int result;
+
+    cursor = (const char *)&command[4];
+    parameter = strtoul(cursor, &end, 10);
+    if ((end == cursor) || (*end != ',')) {
+        printf("ERR cmd=%s reason=WRITE_FORMAT\r\n", (const char *)command);
+        return 1U;
+    }
+    cursor = end + 1;
+    parsed_value = strtod(cursor, &end);
+    if ((end == cursor) || (*end != '\0') || !isfinite(parsed_value)) {
+        printf("ERR cmd=%s reason=WRITE_VALUE_INVALID\r\n", (const char *)command);
+        return 1U;
+    }
+
+    if (TestCommand_V3ParamIsInteger(parameter) != 0U) {
+        if ((parsed_value < -2147483648.0) ||
+            (parsed_value > 4294967295.0) ||
+            (floor(parsed_value) != parsed_value)) {
+            printf("ERR cmd=%s reason=WRITE_VALUE_RANGE\r\n", (const char *)command);
+            return 1U;
+        }
+        raw_value = (uint32_t)(int64_t)parsed_value;
+    } else {
+        float float_value = (float)parsed_value;
+        if (!isfinite(float_value)) {
+            printf("ERR cmd=%s reason=WRITE_VALUE_RANGE\r\n", (const char *)command);
+            return 1U;
+        }
+        memcpy(&raw_value, &float_value, sizeof(raw_value));
+    }
+
+    printf("V3 write direct param=%lu raw=0x%08lX\r\n",
+           parameter,
+           (unsigned long)raw_value);
+    result = MULTIPARAM_V3_WriteRawParam((uint8_t)parameter, raw_value);
+    printf("V3 write result=0x%08lX\r\n", (unsigned long)result);
+    if (result == NO_ERROR) {
+        result = TestCommand_VerifyV3Write(parameter);
+        if (result != NO_ERROR) {
+            printf("V3 write verify failed result=0x%08lX\r\n", (unsigned long)result);
+        }
+    }
+    return 1U;
+}
+static void TestCommand_PrintV3Help(void)
+{
+    printf("V3 debug: V3P=probe V3D=density V3L=level V3A=all reads V3R=... V3W=20..114,value\r\n");
+}
+
+static uint8_t TestCommand_HandleV3(const uint8_t *command)
+{
+    unsigned long parameter;
+    const char *cursor;
+    static const unsigned long all_parameters[] = { 0UL, 4UL, 6UL, 7UL, 8UL, 9UL, 17UL, 18UL, 22UL };
+
+    if ((command == NULL) || (command[0] != 'V') || (command[1] != '3')) {
+        return 0U;
+    }
+    if (command[2] == '?') {
+        TestCommand_PrintV3Help();
+        return 1U;
+    }
+    if (TestCommand_RequireSensorProtocol(command, 0U) == 0U) {
+        return 1U;
+    }
+
+    if (command[2] == 'W') {
+        (void)TestCommand_HandleV3Write(command);
+        return 1U;
+    }
+    if (command[2] == 'P') {
+        int32_t sensor_id = 0;
+        int result = MULTIPARAM_V3_Read_IntParam(0x16U, &sensor_id);
+        printf("V3 probe result=0x%08lX sensor_id=%ld\r\n",
+               (unsigned long)result,
+               (long)sensor_id);
+        return 1U;
+    }
+    if (command[2] == 'D') {
+        int result = MULTIPARAM_V3_SwitchToDensityMode();
+        printf("V3 mode=density result=0x%08lX\r\n", (unsigned long)result);
+        return 1U;
+    }
+    if (command[2] == 'L') {
+        int result = MULTIPARAM_V3_SwitchToLevelMode();
+        printf("V3 mode=level result=0x%08lX\r\n", (unsigned long)result);
+        return 1U;
+    }
+    if (command[2] == 'A') {
+        for (uint32_t index = 0U;
+             index < (sizeof(all_parameters) / sizeof(all_parameters[0]));
+             index++) {
+            (void)TestCommand_ReadV3Parameter(all_parameters[index]);
+        }
+        return 1U;
+    }
+    if (command[2] == 'R') {
+        cursor = (const char *)&command[4];
+        parameter = strtoul(cursor, NULL, 10);
+        (void)TestCommand_ReadV3Parameter(parameter);
+        return 1U;
+    }
+    return 1U;
+}
+
+/* Write one V4 parameter as the exact 32-bit wire value, then verify by reading it back. */
+static uint8_t TestCommand_HandleV4Write(const uint8_t *command)
+{
+    const char *cursor;
+    char *end;
+    unsigned long parameter;
+    unsigned long parsed_raw;
+    uint32_t raw_value;
+    uint32_t readback = 0U;
+    uint32_t result;
+    uint32_t verify_result;
+
+    if (MULTIPARAM_V4_GetCommunicationMode() !=
+        MULTIPARAM_V4_COMMUNICATION_INTERACTIVE) {
+        printf("ERR cmd=%s reason=NOT_INTERACTIVE\r\n",
+               (const char *)command);
+        return 1U;
+    }
+
+    cursor = (const char *)&command[4];
+    parameter = strtoul(cursor, &end, 10);
+    if ((end == cursor) || (*end != ',')) {
+        printf("ERR cmd=%s reason=WRITE_FORMAT\r\n", (const char *)command);
+        return 1U;
+    }
+    if ((parameter < 66UL) || (parameter > 159UL)) {
+        printf("ERR cmd=%s reason=WRITE_PARAMETER_RANGE\r\n", (const char *)command);
+        return 1U;
+    }
+
+    cursor = end + 1;
+    parsed_raw = strtoul(cursor, &end, 10);
+    if ((end == cursor) || (*end != 0) || (parsed_raw > 4294967295UL)) {
+        printf("ERR cmd=%s reason=WRITE_VALUE_RANGE\r\n", (const char *)command);
+        return 1U;
+    }
+    raw_value = (uint32_t)parsed_raw;
+
+    printf("V4 write direct param=%lu raw=0x%08lX\r\n",
+           parameter,
+           (unsigned long)raw_value);
+    MULTIPARAM_V4_SetProbeTraceEnabled(1U);
+    result = MULTIPARAM_V4_WriteParamRaw((uint8_t)parameter, raw_value);
+    verify_result = result;
+    if (result == NO_ERROR) {
+        verify_result = MULTIPARAM_V4_ReadParamRaw((uint8_t)parameter, &readback);
+        if (verify_result == NO_ERROR) {
+            printf("V4 write verify param=%lu raw=0x%08lX result=0x%08lX\r\n",
+                   parameter,
+                   (unsigned long)readback,
+                   (unsigned long)((readback == raw_value) ? NO_ERROR : SENSOR_RESP_FORMAT_ERROR));
+            if (readback != raw_value) {
+                verify_result = SENSOR_RESP_FORMAT_ERROR;
+            }
+        } else {
+            printf("V4 write verify param=%lu result=0x%08lX\r\n",
+                   parameter,
+                   (unsigned long)verify_result);
+        }
+    }
+    MULTIPARAM_V4_SetProbeTraceEnabled(0U);
+    printf("V4 write result=0x%08lX\r\n", (unsigned long)verify_result);
+    return 1U;
+}
+
 static uint8_t TestCommand_HandleV4(const uint8_t *command)
 {
     uint32_t result = NO_ERROR;
@@ -1869,6 +2174,13 @@ static uint8_t TestCommand_HandleV4(const uint8_t *command)
     }
     if (command[2] == '?') {
         TestCommand_PrintV4Help();
+        return 1U;
+    }
+    if (TestCommand_RequireSensorProtocol(command, 1U) == 0U) {
+        return 1U;
+    }
+    if (command[2] == 'W') {
+        (void)TestCommand_HandleV4Write(command);
         return 1U;
     }
     if (command[2] == 'F') {
@@ -2012,6 +2324,9 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
         return 1U;
     }
 
+    if (TestCommand_HandleV3(command) != 0U) {
+        return 1U;
+    }
     if (TestCommand_HandleV4(command) != 0U) {
         return 1U;
     }

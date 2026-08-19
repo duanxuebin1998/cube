@@ -131,6 +131,30 @@ static void MULTIPARAM_V3_PrintProbePacket(const char *direction,
     printf("\r\n");
 }
 
+/* Print direct-write packet bytes for field diagnostics. */
+static void MULTIPARAM_V3_PrintWritePacket(const char *direction,
+                                            uint32_t attempt,
+                                            const uint8_t frame[8],
+                                            uint16_t length,
+                                            uint32_t result)
+{
+    uint16_t print_length = (length > 8U) ? 8U : length;
+
+    printf("V3 write packet direction=%s attempt=%lu/%u length=%u HEX=",
+           direction,
+           (unsigned long)attempt,
+           (unsigned int)MULTIPARAM_V3_MAX_RETRY,
+           (unsigned int)print_length);
+    for (uint16_t index = 0U; index < print_length; index++) {
+        printf((index == 0U) ? "%02X" : " %02X", frame[index]);
+    }
+    if (direction[0] == 'R') {
+        printf(" result=0x%08lX stage=%s",
+               (unsigned long)result,
+               s_multiparam_v3_last_stage);
+    }
+    printf("\r\n");
+}
 /**
  * @brief 在统一重试日志中附带完整的 8 字节请求和当前应答。
  *
@@ -706,6 +730,64 @@ int MULTIPARAM_V3_Read_IntParam(uint8_t param, int32_t *out_value) {
 	return MULTIPARAM_V3_Read_IntParamInternal(param, out_value, 1U);
 }
 
+/**
+ * Write a V3 register using the shared V3 request-frame encoding and verify the ACK.
+ * The caller performs the typed readback because the V3 table mixes integers and floats.
+ */
+int MULTIPARAM_V3_WriteRawParam(uint8_t param, uint32_t raw_value)
+{
+    uint8_t tx[8];
+    uint8_t rx[8];
+    int last_err = SENSOR_DEVICE_COMM_TIMEOUT;
+
+    /* Keep V3 writes aligned with the established request-frame byte order. */
+    MULTIPARAM_V3_MakeFrame(tx,
+                             (uint8_t)MULTIPARAM_V3_FUNC_W,
+                             raw_value,
+                             param);
+
+    for (int attempt = 0; attempt < MULTIPARAM_V3_MAX_RETRY; ++attempt) {
+        if (HasEffectiveCommandSwitchRequest()) {
+            return STATE_SWITCH;
+        }
+        HAL_Delay(DSM_PRE_SEND_DELAY);
+        MULTIPARAM_V3_PrintWritePacket("TX", (uint32_t)(attempt + 1), tx, 8U, NO_ERROR);
+
+        int ret = MULTIPARAM_V3_Transceive(tx, rx);
+        if (ret != NO_ERROR) {
+            MULTIPARAM_V3_PrintWritePacket("RX",
+                                           (uint32_t)(attempt + 1),
+                                           rx,
+                                           s_multiparam_v3_last_received_length,
+                                           (uint32_t)ret);
+            last_err = ret;
+            MULTIPARAM_V3_LogRetry("V3_WRITE_PARAM",
+                                   (uint32_t)ret,
+                                   (uint32_t)(attempt + 1),
+                                   tx,
+                                   rx);
+            continue;
+        }
+
+        ret = MULTIPARAM_V3_CheckReply(tx, rx);
+        MULTIPARAM_V3_PrintWritePacket("RX",
+                                       (uint32_t)(attempt + 1),
+                                       rx,
+                                       s_multiparam_v3_last_received_length,
+                                       (uint32_t)ret);
+        if (ret == NO_ERROR) {
+            return NO_ERROR;
+        }
+        last_err = ret;
+        MULTIPARAM_V3_LogRetry("V3_WRITE_PARAM",
+                               (uint32_t)ret,
+                               (uint32_t)(attempt + 1),
+                               tx,
+                               rx);
+        HAL_Delay(DSM_BCC_DELAY);
+    }
+    return last_err;
+}
 /**
  * @brief 读取 多参数传感器通信协议 V3.0 传感器软件版本参数。
  *
