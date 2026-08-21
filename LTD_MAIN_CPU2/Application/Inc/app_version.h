@@ -1,3 +1,9 @@
+/*
+ * app_version.h
+ *
+ * 文件职责：集中定义 CPU2 固件版本号及其字符串形式。
+ */
+
 #ifndef APP_VERSION_H
 /* APP_VERSION_H 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define APP_VERSION_H
@@ -7,7 +13,7 @@
 /* CPU2主控板固件版本号：主版本.次版本.修订号.构建号 */
 #define CPU2_APP_VERSION_MAJOR      1u /* CPU2 应用主版本号。 */
 #define CPU2_APP_VERSION_MINOR      42u /* CPU2 应用次版本号。 */
-#define CPU2_APP_VERSION_PATCH      0u /* CPU2 应用修订版本号。 */
+#define CPU2_APP_VERSION_PATCH      1u /* CPU2 应用修订版本号。 */
 #define CPU2_APP_VERSION_BUILD      0u /* CPU2 应用构建版本号。 */
 /* 32位版本编码：0xMMmmppbb，例如 V1.2.3 build 4 = 0x01020304 */
 /* CPU2 应用版本号的 32 位打包值。 */
@@ -17,7 +23,7 @@
      ((uint32_t)CPU2_APP_VERSION_PATCH << 8)  | \
      ((uint32_t)CPU2_APP_VERSION_BUILD))
 
-#define CPU2_APP_VERSION_STRING "V1.42.0.0" /* CPU2 应用版本字符串。 */
+#define CPU2_APP_VERSION_STRING "V1.42.1.0" /* CPU2 应用版本字符串。 */
 /* 固件版本仅用于显示和追踪发布；跨CPU能力兼容由DeviceParameters.protocolVersion判断。 */
 
 /* 兼容旧命名，现有代码仍可继续使用 APP_VERSION_*。 */

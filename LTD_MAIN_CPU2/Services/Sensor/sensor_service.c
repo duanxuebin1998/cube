@@ -9,7 +9,7 @@
 #include "sensor_service.h"
 
 #include "abortable_delay.h"
-#include "measure.h"
+
 #include "motor_ctrl.h"
 #include "sensor_comm_diagnostics.h"
 #include "sensor_driver.h"

@@ -1,3 +1,9 @@
+/*
+ * serial_command_parser.h
+ *
+ * 文件职责：定义串口命令分类结果、接收状态和严格解析接口。
+ */
+
 #ifndef INC_SERIAL_COMMAND_PARSER_H_
 /* INC_SERIAL_COMMAND_PARSER_H_ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define INC_SERIAL_COMMAND_PARSER_H_
@@ -31,8 +37,8 @@ typedef struct {
     uint8_t formal_command; /* 正式设备命令的二进制命令码；仅在 kind 为 FORMAL 时有效。 */
 } SerialCommandParseResult;
 
+/* 调试串口逐字节接收器向上层报告的组帧事件。 */
 typedef enum {
-    /* 调试串口逐字节接收器向上层报告的事件。 */
     SERIAL_COMMAND_RX_NONE = 0, /* 本次输入字节尚未形成完整命令事件。 */
     SERIAL_COMMAND_RX_READY, /* 已接收到行结束符，缓冲区内有一条完整命令。 */
     SERIAL_COMMAND_RX_TOO_LONG /* 命令超过缓冲容量，已进入丢弃直到行结束的状态。 */

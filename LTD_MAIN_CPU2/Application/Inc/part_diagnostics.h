@@ -1,3 +1,9 @@
+/*
+ * part_diagnostics.h
+ *
+ * 文件职责：声明部件参数诊断、故障恢复复核和命令处理接口。
+ */
+
 #ifndef PART_DIAGNOSTICS_H_
 #define PART_DIAGNOSTICS_H_
 

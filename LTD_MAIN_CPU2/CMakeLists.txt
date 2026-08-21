@@ -28,8 +28,47 @@ file(GLOB CORE_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_LIST_DIR}/Core/Src/*.c
 )
 
-file(GLOB APP_SOURCES CONFIGURE_DEPENDS
-    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/*.c
+set(APP_SOURCES
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/app/app_main.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/commands/serial_command.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/commands/serial_command_parser.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/diagnostics/fault_manager.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/diagnostics/fault_recovery.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/diagnostics/part_diagnostics.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/measure.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/measure_composite_commands.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/measure_level_commands.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/measure_maintenance_commands.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/density/measure_density.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/density/measure_density_acquisition.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/density/measure_density_commands.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/density/measure_density_si.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/density/measure_density_single_point.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/density/wartsila_density_measurement.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/oil_level/oil_level_calibration.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/oil_level/oil_level_common.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/oil_level/oil_level_density.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/oil_level/oil_level_follow.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/oil_level/oil_level_frequency.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/oil_level/oil_level_position.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/oil_level/oil_level_runtime.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/oil_level/oil_level_search.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/oil_level/oil_level_step_search.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/oil_level/oil_level_strategy.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/tank_height/measure_tank_height.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/water_level/water_level_calibration.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/water_level/water_level_common.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/water_level/water_level_fast_search.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/water_level/water_level_follow.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/water_level/water_level_search.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/zero/measure_zero.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/service_debug/service_debug_command.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/service_debug/service_debug_demo.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/service_debug/service_debug_fixed_frequency.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/service_debug/service_debug_motor.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/service_debug/service_debug_sensor_protocol.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/service_debug/service_debug_storage.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/service_debug/service_debug_water_profile.c
 )
 
 file(GLOB_RECURSE SERVICE_SOURCES CONFIGURE_DEPENDS

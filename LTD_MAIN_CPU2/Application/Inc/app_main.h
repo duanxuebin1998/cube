@@ -1,4 +1,7 @@
-/*
+/**
+ * @file app_main.h
+ * @brief CPU2 Application 初始化和主循环调度入口。
+ *
  * app_main.h
  *
  *  Created on: Mar 13, 2025
@@ -9,12 +12,7 @@
 /* __APP_MAIN_H__ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define __APP_MAIN_H__
 
-#include "AS5145.h"
-#include <stdio.h>
-#include <string.h>
-#include "weight.h"
-#include "TMC5130.h"
-#include "fault_manager.h"
+
 /**
  * @brief 按安全启动顺序初始化电源监控、参数、位置、通信、输出和电机子系统。
  *

@@ -3254,3 +3254,26 @@ CPU3通信和界面：
 - CPU2`cmake --build build/LTD_MAIN_CPU2 --clean-first`通过，107个目标成功编译链接，生成ELF/HEX/BIN。
 - `git diff --check`、GBK/936源码编码检查、V4/V3命令范围检查和根目录布局Compare通过；最终版本验证清单为`tmp/v4-write-commit-20260819/build-validation.json`。
 - 尚未执行真实V3写入、V4写入、参数66改地址后的重新识别、掉电保存、多设备总线、无线滑环和目标板台架验证；当前已知风险是V4W修改P66后本地运行态地址尚未同步，暂不应在现场使用该参数。
+
+## 2026-08-21 - 整理CPU2测量流程模块并恢复探底兜底参考
+
+版本：
+- CPU2：`V1.42.0.0 -> V1.42.1.0`（PATCH）。
+- CPU3：保持`V1.40.1.0`。
+
+协议版本/兼容性：
+- CPU2/CPU3 `DEVICE_PROTOCOL_VERSION`保持35；不新增或移动共享寄存器、共享命令、共享状态和共享字段，CPU3固件无需修改。
+- CPU2 `DEVICE_PARAM_VERSION`保持3，`DeviceParameters`结构大小、字段偏移、`struct_size`、CRC范围和FRAM布局不变；升级不恢复出厂、不清除现场参数。
+- 测量命令编号、串口调试命令名称和既有外部协议地址保持兼容；本次主要调整CPU2内部测量、故障和调试代码组织，以及测量过程中的错误收尾和AO样本提交边界。
+
+本次修改：
+- 将CPU2测量入口、液位命令、维护命令、油位、水位、密度、零点、罐高、部件诊断和串口调试代码拆分到职责目录，更新CMake源文件清单和公共头文件，保留正式命令入口。
+- `ProcessMeasureCmd()`统一执行编码器/电源采样起点和`MeasureStart()`，测量类命令内部不再重复初始化；命令切换`STATE_SWITCH`改为统一安全停机并直接返回，不再伪装成普通测量错误。
+- 罐底参考由`bottom_value`全局变量封装为`TankHeight_Set/GetBottomCableLength01mm()`，并同步给电机失步检测；按用户确认恢复探底失败或偏差过大时使用罐高兜底作为成功参考的原有逻辑。
+- 油位和水位结果通过运行态公共函数提交或失效AO过程样本，密度测量内部统一完成找油位前置；故障管理将`RETURN_ERROR`、`CHECK_ERROR`和命令切换路径集中到`fault_manager`。
+- 将原`test.c`调试命令拆为`service_debug`模块，串口正式入口改为调用`ServiceDebug_ProcessSerialCommand()`；同步自编代码规模、故障码和传感器协议相关正式资料。
+
+验证：
+- CPU2最终源码执行`cmake --build build/LTD_MAIN_CPU2 --clean-first -j 8`通过。
+- `py tools/check_parameter_measurement_fault_contract.py`、`py tools/check_command_argument_transaction_contract.py`、`py tools/check_si_protocol_contract.py`、`py tools/check_version_bumped.py`、`py .agents/skills/cube-development/scripts/bootstrap_cube_hooks.py --check --repo-root D:\CUBE`、`git diff --cached --check`和根目录布局Snapshot/Compare通过。
+- 尚未执行真实探底、找水、找油、密度测量、命令切换、电机失步、AO输出、RS485、传感器、目标板、台架、现场或SIL验证；构建和静态检查不替代硬件证据。

@@ -5,7 +5,7 @@
  */
 #include "sensor_driver_registry.h"
 
-#include "app_main.h"
+
 #include "Protocols/Dsm/dsm_sensor_communication.h"
 #include "Protocols/MultiparamV3/multiparam_v3_communication.h"
 #include "Protocols/Dm4/V4/multiparam_v4_communication.h"

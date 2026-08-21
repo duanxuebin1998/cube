@@ -1,7 +1,14 @@
+/*
+ * fault_recovery.h
+ *
+ * 文件职责：声明测量命令失败后的自动恢复状态和主循环轮询接口。
+ */
+
 #ifndef INC_FAULT_RECOVERY_H_
 /* INC_FAULT_RECOVERY_H_ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define INC_FAULT_RECOVERY_H_
 
+#include <stdbool.h>
 #include <stdint.h>
 #include "system_parameter.h"
 

@@ -1,8 +1,9 @@
-/*
- * fault_manager.h
+/**
+ * @file fault_manager.h
+ * @brief 同步错误出口、异步故障锁存、命令切换和安全停机的统一接口。
  *
- *  Created on: Mar 13, 2025
- *      Author: Duan Xuebin
+ * 错误现场结构及其可写实例由 fault_manager.c 私有保存。调用方只能通过本头文件的
+ * 处理函数和检查宏提交错误，避免跨模块直接修改文件名、行号、函数名或错误码。
  */
 
 #ifndef INC_FAULT_MANAGER_H_
@@ -10,10 +11,8 @@
 #define INC_FAULT_MANAGER_H_
 
 #include <stdint.h>   /* 处理 uint8_t, uint32_t 等类型 */
-#include <string.h>   /* 处理 memset、memcpy 等函数 */
+#include <string.h>   /* 兼容仍依赖本头传递 memcpy 声明的既有服务文件。 */
 #include "error_log.h"
-
-/* #define ERROR_PRINT(msg) printf("ERROR: %s | FILE: %s | LINE: %d\r\n", msg, __FILE__, __LINE__) */
 
 /* 故障大类枚举 */
 typedef enum {
@@ -53,15 +52,6 @@ typedef struct {
 	uint8_t max_retries;        /* 最大重试次数 */
 	FaultRecoveryAction action;  /* 恢复动作 */
 } FaultRecoveryPolicy;
-/* 错误信息结构体 */
-typedef struct {
-	/* 故障发生位置和故障码快照，用于延迟记录文件、行号及函数来源。 */
-	const char *file; /* 产生故障的源码文件名指针，指向静态字符串。 */
-	uint32_t line; /* 产生故障的源码行号。 */
-	const char *func; /* 产生故障的函数名指针，指向静态字符串。 */
-	uint32_t error_code; /* 错误码; */
-} ErrorInfo;
-extern ErrorInfo err; /* 全局错误信息变量 */
 
 /**
   * @brief 记录故障现场并进入统一错误退出路径。
@@ -96,6 +86,25 @@ uint32_t FaultManager_HandleGlobalError(uint32_t error_code,
                                         const char *file,
                                         uint32_t line,
                                         const char *func);
+
+/**
+ * @brief RETURN_ERROR 宏的统一处理入口。
+ * @param error_code 需要返回的原始错误码。
+ * @param file 触发错误出口的短文件名。
+ * @param line 触发错误出口的源码行号。
+ * @param func 触发错误出口的函数名。
+ * @return 完成停机和可读日志输出后的原始错误码。
+ */
+uint32_t FaultManager_HandleReturnError(uint32_t error_code,
+                                        const char *file,
+                                        uint32_t line,
+                                        const char *func);
+
+/**
+ * @brief 记录命令切换结果并执行原有错误停机动作。
+ * @return 固定返回 STATE_SWITCH。
+ */
+uint32_t FaultManager_HandleCommandSwitch(void);
 /**
  * @brief SET_ERROR 宏的统一处理入口。
  * @note 输出最终报错后把设备状态切换为错误态，并标记后续需要回零。
@@ -133,7 +142,7 @@ void FaultManager_LatchAsyncError(uint32_t error_code);
 /* 统一错误检查宏，发现错误后进入故障处理出口。 */
 #define CHECK_ERROR(errorcode)                                                   \
     do {                                                                         \
-        /* Step 1: 优先检查函数返回错误码 */                                      \
+        /* 优先处理当前函数返回的错误码。 */                                      \
         uint32_t check_error_code = (uint32_t)(errorcode);                       \
         if (check_error_code != NO_ERROR) {                                      \
             return FaultManager_HandleCheckError(check_error_code,               \
@@ -141,8 +150,7 @@ void FaultManager_LatchAsyncError(uint32_t error_code);
                                                  __LINE__,                       \
                                                  __func__);                      \
         }                                                                        \
-                                                                                 \
-        /* Step 2: 检查全局设备错误状态 */                                        \
+        /* 返回值正常时仍需传播已经异步锁存的全局设备错误。 */                    \
         if (g_measurement.device_status.error_code != NO_ERROR) {                \
             return FaultManager_HandleGlobalError(                               \
                 g_measurement.device_status.error_code,                          \
@@ -150,12 +158,9 @@ void FaultManager_LatchAsyncError(uint32_t error_code);
                 __LINE__,                                                        \
                 __func__);                                                       \
         }                                                                        \
-                                                                                 \
-        /* Step 3: 检查是否有命令切换 */                                          \
+        /* 命令切换保持原有停机动作，并以 STATE_SWITCH 正常打断当前流程。 */       \
         if (HasEffectiveCommandSwitchRequest()) {                                \
-            err.error_code = STATE_SWITCH;                                       \
-            HandleError();                                                       \
-            return err.error_code;                                               \
+            return FaultManager_HandleCommandSwitch();                           \
         }                                                                        \
     } while (0)
 
@@ -163,16 +168,13 @@ void FaultManager_LatchAsyncError(uint32_t error_code);
 /* 统一错误返回宏，用于带返回值流程的故障退出。 */
 #define RETURN_ERROR(errorcode)                                                  \
     do {                                                                         \
-        if ((errorcode) != NO_ERROR) {                                           \
-            err.file       = GetShortFilename(__FILE__);                         \
-            err.line       = __LINE__;                                           \
-            err.func       = __func__;                                           \
-            err.error_code = (errorcode);                                        \
-                                                                                 \
-            HandleError();        /* 停机 / 报警 / 记录到全局状态等 */            \
-            printError(&err);     /* 串口/日志输出可读信息 */                     \
-                                                                                 \
-            return err.error_code;                                               \
+        uint32_t return_error_code = (uint32_t)(errorcode);                      \
+        if (return_error_code != NO_ERROR) {                                     \
+            return FaultManager_HandleReturnError(                               \
+                return_error_code,                                               \
+                GetShortFilename(__FILE__),                                      \
+                __LINE__,                                                        \
+                __func__);                                                       \
         }                                                                        \
     } while (0)
 
@@ -222,13 +224,7 @@ void fault_info_init(void);
  * @brief 处理故障处理中的 HandleError 逻辑。
  */
 void HandleError(void);
-/**
- * @brief 从错误信息对象取得错误码并转交统一最终报错出口。
- *
- * @param err 待上报错误信息对象；函数读取其中的错误码，传入 NULL 时直接返回。
- * @note 传入 NULL 时直接返回；统一报错出口会过滤 NO_ERROR 和 STATE_SWITCH，并对短时间内的重复错误码去重，本函数自身不执行停机。
- */
-void printError(const ErrorInfo* err);
+
 /**
  * @brief 提取短文件名 (从路径中提取)
  * @param fullpath 完整路径

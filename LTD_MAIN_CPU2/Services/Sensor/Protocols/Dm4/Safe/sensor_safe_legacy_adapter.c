@@ -9,7 +9,6 @@
 
 #include "abortable_delay.h"
 #include "error_log.h"
-#include "measure.h"
 #include "sensor_safe_identity_platform.h"
 #include "sensor_safe_service.h"
 #include "sensor_safe_transport_uart6.h"

@@ -1,4 +1,7 @@
-/*
+/**
+ * @file measure_density.h
+ * @brief 密度分布、SI Profile、单点测量和结果发布的公共接口。
+ *
  * measure_density.h
  *
  *  Created on: Nov 8, 2025
@@ -9,7 +12,7 @@
 /* INC_MEASURE_DENSITY_H_ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define INC_MEASURE_DENSITY_H_
 
-#include "app_main.h"
+#include "system_parameter.h"
 /* ===================== 配置宏 ===================== */
 
 /* 单次测量最多点数 */
@@ -19,23 +22,24 @@
 
 /* 国标分段阈值（单位：0.1mm） */
 #ifndef Spread_Gb_Onepiont_Posion
-/* 密度分布流程的第一参考位置 3.000 m，线值单位为 0.01 mm；保留历史拼写以兼容现有代码。 */
+/* 密度分布流程的第一参考位置 3.000 m，定点单位为 0.1 mm；保留历史拼写以兼容现有代码。 */
 #define Spread_Gb_Onepiont_Posion   (30000u)  /* 3m */
 #endif
 
 #ifndef Spread_Gb_Twopiont_Posion
-/* 密度分布流程的第二参考位置 4.500 m，线值单位为 0.01 mm；保留历史拼写以兼容现有代码。 */
+/* 密度分布流程的第二参考位置 4.500 m，定点单位为 0.1 mm；保留历史拼写以兼容现有代码。 */
 #define Spread_Gb_Twopiont_Posion   (45000u)  /* 4.5m */
 #endif
 
 /* 每米测步距（单位：0.1mm） */
 #ifndef METER_STEP_01MM
-/* 密度测量默认移动步距 1.000 m，线值单位为 0.01 mm。 */
+/* 密度测量默认移动步距 1.000 m，定点单位为 0.1 mm。 */
 #define METER_STEP_01MM             (10000u)  /* 1m */
 #endif
 
 
 
+/* 密度分布命令的模式编号；数值与现有串口命令和结果分支保持兼容。 */
 typedef enum {
     DENS_MODE_SPREAD  = 1, /* 普通分布测 */
     DENS_MODE_GB      = 3, /* 国标测 */
@@ -44,53 +48,6 @@ typedef enum {
 } DensitySpreadModeId;
 
 /* ===================== 对外接口：四种模式入口 ===================== */
-/**
- * @brief 执行普通密度分布测量，并仅在完整成功后打印和发布新的标准点阵。
- *
- * 开始时清除上一轮完成锁存并将设备状态置为普通分布测量中，再调用 Density_MeasureByMode_Exact 生成临时结果。
- * 测量完整成功后打印结果，通过 PROFILE_SOURCE_STANDARD 发布整份点阵及新代际，最后发布普通分布测量完成状态。
- *
- * @note STATE_SWITCH 是新命令触发的正常退出，不发布候选点阵也不进入错误报警；其他失败通过 SET_ERROR 进入统一处理。
- */
-void CMD_MeasureDensitySpread_Spread(void);
-
-/**
- * @brief 执行国标密度分布测量；仅在完整成功后发布点阵和完成态。
- *
- * 国标测。
- */
-void CMD_MeasureDensitySpread_GB(void);
-
-/**
- * @brief 执行每米密度分布测量；仅在完整成功后发布点阵和完成态。
- *
- * 每米测。
- */
-void CMD_MeasureDensitySpread_Meter(void);
-
-/**
- * @brief 执行区间密度分布测量；仅在完整成功后发布点阵和完成态。
- *
- * 区间测。
- */
-void CMD_MeasureDensitySpread_Interval(void);
-/**
- * @brief 执行 SI 独立 profile 测量。
- *
- * 调用场景：CPU3 SI Profile 线圈或自动调度下发 CMD_SI_PROFILE 后由命令分发调用。
- * 函数清空上一轮 SI 候选结果，复位进度并进入准备阶段，从独立 SI 参数区取得首点、点距、驻留时间和探底周期；这些参数不复用普通密度分布测量配置。
- * 到达探底周期时先执行 SearchBottom；命令切换立即取消本轮，其他探底错误只记录诊断，并允许点阵生成按已有罐底参考或当前位置继续。
- * 点阵生成成功后逐点移动、驻留并采集到局部候选结构；生成或测量失败会清除候选、发布错误并退出，未完成的候选不会成为对外最终结果。
- * 采点收尾与命令排队共用关中断临界区：若已有新命令或非回液位命令，本轮候选立即取消；否则锁存候选、更新进度阶段，并在命令槽为空时排队 CMD_FIND_OIL。
- * 函数结束时只进入“等待回液位”阶段；真正的 SI 最终完成快照必须等回到稳定液位且电机停止后由后续流程发布。
- *
- * SI 独立 Profile。
- *
- * @note 关键约束：不复用普通分布测 profile 参数；失败不锁存完成态，命令切换直接退出。
- * @note 候选锁存和回液位命令排队期间以新到命令为最高优先级，不得覆盖用户已经送达的其他命令。
- */
-void CMD_SiProfile(void);
-
 /**
  * @brief 按当前 SI Profile 阶段处理显式取消或命令切换。
  *
@@ -209,13 +166,4 @@ uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistributi
  * @return NO_ERROR 表示目标有效，其他值表示参数或位置越界。
  */
 uint32_t SinglePoint_CheckTargetPosition(const char *scene, uint32_t target_01mm);
-/**
- * @brief 单点测量命令：移动到指定高度 -> 单点稳定读取。
- */
-void CMD_SinglePointMeasurement();
-/**
- * @brief 单点监测命令：移动到监测高度 -> 循环单点稳定读取（直到命令切换）。
- */
-void CMD_SinglePointMonitoring();
-
 #endif /* INC_MEASURE_DENSITY_H_ */

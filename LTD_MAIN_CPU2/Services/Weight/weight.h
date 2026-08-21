@@ -73,7 +73,6 @@ Weight_StateTypeDef check_zero_point_status(void);
  *  - 扭力阈值：g_deviceParams.bottom_weight_threshold
  *  - 角度阈值：g_deviceParams.bottom_angle_threshold
  */
-uint32_t check_bottom_status(Weight_StateTypeDef *status); /* 检测罐底状态，返回错误码并通过参数输出 NORMAL/BOTTOM */
 /**
  * @brief 扭力统一碰撞/极限检测
  *        上行: 先判零点阈值，再判变重阈值

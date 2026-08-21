@@ -1426,10 +1426,9 @@ static uint32_t MotorMotion_CheckErrorWithSpeedScope(uint32_t ret,
     }
 
     if (HasEffectiveCommandSwitchRequest()) {
-        err.error_code = STATE_SWITCH;
-        HandleError();
+        const uint32_t switch_ret = FaultManager_HandleCommandSwitch();
         (void)MotorMotion_EndSpeedScope(scope);
-        return err.error_code;
+        return switch_ret;
     }
 
     return NO_ERROR;

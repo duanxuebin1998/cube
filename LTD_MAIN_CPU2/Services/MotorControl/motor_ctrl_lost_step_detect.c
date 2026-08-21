@@ -19,6 +19,7 @@ static int write_idx = 0; /* Ê§²½¼ì²â²ÉÑù»·ÐÎ»º³åÇøµÄÏÂÒ»Ð´ÈëË÷Òý¡£ */
 static int samples = 0; /* Ê§²½¼ì²â»º³åÇøµ±Ç°ÒÑÓÐµÄÓÐÐ§Ñù±¾Êý¡£ */
 static uint32_t last_check_tick = 0; /* Ê§²½¼ì²â×î½üÒ»´ÎÖ´ÐÐ´°¿ÚÍ³¼ÆµÄ HAL ºÁÃë½ÚÅÄ¡£ */
 static uint32_t last_alarm_tick = 0; /* Ê§²½¸æ¾¯×î½üÒ»´ÎÉÏ±¨µÄ HAL ºÁÃë½ÚÅÄ£¬ÓÃÓÚÏÞÖÆÖØ¸´¸æ¾¯ÆµÂÊ¡£ */
+static int32_t s_bottom_reference_01mm = -100000000; /* Application ×î½üÍ¬²½µÄ¹Þµ×³ß´ø²Î¿¼£¬µ¥Î» 0.1 mm£»¸º³õÖµ±íÊ¾ÉÐÎ´½¨Á¢¡£ */
 #ifndef NODETECT_LOG_PERIOD_MS
 #define NODETECT_LOG_PERIOD_MS        100u   /* ´òÓ¡ÖÜÆÚ£º100ms */
 #endif
@@ -36,6 +37,16 @@ static uint32_t last_alarm_tick = 0; /* Ê§²½¸æ¾¯×î½üÒ»´ÎÉÏ±¨µÄ HAL ºÁÃë½ÚÅÄ£¬ÓÃÓ
 #endif
 
 /* ===================== ¶ÔÍâ½Ó¿Ú ===================== */
+
+/**
+ * @brief ¸üÐÂ¶ª²½¼ì²âÊ¹ÓÃµÄ¹Þµ×³ß´ø²Î¿¼¡£
+ * @param cable_length_01mm ¹Þµ×¶ÔÓ¦µÄ³ß´ø³¤¶È£¬µ¥Î» 0.1 mm¡£
+ * @note ¸Ã½Ó¿ÚÖ»¸´ÖÆÊýÖµ£¬²»¶ÁÈ¡ Application ×´Ì¬£¬Ò²²»·ÃÎÊÓ²¼þ¡£
+ */
+void MotorCtrl_SetBottomReference01mm(int32_t cable_length_01mm)
+{
+    s_bottom_reference_01mm = cable_length_01mm;
+}
 
 /**
  * @brief ³õÊ¼»¯¶ª²½¼ì²â´°¿Ú¡£
@@ -149,7 +160,7 @@ uint32_t MotorCtrl_CheckLostStepAutoTiming(int32_t currentPos)
 
 
     /* ±àÂëÂÖ¸úËæÐÔ¼ì²é£ºµç»úÃ÷ÏÔÔË¶¯µ«±àÂëÂÖ»ù±¾²»¶¯Ê±£¬Ö±½ÓÅÐ¶¨Òì³£¡£
-     * ¸Ã¼ì²é²»ÒÀÀµ¹Þµ×Î»ÖÃ£¬±ÜÃâ´ÖÕÒ½×¶Î bottom_value ÉÐÎ´½¨Á¢µ¼ÖÂÂ©ÅÐ¡£ */
+     * ¸Ã¼ì²é²»ÒÀÀµ¹Þµ×Î»ÖÃ£¬±ÜÃâ´ÖÕÒ½×¶Î s_bottom_reference_01mm ÉÐÎ´½¨Á¢µ¼ÖÂÂ©ÅÐ¡£ */
     if (motor_delta_01mm >= LOST_STEP_MIN_MOTOR_DELTA_01MM) {
         int32_t encoder_min_delta_01mm =
             (motor_delta_01mm * (int32_t)LOST_STEP_ENCODER_FOLLOW_RATIO_PERCENT) / 100;
@@ -171,7 +182,7 @@ uint32_t MotorCtrl_CheckLostStepAutoTiming(int32_t currentPos)
     }
     /* ÖÐ¼äÇøÓò²ÅÆôÓÃ¶ª²½ÅÐ¶¨£¬±ÜÃâ¿¿½üÁãµã/¹Þµ×ÎóÅÐ */
     if ((g_measurement.debug_data.cable_length > 1000) &&
-        (g_measurement.debug_data.cable_length < bottom_value - 1000)) {
+        (g_measurement.debug_data.cable_length < s_bottom_reference_01mm - 1000)) {
 
         if (avg_speed_mm_s < speed_threshold_mm_s) {
             if ((now - last_alarm_tick) >= LOST_STEP_SUPPRESS_MS) {

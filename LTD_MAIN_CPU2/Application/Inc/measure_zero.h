@@ -1,4 +1,7 @@
-/*
+/**
+ * @file measure_zero.h
+ * @brief 零点粗找、精找和位置基准重建的公共接口。
+ *
  * measure_zero.h
  *
  *  Created on: Mar 5, 2025
@@ -7,7 +10,8 @@
 #ifndef INC_MEASURE_ZERO_H_
 /* INC_MEASURE_ZERO_H_ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define INC_MEASURE_ZERO_H_
-extern int32_t zero_position ;
+
+#include <stdint.h>
 /**
  * @brief 在有限重试次数内依次执行零点粗找和精找，成功后重建编码器及卷筒位置基准。
  *

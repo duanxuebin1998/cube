@@ -14,7 +14,6 @@
 #include "motor_ctrl.h"
 #include "fault_manager.h"
 #include "spi.h"
-#include "measure_tank_height.h"
 #include "sensor_service.h"
 #include "encoder.h"
 #include "mb85rs2m.h"

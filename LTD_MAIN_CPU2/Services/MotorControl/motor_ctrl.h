@@ -309,6 +309,18 @@ uint32_t MotorCtrl_SetCurrent(uint32_t current);
  */
 uint32_t MotorCtrl_GetDefaultSpeedX100(void);
 
+
+/**
+ * @brief 将外部请求速度限制到电机服务允许范围。
+ *
+ * 调用场景：维护命令或业务入口在保存、打印或下发速度前统一使用，避免复制私有边界宏。
+ * 关键约束：只计算并返回限幅结果，不修改设备参数、运行态或驱动寄存器。
+ *
+ * @param speed_x100 请求速度，单位 0.01 m/min。
+ * @return 限制到电机服务最小值和最大值之间的速度，单位 0.01 m/min。
+ */
+uint32_t MotorCtrl_ClampSpeedX100(uint32_t speed_x100);
+
 /* ===================== 常规运动接口 ===================== */
 
 /**
@@ -503,8 +515,14 @@ uint32_t MotorCtrl_CheckDriverGstat(void);
  *
  * 每次新的运动阶段开始前初始化丢步检测状态。
  */
-void MotorCtrl_LostStepInit(void);
+/**
+ * @brief 更新丢步检测使用的罐底尺带参考。
+ * @param cable_length_01mm 罐底对应的尺带长度，单位 0.1 mm。
+ * @note 该接口只复制数值，不读取 Application 状态，也不访问硬件。
+ */
+void MotorCtrl_SetBottomReference01mm(int32_t cable_length_01mm);
 
+void MotorCtrl_LostStepInit(void);
 /**
  * @brief 按固定周期执行丢步检测。
  *

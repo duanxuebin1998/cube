@@ -57,6 +57,17 @@ uint32_t MotorCtrl_GetDefaultSpeedX100(void)
     return MotorDriver_GetDefaultSpeedSetpointX100();
 }
 
+
+/*
+ * 函数用途：向应用层提供与电机驱动参数一致的速度限幅结果。
+ * 调用场景：串口维护命令和其它外部入口需要校验 0.01 m/min 速度时调用。
+ * 关键约束：复用驱动内部唯一限幅实现，不修改当前速度或电机状态。
+ */
+uint32_t MotorCtrl_ClampSpeedX100(uint32_t speed_x100)
+{
+    return MotorDriver_ClampSpeedSetpointX100(speed_x100);
+}
+
 /**
  * @brief 使 TMC5130 初始化状态失效，强制下次运动前重新校验。
  */
