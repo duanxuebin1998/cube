@@ -154,15 +154,15 @@ static uint32_t SensorDriverV4_EnableLevelMode(void)
 }
 
 /*
- * 函数用途：根据最新主动快照判断目标功能是否已经处于期望状态。
+ * 函数用途：根据最新主动快照判断指定独立功能是否已经处于期望状态。
  * 调用场景：发送L/M功能命令前避免重复翻转非幂等开关。
- * 关键约束：快照必须新鲜且通信处于主动模式；开启状态还必须同时为密度模式。
+ * 关键约束：快照必须新鲜且通信处于主动模式；功能开关不依赖当前测量模式。
  */
-static uint8_t SensorDriverV4_ActiveFeatureMatches(
-    multiparam_v4_feature_state_t target_feature,
-    uint8_t enabled)
+static uint8_t SensorDriverV4_ActiveFeatureMatches(uint8_t water_feature,
+                                                   uint8_t enabled)
 {
     multiparam_v4_snapshot_t snapshot;
+    uint8_t actual_enabled;
 
     if (MULTIPARAM_V4_GetCommunicationMode() != MULTIPARAM_V4_COMMUNICATION_ACTIVE) {
         return 0U;
@@ -171,12 +171,10 @@ static uint8_t SensorDriverV4_ActiveFeatureMatches(
         ((HAL_GetTick() - snapshot.received_tick) > MULTIPARAM_V4_ACTIVE_TIMEOUT_MS)) {
         return 0U;
     }
-    if (enabled != 0U) {
-        /* 水位电容和零点霍尔只能在密度模式开启，主动帧状态字同时确认模式与功能。 */
-        return (uint8_t)(((snapshot.measurement_mode == MULTIPARAM_V4_MEASUREMENT_DENSITY) &&
-                          (snapshot.feature_state == target_feature)) ? 1U : 0U);
-    }
-    return (uint8_t)((snapshot.feature_state != target_feature) ? 1U : 0U);
+    actual_enabled = (water_feature != 0U)
+                         ? snapshot.water_enabled
+                         : snapshot.magnetic_zero_enabled;
+    return (uint8_t)(actual_enabled == ((enabled != 0U) ? 1U : 0U));
 }
 
 /*
@@ -220,7 +218,7 @@ static uint32_t SensorDriverV4_SetWaterEnabled(uint8_t enabled)
 {
     uint8_t target = (enabled != 0U) ? 1U : 0U;
 
-    if (SensorDriverV4_ActiveFeatureMatches(MULTIPARAM_V4_FEATURE_WATER, target) != 0U) {
+    if (SensorDriverV4_ActiveFeatureMatches(1U, target) != 0U) {
         return NO_ERROR;
     }
     return SensorDriverV4_RunFeatureCommand(MULTIPARAM_V4_EnsureWaterEnabled, target);
@@ -235,7 +233,7 @@ static uint32_t SensorDriverV4_SetMagneticZeroEnabled(uint8_t enabled)
 {
     uint8_t target = (enabled != 0U) ? 1U : 0U;
 
-    if (SensorDriverV4_ActiveFeatureMatches(MULTIPARAM_V4_FEATURE_MAGNETIC_ZERO, target) != 0U) {
+    if (SensorDriverV4_ActiveFeatureMatches(0U, target) != 0U) {
         return NO_ERROR;
     }
     return SensorDriverV4_RunFeatureCommand(MULTIPARAM_V4_EnsureMagneticZeroEnabled, target);

@@ -29,10 +29,14 @@
 #define MULTIPARAM_V4_STATUS_TEMPERATURE_NEW  (1UL << 8U)
 /* R02状态字中密度数据已更新标志位。 */
 #define MULTIPARAM_V4_STATUS_DENSITY_NEW      (1UL << 9U)
+/* R02状态字：黏度数据新更新标志位。 */
+#define MULTIPARAM_V4_STATUS_VISCOSITY_NEW    (1UL << 10U)
 /* R02状态字中陀螺仪异常标志位。 */
 #define MULTIPARAM_V4_STATUS_GYRO_ABNORMAL    (1UL << 16U)
 /* R02状态字中水位电容异常标志位。 */
 #define MULTIPARAM_V4_STATUS_WATER_ABNORMAL   (1UL << 17U)
+/* R02状态字中电压检测正常标志位，极性与Bit16、Bit17相反。 */
+#define MULTIPARAM_V4_STATUS_VOLTAGE_NORMAL   (1UL << 18U)
 /* 交互方式附加调试量的最短刷新间隔，单位ms。 */
 #define MULTIPARAM_V4_INTERACTIVE_DEBUG_REFRESH_INTERVAL_MS 500U
 /* V4零点霍尔电压参数号R03。 */
@@ -202,10 +206,12 @@ uint32_t MULTIPARAM_V4_MeasurementProcessDeferred(void)
         return NO_ERROR;
     }
 
-    frequency_valid = (uint8_t)(((snapshot.measurement_frequency_hz >= 0) &&
+    frequency_valid = (uint8_t)(((snapshot.measurement_frequency_valid != 0U) &&
                                  (snapshot.measurement_frequency_hz <= MULTIPARAM_V4_FREQUENCY_MAX_HZ))
                                     ? 1U : 0U);
-    temperature_valid = (uint8_t)((isfinite(snapshot.temperature_c) &&
+    temperature_valid = (uint8_t)((((snapshot.status_word &
+                                    MULTIPARAM_V4_STATUS_TEMPERATURE_NEW) != 0U) &&
+                                   isfinite(snapshot.temperature_c) &&
                                    (snapshot.temperature_c >= MULTIPARAM_V4_TEMPERATURE_MIN_C) &&
                                    (snapshot.temperature_c <= MULTIPARAM_V4_TEMPERATURE_MAX_C))
                                       ? 1U : 0U);
@@ -218,9 +224,15 @@ uint32_t MULTIPARAM_V4_MeasurementProcessDeferred(void)
                                    (capacitance_raw != UINT32_MAX) &&
                                    ((snapshot.status_word & MULTIPARAM_V4_STATUS_WATER_ABNORMAL) == 0U))
                                       ? 1U : 0U);
-    dynamic_viscosity_valid = (uint8_t)(isfinite(snapshot.dynamic_viscosity_cp) ? 1U : 0U);
-    kinematic_viscosity_valid = (uint8_t)(isfinite(snapshot.kinematic_viscosity_cst) ? 1U : 0U);
-    supply_voltage_valid = (uint8_t)(isfinite(snapshot.supply_voltage_v) ? 1U : 0U);
+    dynamic_viscosity_valid =
+        (uint8_t)((((snapshot.status_word & MULTIPARAM_V4_STATUS_VISCOSITY_NEW) != 0U) &&
+                   isfinite(snapshot.dynamic_viscosity_cp)) ? 1U : 0U);
+    kinematic_viscosity_valid =
+        (uint8_t)((((snapshot.status_word & MULTIPARAM_V4_STATUS_VISCOSITY_NEW) != 0U) &&
+                   isfinite(snapshot.kinematic_viscosity_cst)) ? 1U : 0U);
+    supply_voltage_valid =
+        (uint8_t)((isfinite(snapshot.supply_voltage_v) &&
+                   ((snapshot.status_word & MULTIPARAM_V4_STATUS_VOLTAGE_NORMAL) != 0U)) ? 1U : 0U);
     angle_valid = (uint8_t)((isfinite(snapshot.angle_x_deg) &&
                              isfinite(snapshot.angle_y_deg) &&
                              (fabsf(snapshot.angle_x_deg) <= MULTIPARAM_V4_ANGLE_ABS_MAX_DEG) &&
@@ -289,18 +301,19 @@ static uint32_t MULTIPARAM_V4_ReadInteractiveDensity(float *frequency_hz,
                                                       float *density_kg_m3,
                                                       float *temperature_c)
 {
-    multiparam_v4_measurement_mode_t mode;
-    multiparam_v4_feature_state_t feature;
+    multiparam_v4_operating_state_t operating_state;
     int32_t frequency_value;
+    uint32_t normalized_frequency;
+    uint8_t fast_sweep_completed;
     uint32_t status_word;
     uint32_t primask;
     uint32_t result;
 
-    result = MULTIPARAM_V4_ReadOperatingState(&status_word, &mode, &feature);
+    result = MULTIPARAM_V4_ReadOperatingState(&status_word, &operating_state);
     if (result != NO_ERROR) {
         return result;
     }
-    if (mode != MULTIPARAM_V4_MEASUREMENT_DENSITY) {
+    if (operating_state.measurement_mode != MULTIPARAM_V4_MEASUREMENT_DENSITY) {
         return SENSOR_MODE_MISMATCH;
     }
     result = MULTIPARAM_V4_ReadIntParam(4U, &frequency_value);
@@ -313,7 +326,10 @@ static uint32_t MULTIPARAM_V4_ReadInteractiveDensity(float *frequency_hz,
     if (result != NO_ERROR) {
         return result;
     }
-    if ((frequency_value < 0) || (frequency_value > MULTIPARAM_V4_FREQUENCY_MAX_HZ) ||
+    if ((MULTIPARAM_V4_DecodeFrequency(frequency_value,
+                                       &normalized_frequency,
+                                       &fast_sweep_completed) == 0U) ||
+        (normalized_frequency > MULTIPARAM_V4_FREQUENCY_MAX_HZ) ||
         (!isfinite(*density_kg_m3)) || (*density_kg_m3 < MULTIPARAM_V4_DENSITY_MIN_KG_M3) ||
         (*density_kg_m3 > MULTIPARAM_V4_DENSITY_MAX_KG_M3) ||
         (!isfinite(*temperature_c)) || (*temperature_c < MULTIPARAM_V4_TEMPERATURE_MIN_C) ||
@@ -321,10 +337,10 @@ static uint32_t MULTIPARAM_V4_ReadInteractiveDensity(float *frequency_hz,
         return SENSOR_RESP_FORMAT_ERROR;
     }
 
-    *frequency_hz = (float)frequency_value;
+    *frequency_hz = (float)normalized_frequency;
     primask = __get_PRIMASK();
     __disable_irq();
-    g_measurement.debug_data.frequency = (uint32_t)frequency_value;
+    g_measurement.debug_data.frequency = normalized_frequency;
     g_measurement.debug_data.temperature = TEMP_TO_RAW(*temperature_c);
     if (primask == 0U) {
         __enable_irq();
@@ -367,7 +383,7 @@ uint32_t MULTIPARAM_V4_MeasurementReadDensity(float *frequency_hz,
     if (isnan(snapshot.density_kg_m3) || isnan(snapshot.temperature_c)) {
         return SENSOR_DATA_STALE;
     }
-    if ((snapshot.measurement_frequency_hz < 0) ||
+    if ((snapshot.measurement_frequency_valid == 0U) ||
         (snapshot.measurement_frequency_hz > MULTIPARAM_V4_FREQUENCY_MAX_HZ) ||
         (!isfinite(snapshot.density_kg_m3)) ||
         (snapshot.density_kg_m3 < MULTIPARAM_V4_DENSITY_MIN_KG_M3) ||
@@ -391,9 +407,10 @@ uint32_t MULTIPARAM_V4_MeasurementReadDensity(float *frequency_hz,
 uint32_t MULTIPARAM_V4_MeasurementReadLevelFrequency(uint32_t *frequency_hz)
 {
     multiparam_v4_snapshot_t snapshot;
-    multiparam_v4_measurement_mode_t mode;
-    multiparam_v4_feature_state_t feature;
+    multiparam_v4_operating_state_t operating_state;
     int32_t frequency_value;
+    uint32_t normalized_frequency;
+    uint8_t fast_sweep_completed;
     uint32_t status_word;
     uint32_t primask;
     uint32_t result;
@@ -402,25 +419,28 @@ uint32_t MULTIPARAM_V4_MeasurementReadLevelFrequency(uint32_t *frequency_hz)
         return SYSTEM_CALL_CONDITION_ERROR;
     }
     if (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_INTERACTIVE) {
-        result = MULTIPARAM_V4_ReadOperatingState(&status_word, &mode, &feature);
+        result = MULTIPARAM_V4_ReadOperatingState(&status_word, &operating_state);
         if (result != NO_ERROR) {
             return result;
         }
-        if (mode != MULTIPARAM_V4_MEASUREMENT_LEVEL) {
+        if (operating_state.measurement_mode != MULTIPARAM_V4_MEASUREMENT_LEVEL) {
             return SENSOR_MODE_MISMATCH;
         }
         result = MULTIPARAM_V4_ReadIntParam(4U, &frequency_value);
         if (result != NO_ERROR) {
             return result;
         }
-        if ((frequency_value < 0) || (frequency_value > MULTIPARAM_V4_FREQUENCY_MAX_HZ)) {
+        if ((MULTIPARAM_V4_DecodeFrequency(frequency_value,
+                                           &normalized_frequency,
+                                           &fast_sweep_completed) == 0U) ||
+            (normalized_frequency > MULTIPARAM_V4_FREQUENCY_MAX_HZ)) {
             return SONIC_FREQ_ABNORMAL;
         }
-        *frequency_hz = (uint32_t)frequency_value;
+        *frequency_hz = normalized_frequency;
         primask = __get_PRIMASK();
         __disable_irq();
-        g_measurement.debug_data.frequency = (uint32_t)frequency_value;
-        g_measurement.oil_measurement.current_frequency = (uint32_t)frequency_value;
+        g_measurement.debug_data.frequency = normalized_frequency;
+        g_measurement.oil_measurement.current_frequency = normalized_frequency;
         if (primask == 0U) {
             __enable_irq();
         }
@@ -433,7 +453,7 @@ uint32_t MULTIPARAM_V4_MeasurementReadLevelFrequency(uint32_t *frequency_hz)
     if (snapshot.measurement_mode != MULTIPARAM_V4_MEASUREMENT_LEVEL) {
         return SENSOR_MODE_MISMATCH;
     }
-    if ((snapshot.measurement_frequency_hz < 0) ||
+    if ((snapshot.measurement_frequency_valid == 0U) ||
         (snapshot.measurement_frequency_hz > MULTIPARAM_V4_FREQUENCY_MAX_HZ)) {
         return SONIC_FREQ_ABNORMAL;
     }
@@ -444,13 +464,12 @@ uint32_t MULTIPARAM_V4_MeasurementReadLevelFrequency(uint32_t *frequency_hz)
 /*
  * 函数用途：按当前V4通信方式读取水位电容并校验浮点有效性。
  * 调用场景：SensorService已经确认能力并完成测水使能之后。
- * 关键约束：本函数不切换密度模式、不处理与零点霍尔的互斥，也不自动关闭已开启功能。
+ * 关键约束：测水开关适用于两种模式且可与磁零点同时开启，本函数只确保Bit1有效。
  */
 uint32_t MULTIPARAM_V4_MeasurementReadWaterCapacitance(float *capacitance_pf)
 {
     multiparam_v4_snapshot_t snapshot;
-    multiparam_v4_measurement_mode_t mode;
-    multiparam_v4_feature_state_t feature;
+    multiparam_v4_operating_state_t operating_state;
     uint32_t capacitance_raw;
     uint32_t status_word;
     uint32_t primask;
@@ -460,23 +479,21 @@ uint32_t MULTIPARAM_V4_MeasurementReadWaterCapacitance(float *capacitance_pf)
         return SYSTEM_CALL_CONDITION_ERROR;
     }
     if (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_INTERACTIVE) {
-        result = MULTIPARAM_V4_ReadOperatingState(&status_word, &mode, &feature);
+        result = MULTIPARAM_V4_ReadOperatingState(&status_word, &operating_state);
         if (result != NO_ERROR) {
             return result;
         }
-        if ((mode != MULTIPARAM_V4_MEASUREMENT_DENSITY) ||
-            (feature != MULTIPARAM_V4_FEATURE_WATER)) {
+        if (operating_state.water_enabled == 0U) {
             result = MULTIPARAM_V4_EnsureWaterEnabled(1U);
             if (result != NO_ERROR) {
                 return result;
             }
-            result = MULTIPARAM_V4_ReadOperatingState(&status_word, &mode, &feature);
+            result = MULTIPARAM_V4_ReadOperatingState(&status_word, &operating_state);
             if (result != NO_ERROR) {
                 return result;
             }
         }
-        if ((mode != MULTIPARAM_V4_MEASUREMENT_DENSITY) ||
-            (feature != MULTIPARAM_V4_FEATURE_WATER)) {
+        if (operating_state.water_enabled == 0U) {
             return SENSOR_STREAM_STATE_ERROR;
         }
         result = MULTIPARAM_V4_ReadFloatParam(5U, capacitance_pf);
@@ -505,8 +522,7 @@ uint32_t MULTIPARAM_V4_MeasurementReadWaterCapacitance(float *capacitance_pf)
     if (result != NO_ERROR) {
         return result;
     }
-    if ((snapshot.measurement_mode != MULTIPARAM_V4_MEASUREMENT_DENSITY) ||
-        (snapshot.feature_state != MULTIPARAM_V4_FEATURE_WATER)) {
+    if (snapshot.water_enabled == 0U) {
         return SENSOR_STREAM_STATE_ERROR;
     }
     if (isnan(snapshot.water_capacitance_pf)) {
@@ -534,13 +550,12 @@ uint32_t MULTIPARAM_V4_MeasurementReadWaterCapacitance(float *capacitance_pf)
 /*
  * 函数用途：读取V4零点霍尔对应的R03磁零点电压。
  * 调用场景：业务层已经请求零点霍尔值，交互方式可在本函数内自动准备M功能。
- * 关键约束：M仅在密度模式有效且与L互斥；读取成功后保持M开启。
+ * 关键约束：磁零点开关适用于两种模式且可与测水同时开启；读取成功后保持M开启。
  */
 uint32_t MULTIPARAM_V4_MeasurementReadMagneticZeroVoltage(float *voltage_v)
 {
     multiparam_v4_snapshot_t snapshot;
-    multiparam_v4_measurement_mode_t mode;
-    multiparam_v4_feature_state_t feature;
+    multiparam_v4_operating_state_t operating_state;
     uint32_t status_word;
     uint32_t primask;
     uint32_t result;
@@ -549,23 +564,21 @@ uint32_t MULTIPARAM_V4_MeasurementReadMagneticZeroVoltage(float *voltage_v)
         return SYSTEM_CALL_CONDITION_ERROR;
     }
     if (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_INTERACTIVE) {
-        result = MULTIPARAM_V4_ReadOperatingState(&status_word, &mode, &feature);
+        result = MULTIPARAM_V4_ReadOperatingState(&status_word, &operating_state);
         if (result != NO_ERROR) {
             return result;
         }
-        if ((mode != MULTIPARAM_V4_MEASUREMENT_DENSITY) ||
-            (feature != MULTIPARAM_V4_FEATURE_MAGNETIC_ZERO)) {
+        if (operating_state.magnetic_zero_enabled == 0U) {
             result = MULTIPARAM_V4_EnsureMagneticZeroEnabled(1U);
             if (result != NO_ERROR) {
                 return result;
             }
-            result = MULTIPARAM_V4_ReadOperatingState(&status_word, &mode, &feature);
+            result = MULTIPARAM_V4_ReadOperatingState(&status_word, &operating_state);
             if (result != NO_ERROR) {
                 return result;
             }
         }
-        if ((mode != MULTIPARAM_V4_MEASUREMENT_DENSITY) ||
-            (feature != MULTIPARAM_V4_FEATURE_MAGNETIC_ZERO)) {
+        if (operating_state.magnetic_zero_enabled == 0U) {
             return SENSOR_STREAM_STATE_ERROR;
         }
         result = MULTIPARAM_V4_ReadFloatParam(MULTIPARAM_V4_PARAM_MAGNETIC_ZERO_VOLTAGE,
@@ -592,8 +605,7 @@ uint32_t MULTIPARAM_V4_MeasurementReadMagneticZeroVoltage(float *voltage_v)
     if (result != NO_ERROR) {
         return result;
     }
-    if ((snapshot.measurement_mode != MULTIPARAM_V4_MEASUREMENT_DENSITY) ||
-        (snapshot.feature_state != MULTIPARAM_V4_FEATURE_MAGNETIC_ZERO)) {
+    if (snapshot.magnetic_zero_enabled == 0U) {
         return SENSOR_STREAM_STATE_ERROR;
     }
     if (isnan(snapshot.magnetic_zero_voltage)) {
@@ -621,8 +633,7 @@ uint32_t MULTIPARAM_V4_MeasurementReadMagneticZeroVoltage(float *voltage_v)
 uint32_t MULTIPARAM_V4_MeasurementReadGyro(float *angle_x_deg, float *angle_y_deg)
 {
     multiparam_v4_snapshot_t snapshot;
-    multiparam_v4_measurement_mode_t mode;
-    multiparam_v4_feature_state_t feature;
+    multiparam_v4_operating_state_t operating_state;
     uint32_t status_word;
     uint32_t primask;
     uint32_t result;
@@ -631,7 +642,7 @@ uint32_t MULTIPARAM_V4_MeasurementReadGyro(float *angle_x_deg, float *angle_y_de
         return SYSTEM_CALL_CONDITION_ERROR;
     }
     if (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_INTERACTIVE) {
-        result = MULTIPARAM_V4_ReadOperatingState(&status_word, &mode, &feature);
+        result = MULTIPARAM_V4_ReadOperatingState(&status_word, &operating_state);
         if (result != NO_ERROR) {
             return result;
         }

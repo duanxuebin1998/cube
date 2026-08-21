@@ -43,20 +43,6 @@ static const char *TestCommand_V4MeasurementModeName(
     }
 }
 
-/* 返回V4附加功能的现场可读名称。 */
-static const char *TestCommand_V4FeatureName(multiparam_v4_feature_state_t feature)
-{
-    switch (feature) {
-    case MULTIPARAM_V4_FEATURE_NONE:
-        return "无";
-    case MULTIPARAM_V4_FEATURE_WATER:
-        return "测水";
-    case MULTIPARAM_V4_FEATURE_MAGNETIC_ZERO:
-        return "磁零点";
-    default:
-        return "无效";
-    }
-}
 
 /**
  * @brief 将 V4 参数的 32 位原始字按单精度浮点格式还原。
@@ -91,13 +77,15 @@ static void TestCommand_PrintV4ActiveSnapshot(void)
     }
 
     printf("V4主动帧\t解包成功\t地址=%u\t序号=%u\t代次=%lu\t年龄=%lu ms"
-           "\t模式=%s\t功能=%s\t状态=0x%08lX\r\n",
+           "\t模式=%s\t测水=%u\t磁零点=%u\t快扫完成=%u\t状态=0x%08lX\r\n",
            (unsigned int)snapshot.address,
            (unsigned int)snapshot.sequence,
            (unsigned long)snapshot.generation,
            (unsigned long)MULTIPARAM_V4_GetSnapshotAgeMs(),
            TestCommand_V4MeasurementModeName(snapshot.measurement_mode),
-           TestCommand_V4FeatureName(snapshot.feature_state),
+           (unsigned int)snapshot.water_enabled,
+           (unsigned int)snapshot.magnetic_zero_enabled,
+           (unsigned int)snapshot.fast_sweep_completed,
            (unsigned long)snapshot.status_word);
     for (uint32_t index = 0U; index < MULTIPARAM_V4_ACTIVE_PARAMETER_COUNT; index++) {
         uint32_t raw = snapshot.raw_parameter[index];
@@ -553,8 +541,7 @@ uint8_t TestCommand_HandleV4(const uint8_t *command)
     uint32_t status_word = 0U;
     unsigned long parameter = 0UL;
     float protocol_version = 0.0f;
-    multiparam_v4_measurement_mode_t measurement_mode = MULTIPARAM_V4_MEASUREMENT_INVALID;
-    multiparam_v4_feature_state_t feature = MULTIPARAM_V4_FEATURE_INVALID;
+    multiparam_v4_operating_state_t operating_state = {0};
     const char *operation = "未指定";
     uint8_t print_active_after = 0U;
 
@@ -624,8 +611,7 @@ uint8_t TestCommand_HandleV4(const uint8_t *command)
         break;
     case 'O':
         operation = "读取并解码R02";
-        result = MULTIPARAM_V4_ReadOperatingState(
-            &status_word, &measurement_mode, &feature);
+        result = MULTIPARAM_V4_ReadOperatingState(&status_word, &operating_state);
         break;
     case 'R':
         parameter = strtoul((const char *)&command[4], NULL, 10);
@@ -650,12 +636,15 @@ uint8_t TestCommand_HandleV4(const uint8_t *command)
     if ((command[2] == 'P') && (result == NO_ERROR)) {
         printf("V4调试\tR01协议版本=%.3f\r\n", (double)protocol_version);
     } else if ((command[2] == 'O') && (result == NO_ERROR)) {
-        printf("V4状态\tR02=0x%08lX\t模式=%s\t功能=%s"
-               "\t温度新值=%u\t密度新值=%u\t粘度新值=%u"
+        printf("V4状态\tR02=0x%08lX\t模式=%s\t测水=%u\t磁零点=%u"
+               "\t扫频阶段=%u\t驱动阶段=%u\t温度新值=%u\t密度新值=%u\t粘度新值=%u"
                "\t陀螺异常=%u\t测水异常=%u\t电压正常=%u\r\n",
                (unsigned long)status_word,
-               TestCommand_V4MeasurementModeName(measurement_mode),
-               TestCommand_V4FeatureName(feature),
+               TestCommand_V4MeasurementModeName(operating_state.measurement_mode),
+               (unsigned int)operating_state.water_enabled,
+               (unsigned int)operating_state.magnetic_zero_enabled,
+               (unsigned int)operating_state.sweep_stage,
+               (unsigned int)operating_state.drive_stage,
                (unsigned int)((status_word >> 8U) & 1U),
                (unsigned int)((status_word >> 9U) & 1U),
                (unsigned int)((status_word >> 10U) & 1U),

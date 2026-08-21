@@ -519,29 +519,24 @@ uint32_t MULTIPARAM_V4_ReadFloatParamOnce(uint8_t parameter, float *value)
 }
 
 /*
- * 函数用途：读取R02并统一解析测量模式、功能状态和异常位原值。
- * 调用场景：交互测量读取R04、R05、R11和R12之前。
- * 关键约束：无法识别的低四位状态视为响应格式错误。
+ * 函数用途：读取R02，统一返回测量模式、独立功能开关和运行阶段。
+ * 调用场景：交互测量读取参数以及模式、功能命令状态确认之前。
+ * 关键约束：Bit0～Bit2为独立状态，不把合法的组合状态误判为格式错误。
  */
 uint32_t MULTIPARAM_V4_ReadOperatingState(uint32_t *status_word,
-                                          multiparam_v4_measurement_mode_t *mode,
-                                          multiparam_v4_feature_state_t *feature)
+                                          multiparam_v4_operating_state_t *operating_state)
 {
     uint32_t raw_status;
     uint32_t result;
 
-    if ((status_word == NULL) || (mode == NULL) || (feature == NULL)) {
+    if ((status_word == NULL) || (operating_state == NULL)) {
         return SYSTEM_CALL_CONDITION_ERROR;
     }
     result = MULTIPARAM_V4_ReadParamRaw(MULTIPARAM_V4_PARAM_STATUS, &raw_status);
     if (result != NO_ERROR) {
         return result;
     }
-    MULTIPARAM_V4_DecodeOperatingState(raw_status, mode, feature);
-    if ((*mode == MULTIPARAM_V4_MEASUREMENT_INVALID) ||
-        (*feature == MULTIPARAM_V4_FEATURE_INVALID)) {
-        return SENSOR_RESP_FORMAT_ERROR;
-    }
+    MULTIPARAM_V4_DecodeOperatingState(raw_status, operating_state);
     *status_word = raw_status;
     return NO_ERROR;
 }
@@ -646,9 +641,9 @@ uint32_t MULTIPARAM_V4_ProbeProtocolVersion(float *protocol_version)
 }
 
 /*
- * 函数用途：把D/S测量模式调整到目标状态，并用状态字确认最终模式。
+ * 函数用途：把D/S测量模式调整到目标状态，并用状态字Bit0确认最终模式。
  * 调用场景：交互通信模式下切换密度或液位测量过程。
- * 关键约束：已在密度模式时不得重复发送D，避免关闭已保持开启的L/M功能。
+ * 关键约束：模式命令不要求测水和磁零点关闭，已到目标模式时不得重复发送。
  */
 static uint32_t MULTIPARAM_V4_SelectMeasurementMode(uint8_t function,
                                                     multiparam_v4_measurement_mode_t expected_mode)
@@ -656,20 +651,17 @@ static uint32_t MULTIPARAM_V4_SelectMeasurementMode(uint8_t function,
     uint8_t request[8];
     uint8_t reply[8];
     uint32_t status_word;
-    multiparam_v4_measurement_mode_t mode;
-    multiparam_v4_feature_state_t feature;
+    multiparam_v4_operating_state_t operating_state;
     uint32_t result;
 
     if (s_active_receive_requested != 0U) {
         return SENSOR_STREAM_STATE_ERROR;
     }
-    result = MULTIPARAM_V4_ReadOperatingState(&status_word, &mode, &feature);
+    result = MULTIPARAM_V4_ReadOperatingState(&status_word, &operating_state);
     if (result != NO_ERROR) {
         return result;
     }
-    if ((mode == expected_mode) &&
-        ((expected_mode == MULTIPARAM_V4_MEASUREMENT_DENSITY) ||
-         (feature == MULTIPARAM_V4_FEATURE_NONE))) {
+    if (operating_state.measurement_mode == expected_mode) {
         return NO_ERROR;
     }
     MULTIPARAM_V4_BuildRequestFrame(MULTIPARAM_V4_GetRequestAddress(), function, 0U, 0U, request);
@@ -677,11 +669,11 @@ static uint32_t MULTIPARAM_V4_SelectMeasurementMode(uint8_t function,
     if (result != NO_ERROR) {
         return result;
     }
-    result = MULTIPARAM_V4_ReadOperatingState(&status_word, &mode, &feature);
+    result = MULTIPARAM_V4_ReadOperatingState(&status_word, &operating_state);
     if (result != NO_ERROR) {
         return result;
     }
-    return ((mode == expected_mode) && (feature == MULTIPARAM_V4_FEATURE_NONE))
+    return (operating_state.measurement_mode == expected_mode)
                ? NO_ERROR
                : SENSOR_STREAM_STATE_ERROR;
 }
@@ -709,121 +701,92 @@ uint32_t MULTIPARAM_V4_SelectLevelMode(void)
 }
 
 /*
- * 函数用途：发送一次非幂等L/M翻转命令并读取状态字恢复事实。
- * 调用场景：目标状态与当前状态不同，且UART6处于交互通信模式时。
- * 关键约束：应答丢失后禁止直接重发；无论应答结果都先读状态字。
+ * 函数用途：读取指定独立功能开关的当前状态。
+ * 调用场景：L/M翻转命令发送前后核对目标功能，不影响另一个开关。
+ * 关键约束：function只接受测水L或磁零点M命令。
+ */
+static uint8_t MULTIPARAM_V4_GetFeatureEnabled(
+    const multiparam_v4_operating_state_t *operating_state,
+    uint8_t function)
+{
+    return (function == MULTIPARAM_V4_FUNCTION_WATER)
+               ? operating_state->water_enabled
+               : operating_state->magnetic_zero_enabled;
+}
+
+/*
+ * 函数用途：按V3固定8字节控制帧发送一次非幂等L/M翻转命令并读取R02恢复事实。
+ * 调用场景：目标开关状态与当前状态不同，且UART6处于交互通信模式时。
+ * 关键约束：控制帧数据区和参数码均为0；应答丢失后禁止直接重发，先确认目标位。
  */
 static uint32_t MULTIPARAM_V4_ToggleFeatureOnce(uint8_t function,
-                                                multiparam_v4_feature_state_t expected_feature)
+                                                uint8_t expected_enabled)
 {
     uint8_t request[8];
     uint8_t reply[8];
     uint32_t command_result;
-    int32_t status_word;
-    multiparam_v4_measurement_mode_t mode;
-    multiparam_v4_feature_state_t feature;
+    uint32_t status_word;
+    multiparam_v4_operating_state_t operating_state;
     uint32_t read_result;
 
     MULTIPARAM_V4_BuildRequestFrame(MULTIPARAM_V4_GetRequestAddress(), function, 0U, 0U, request);
     command_result = MULTIPARAM_V4_TransceiveOnce(request,
                                                   reply,
                                                   MULTIPARAM_V4_TRANSACTION_TIMEOUT_MS);
-    read_result = MULTIPARAM_V4_ReadIntParam(MULTIPARAM_V4_PARAM_STATUS, &status_word);
+    read_result = MULTIPARAM_V4_ReadOperatingState(&status_word, &operating_state);
     if (read_result != NO_ERROR) {
         return (command_result == NO_ERROR) ? read_result : command_result;
     }
-    MULTIPARAM_V4_DecodeOperatingState((uint32_t)status_word, &mode, &feature);
-    if ((mode == MULTIPARAM_V4_MEASUREMENT_DENSITY) && (feature == expected_feature)) {
+    if (MULTIPARAM_V4_GetFeatureEnabled(&operating_state, function) == expected_enabled) {
         return NO_ERROR;
     }
     return (command_result == NO_ERROR) ? SENSOR_STREAM_STATE_ERROR : command_result;
 }
 
 /*
- * 函数用途：把测水或磁零点功能调整到明确目标状态。
- * 调用场景：业务层请求使能或关闭功能，不允许业务层直接盲发L/M翻转。
- * 关键约束：L/M只能在密度模式开启且互斥；每次翻转后必须读R02确认事实。
+ * 函数用途：把测水或磁零点独立开关调整到明确目标状态。
+ * 调用场景：业务层请求使能或关闭功能，不允许业务层直接盲发翻转命令。
+ * 关键约束：两个开关允许同时开启并适用于两种测量模式，只修改目标功能位。
  */
 static uint32_t MULTIPARAM_V4_EnsureFeature(uint8_t enabled,
-                                           multiparam_v4_feature_state_t target_feature,
-                                           uint8_t target_function,
-                                           multiparam_v4_feature_state_t opposite_feature,
-                                           uint8_t opposite_function)
+                                           uint8_t target_function)
 {
     uint32_t status_word;
-    multiparam_v4_measurement_mode_t mode;
-    multiparam_v4_feature_state_t feature;
+    multiparam_v4_operating_state_t operating_state;
+    uint8_t expected_enabled = (enabled != 0U) ? 1U : 0U;
     uint32_t result;
 
     if (s_active_receive_requested != 0U) {
         return SENSOR_STREAM_STATE_ERROR;
     }
-    result = MULTIPARAM_V4_ReadOperatingState(&status_word, &mode, &feature);
+    result = MULTIPARAM_V4_ReadOperatingState(&status_word, &operating_state);
     if (result != NO_ERROR) {
         return result;
     }
-    if (mode != MULTIPARAM_V4_MEASUREMENT_DENSITY) {
-        if ((enabled == 0U) && (mode == MULTIPARAM_V4_MEASUREMENT_LEVEL)) {
-            /* 进入液位模式会自动关闭L/M，关闭请求已经满足。 */
-            return NO_ERROR;
-        }
-        if ((enabled == 0U) || (mode != MULTIPARAM_V4_MEASUREMENT_LEVEL)) {
-            return SENSOR_STREAM_STATE_ERROR;
-        }
-        /* L/M只能在密度模式开启；仅在确实需要时发送D，避免D关闭已开启功能。 */
-        result = MULTIPARAM_V4_SelectDensityMode();
-        if (result != NO_ERROR) {
-            return result;
-        }
-        feature = MULTIPARAM_V4_FEATURE_NONE;
-    }
-
-    if (enabled == 0U) {
-        if (feature != target_feature) {
-            return NO_ERROR;
-        }
-        return MULTIPARAM_V4_ToggleFeatureOnce(target_function, MULTIPARAM_V4_FEATURE_NONE);
-    }
-    if (feature == target_feature) {
+    if (MULTIPARAM_V4_GetFeatureEnabled(&operating_state, target_function) == expected_enabled) {
         return NO_ERROR;
     }
-    if (feature == opposite_feature) {
-        result = MULTIPARAM_V4_ToggleFeatureOnce(opposite_function, MULTIPARAM_V4_FEATURE_NONE);
-        if (result != NO_ERROR) {
-            return result;
-        }
-    } else if (feature != MULTIPARAM_V4_FEATURE_NONE) {
-        return SENSOR_STREAM_STATE_ERROR;
-    }
-    return MULTIPARAM_V4_ToggleFeatureOnce(target_function, target_feature);
+    return MULTIPARAM_V4_ToggleFeatureOnce(target_function, expected_enabled);
 }
 
 /*
  * 函数用途：把V4测水功能调整为调用方要求的明确状态。
  * 调用场景：水位电容读取前使能或串口调试关闭。
- * 关键约束：只能在密度模式开启；开启前先关闭互斥的零点霍尔，完成后保持当前状态。
+ * 关键约束：只翻转测水Bit1，不改变测量模式和磁零点Bit2。
  */
 uint32_t MULTIPARAM_V4_EnsureWaterEnabled(uint8_t enabled)
 {
-    return MULTIPARAM_V4_EnsureFeature(enabled,
-                                       MULTIPARAM_V4_FEATURE_WATER,
-                                       MULTIPARAM_V4_FUNCTION_WATER,
-                                       MULTIPARAM_V4_FEATURE_MAGNETIC_ZERO,
-                                       MULTIPARAM_V4_FUNCTION_MAGNETIC_ZERO);
+    return MULTIPARAM_V4_EnsureFeature(enabled, MULTIPARAM_V4_FUNCTION_WATER);
 }
 
 /*
  * 函数用途：把V4零点霍尔功能调整为调用方要求的明确状态。
  * 调用场景：磁零点电压读取前使能或串口调试关闭。
- * 关键约束：只能在密度模式开启；开启前先关闭互斥的测水功能，完成后保持当前状态。
+ * 关键约束：只翻转磁零点Bit2，不改变测量模式和测水Bit1。
  */
 uint32_t MULTIPARAM_V4_EnsureMagneticZeroEnabled(uint8_t enabled)
 {
-    return MULTIPARAM_V4_EnsureFeature(enabled,
-                                       MULTIPARAM_V4_FEATURE_MAGNETIC_ZERO,
-                                       MULTIPARAM_V4_FUNCTION_MAGNETIC_ZERO,
-                                       MULTIPARAM_V4_FEATURE_WATER,
-                                       MULTIPARAM_V4_FUNCTION_WATER);
+    return MULTIPARAM_V4_EnsureFeature(enabled, MULTIPARAM_V4_FUNCTION_MAGNETIC_ZERO);
 }
 
 /*

@@ -41,12 +41,13 @@ typedef enum {
     MULTIPARAM_V4_MEASUREMENT_LEVEL = 2 /* 传感器处于液位测量模式。 */
 } multiparam_v4_measurement_mode_t;
 
-typedef enum {
-    MULTIPARAM_V4_FEATURE_NONE = 0, /* 密度模式下水位与零点霍尔均未开启。 */
-    MULTIPARAM_V4_FEATURE_WATER = 1, /* 密度模式下水位电容功能已开启。 */
-    MULTIPARAM_V4_FEATURE_MAGNETIC_ZERO = 2, /* 密度模式下零点霍尔功能已开启。 */
-    MULTIPARAM_V4_FEATURE_INVALID = 3 /* 功能位组合非法或与当前测量模式冲突。 */
-} multiparam_v4_feature_state_t;
+typedef struct {
+    multiparam_v4_measurement_mode_t measurement_mode; /* Bit0：0为密度模式，1为液位模式。 */
+    uint8_t water_enabled; /* Bit1：测水功能独立开关。 */
+    uint8_t magnetic_zero_enabled; /* Bit2：磁零点功能独立开关。 */
+    uint8_t sweep_stage; /* Bits5:4：数字扫频阶段。 */
+    uint8_t drive_stage; /* Bits7:6：驱动阶段。 */
+} multiparam_v4_operating_state_t;
 
 /* 最近一次有效主动帧的规范化快照；所有字段来自同一帧和同一发布代次。 */
 typedef struct {
@@ -60,7 +61,10 @@ typedef struct {
     float protocol_version; /* 传感器报告的协议版本参数。 */
     uint32_t status_word; /* R02运行状态原始位集合。 */
     float magnetic_zero_voltage; /* 零点霍尔电压，单位V；是否有效由magnetic_zero_valid指示。 */
-    int32_t measurement_frequency_hz; /* 当前测量频率，单位Hz。 */
+    int32_t measurement_frequency_raw; /* 参数4原始有符号值；负号表示数字快扫完成。 */
+    uint32_t measurement_frequency_hz; /* 去除协议状态符号后的频率绝对值，单位Hz。 */
+    uint8_t measurement_frequency_valid; /* 参数4非0且不是INT32_MIN时置1。 */
+    uint8_t fast_sweep_completed; /* 参数4原始值为负时置1。 */
     float water_capacitance_pf; /* 水位电容，单位pF；是否有效由water_capacitance_valid指示。 */
     float temperature_c; /* 介质温度，单位摄氏度。 */
     float density_kg_m3; /* 密度，单位kg/m3。 */
@@ -71,8 +75,11 @@ typedef struct {
     float angle_y_deg; /* Y轴姿态角，单位度。 */
     float sweep_period_square_mean_45; /* 45度扫频周期平方均值，单位沿传感器协议定义。 */
     float sweep_period_square_mean_22_5; /* 22.5度扫频周期平方均值，单位沿传感器协议定义。 */
-    multiparam_v4_measurement_mode_t measurement_mode; /* 从R02低位解码的密度或液位模式。 */
-    multiparam_v4_feature_state_t feature_state; /* 从R02低位解码的水位、零点霍尔或关闭状态。 */
+    multiparam_v4_measurement_mode_t measurement_mode; /* 从R02 Bit0解码的密度或液位模式。 */
+    uint8_t water_enabled; /* 从R02 Bit1解码的测水功能开关。 */
+    uint8_t magnetic_zero_enabled; /* 从R02 Bit2解码的磁零点功能开关。 */
+    uint8_t sweep_stage; /* 从R02 Bits5:4解码的数字扫频阶段。 */
+    uint8_t drive_stage; /* 从R02 Bits7:6解码的驱动阶段。 */
     uint8_t magnetic_zero_valid; /* 零点霍尔电压当前具有业务语义的标志。 */
     uint8_t water_capacitance_valid; /* 水位电容当前具有业务语义的标志。 */
 } multiparam_v4_snapshot_t;
@@ -348,13 +355,20 @@ uint32_t MULTIPARAM_V4_ReadSensorID(uint32_t *sensor_id);
  */
 uint32_t MULTIPARAM_V4_ReadFloatParamOnce(uint8_t parameter, float *value);
 /*
- * 函数用途：读取R02并解析当前测量模式和功能使能状态。
- * 调用场景：交互方式读取R04、R05、R11和R12前核对数据语义与异常位。
- * 关键约束：状态低四位无法映射时返回响应格式错误，不输出伪造模式。
+ * 函数用途：读取R02并解析测量模式、两个独立功能开关和运行阶段。
+ * 调用场景：交互方式读取测量参数或发送模式、功能控制命令前后核对事实。
+ * 关键约束：Bit0～Bit2相互独立；测水与磁零点允许在任一模式同时开启。
  */
 uint32_t MULTIPARAM_V4_ReadOperatingState(uint32_t *status_word,
-                                          multiparam_v4_measurement_mode_t *mode,
-                                          multiparam_v4_feature_state_t *feature);
+                                          multiparam_v4_operating_state_t *operating_state);
+/*
+ * 函数用途：解码参数4的频率绝对值和数字快扫完成标志。
+ * 调用场景：主动帧发布和交互R04测量读取。
+ * 关键约束：0和INT32_MIN返回无效；负号只表示快扫完成，不表示频率异常。
+ */
+uint8_t MULTIPARAM_V4_DecodeFrequency(int32_t raw_frequency,
+                                      uint32_t *frequency_hz,
+                                      uint8_t *fast_sweep_completed);
 /*
  * 函数用途：向允许写入的V4参数写入明确32位值。
  * 调用场景：交互维护配置，不包括R65通信方式。

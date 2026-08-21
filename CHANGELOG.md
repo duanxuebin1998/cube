@@ -3277,3 +3277,24 @@ CPU3通信和界面：
 - CPU2最终源码执行`cmake --build build/LTD_MAIN_CPU2 --clean-first -j 8`通过。
 - `py tools/check_parameter_measurement_fault_contract.py`、`py tools/check_command_argument_transaction_contract.py`、`py tools/check_si_protocol_contract.py`、`py tools/check_version_bumped.py`、`py .agents/skills/cube-development/scripts/bootstrap_cube_hooks.py --check --repo-root D:\CUBE`、`git diff --cached --check`和根目录布局Snapshot/Compare通过。
 - 尚未执行真实探底、找水、找油、密度测量、命令切换、电机失步、AO输出、RS485、传感器、目标板、台架、现场或SIL验证；构建和静态检查不替代硬件证据。
+
+## 2026-08-21 - 修复DM4主动帧新数据状态位发布
+
+版本：
+- CPU2：`V1.42.1.0 -> V1.42.2.0`（PATCH）。
+- CPU3：保持`V1.40.1.0`。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION`保持35，DM4 V4帧格式、参数地址和广播地址策略不变。
+- `DEVICE_PARAM_VERSION`保持3，参数存储结构、FRAM布局和现场参数兼容性不变。
+
+本次修改：
+- CPU2主动帧发布温度前校验R02 Bit8新数据标志。
+- CPU2主动帧发布动态黏度和运动黏度前校验R02 Bit10新数据标志；密度读取继续校验Bit8/Bit9。
+- 同步DM4 V4状态字、测量模式、功能开关、频率符号和V3固定8字节控制帧实现及正式协议文档。
+
+验证：
+- `py tools/check_multiparam_v4_protocol.py`通过。
+- `cmake --build build/LTD_MAIN_CPU2 --clean-first`通过，生成CPU2 V1.42.2.0固件产物。
+- CP936源码编码检查、`git diff --check`和根目录布局Compare通过。
+- 尚未执行真实DM4传感器、RS485台架、多设备广播和现场验证。

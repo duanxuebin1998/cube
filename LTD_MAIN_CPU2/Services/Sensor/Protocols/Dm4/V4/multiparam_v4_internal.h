@@ -156,8 +156,7 @@ float MULTIPARAM_V4_RawToFloat(uint32_t raw);
 uint8_t MULTIPARAM_V4_IsReadableParameter(uint8_t parameter);
 uint8_t MULTIPARAM_V4_IsZeroRange(const uint8_t *data, uint16_t length);
 void MULTIPARAM_V4_DecodeOperatingState(uint32_t status_word,
-                                        multiparam_v4_measurement_mode_t *measurement_mode,
-                                        multiparam_v4_feature_state_t *feature_state);
+                                        multiparam_v4_operating_state_t *operating_state);
 multiparam_v4_active_candidate_state_t MULTIPARAM_V4_DecodeActiveCandidate(
     const uint8_t *data,
     uint16_t available_length,

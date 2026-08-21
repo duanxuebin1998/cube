@@ -62,36 +62,48 @@ float MULTIPARAM_V4_RawToFloat(uint32_t raw)
  */
 uint8_t MULTIPARAM_V4_IsReadableParameter(uint8_t parameter)
 {
-    return (uint8_t)(((parameter <= 25U) ||
-                      ((parameter >= 65U) && (parameter <= MULTIPARAM_V4_PARAM_MAX))) ? 1U : 0U);
+    return (uint8_t)((parameter <= MULTIPARAM_V4_PARAM_MAX) ? 1U : 0U);
 }
 
 /*
- * 函数用途：解析状态字低四位为测量模式和功能状态。
- * 调用场景：主动快照发布以及L/M目标状态核对。
- * 关键约束：未知状态保留INVALID结果，不猜测或自动回退为密度模式。
+ * 函数用途：按新版独立位定义解析R02运行状态。
+ * 调用场景：主动快照发布以及模式、功能目标状态核对。
+ * 关键约束：Bit0～Bit2互不排斥；保留位不参与模式和开关判定。
  */
 void MULTIPARAM_V4_DecodeOperatingState(uint32_t status_word,
-                                               multiparam_v4_measurement_mode_t *mode,
-                                               multiparam_v4_feature_state_t *feature)
+                                        multiparam_v4_operating_state_t *operating_state)
 {
-    uint32_t state = status_word & 0x0FU;
+    operating_state->measurement_mode =
+        ((status_word & (1UL << 0U)) != 0U)
+            ? MULTIPARAM_V4_MEASUREMENT_LEVEL
+            : MULTIPARAM_V4_MEASUREMENT_DENSITY;
+    operating_state->water_enabled =
+        (uint8_t)(((status_word & (1UL << 1U)) != 0U) ? 1U : 0U);
+    operating_state->magnetic_zero_enabled =
+        (uint8_t)(((status_word & (1UL << 2U)) != 0U) ? 1U : 0U);
+    operating_state->sweep_stage = (uint8_t)((status_word >> 4U) & 0x03U);
+    operating_state->drive_stage = (uint8_t)((status_word >> 6U) & 0x03U);
+}
 
-    *mode = MULTIPARAM_V4_MEASUREMENT_INVALID;
-    *feature = MULTIPARAM_V4_FEATURE_INVALID;
-    if (state == 0U) {
-        *mode = MULTIPARAM_V4_MEASUREMENT_DENSITY;
-        *feature = MULTIPARAM_V4_FEATURE_NONE;
-    } else if (state == 1U) {
-        *mode = MULTIPARAM_V4_MEASUREMENT_LEVEL;
-        *feature = MULTIPARAM_V4_FEATURE_NONE;
-    } else if (state == 2U) {
-        *mode = MULTIPARAM_V4_MEASUREMENT_DENSITY;
-        *feature = MULTIPARAM_V4_FEATURE_WATER;
-    } else if (state == 3U) {
-        *mode = MULTIPARAM_V4_MEASUREMENT_DENSITY;
-        *feature = MULTIPARAM_V4_FEATURE_MAGNETIC_ZERO;
+/*
+ * 函数用途：把参数4的有符号协议值拆分为频率绝对值和快扫完成标志。
+ * 调用场景：主动帧解包和交互R04读取共用同一套符号语义。
+ * 关键约束：0表示采集失败，INT32_MIN无法安全取绝对值，两者都返回无效。
+ */
+uint8_t MULTIPARAM_V4_DecodeFrequency(int32_t raw_frequency,
+                                      uint32_t *frequency_hz,
+                                      uint8_t *fast_sweep_completed)
+{
+    if ((frequency_hz == NULL) || (fast_sweep_completed == NULL) ||
+        (raw_frequency == 0) || (raw_frequency == INT32_MIN)) {
+        return 0U;
     }
+
+    *fast_sweep_completed = (uint8_t)((raw_frequency < 0) ? 1U : 0U);
+    *frequency_hz = (raw_frequency < 0)
+                        ? (uint32_t)(-raw_frequency)
+                        : (uint32_t)raw_frequency;
+    return 1U;
 }
 
 /*
@@ -230,7 +242,11 @@ uint32_t MULTIPARAM_V4_ParseActiveFrame(const uint8_t frame[MULTIPARAM_V4_ACTIVE
     snapshot->protocol_version = MULTIPARAM_V4_RawToFloat(snapshot->raw_parameter[1]);
     snapshot->status_word = snapshot->raw_parameter[2];
     snapshot->magnetic_zero_voltage = MULTIPARAM_V4_RawToFloat(snapshot->raw_parameter[3]);
-    snapshot->measurement_frequency_hz = (int32_t)snapshot->raw_parameter[4];
+    snapshot->measurement_frequency_raw = (int32_t)snapshot->raw_parameter[4];
+    snapshot->measurement_frequency_valid =
+        MULTIPARAM_V4_DecodeFrequency(snapshot->measurement_frequency_raw,
+                                      &snapshot->measurement_frequency_hz,
+                                      &snapshot->fast_sweep_completed);
     snapshot->water_capacitance_pf = MULTIPARAM_V4_RawToFloat(snapshot->raw_parameter[5]);
     snapshot->temperature_c = MULTIPARAM_V4_RawToFloat(snapshot->raw_parameter[6]);
     snapshot->density_kg_m3 = MULTIPARAM_V4_RawToFloat(snapshot->raw_parameter[7]);
@@ -243,21 +259,26 @@ uint32_t MULTIPARAM_V4_ParseActiveFrame(const uint8_t frame[MULTIPARAM_V4_ACTIVE
         MULTIPARAM_V4_RawToFloat(snapshot->raw_parameter[13]);
     snapshot->sweep_period_square_mean_22_5 =
         MULTIPARAM_V4_RawToFloat(snapshot->raw_parameter[14]);
-    MULTIPARAM_V4_DecodeOperatingState(snapshot->status_word,
-                                       &snapshot->measurement_mode,
-                                       &snapshot->feature_state);
+    {
+        multiparam_v4_operating_state_t operating_state;
+
+        MULTIPARAM_V4_DecodeOperatingState(snapshot->status_word, &operating_state);
+        snapshot->measurement_mode = operating_state.measurement_mode;
+        snapshot->water_enabled = operating_state.water_enabled;
+        snapshot->magnetic_zero_enabled = operating_state.magnetic_zero_enabled;
+        snapshot->sweep_stage = operating_state.sweep_stage;
+        snapshot->drive_stage = operating_state.drive_stage;
+    }
     snapshot->magnetic_zero_valid =
-        (uint8_t)(((snapshot->feature_state == MULTIPARAM_V4_FEATURE_MAGNETIC_ZERO) &&
+        (uint8_t)(((snapshot->magnetic_zero_enabled != 0U) &&
                    isfinite(snapshot->magnetic_zero_voltage)) ? 1U : 0U);
     snapshot->water_capacitance_valid =
-        (uint8_t)(((snapshot->feature_state == MULTIPARAM_V4_FEATURE_WATER) &&
+        (uint8_t)(((snapshot->water_enabled != 0U) &&
                    isfinite(snapshot->water_capacitance_pf)) ? 1U : 0U);
 
-    /* 功能关闭或结果尚未生成时，测量字段允许为NaN；帧级只校验身份和状态语义。 */
+    /* 功能关闭或结果尚未生成时，测量字段允许为NaN；帧级只校验身份和协议版本。 */
     if ((!isfinite(snapshot->software_version)) ||
-        (!isfinite(snapshot->protocol_version)) ||
-        (snapshot->measurement_mode == MULTIPARAM_V4_MEASUREMENT_INVALID) ||
-        (snapshot->feature_state == MULTIPARAM_V4_FEATURE_INVALID)) {
+        (!isfinite(snapshot->protocol_version))) {
         return SENSOR_RESP_FORMAT_ERROR;
     }
     if (fabsf(snapshot->protocol_version - MULTIPARAM_V4_PROTOCOL_VERSION_VALUE) > 0.01f) {
