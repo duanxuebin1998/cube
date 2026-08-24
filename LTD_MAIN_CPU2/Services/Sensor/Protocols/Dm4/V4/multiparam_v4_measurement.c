@@ -293,6 +293,16 @@ static uint32_t MULTIPARAM_V4_RefreshInteractiveDebugAfterCoreRead(void)
 }
 
 /*
+ * 函数用途：识别四代密度模式尚未扫到有效结果的组合值。
+ * 调用场景：交互读取或主动快照同时得到R04频率和R07密度后。
+ * 关键约束：仅R04为0时返回真，INT32_MIN和其他无效频率仍按故障处理。
+ */
+static uint8_t MULTIPARAM_V4_IsDensityNotScanned(int32_t raw_frequency)
+{
+    return (uint8_t)((raw_frequency == 0) ? 1U : 0U);
+}
+
+/*
  * 函数用途：在交互通信方式下读取并发布密度模式的R04、R07和R06。
  * 调用场景：密度测量流程需要一次同步结果时。
  * 关键约束：先读R02确认密度模式，全部核心量通过范围检查后才更新输出和调试快照。
@@ -305,6 +315,7 @@ static uint32_t MULTIPARAM_V4_ReadInteractiveDensity(float *frequency_hz,
     int32_t frequency_value;
     uint32_t normalized_frequency;
     uint8_t fast_sweep_completed;
+    uint8_t density_not_scanned;
     uint32_t status_word;
     uint32_t primask;
     uint32_t result;
@@ -326,14 +337,22 @@ static uint32_t MULTIPARAM_V4_ReadInteractiveDensity(float *frequency_hz,
     if (result != NO_ERROR) {
         return result;
     }
-    if ((MULTIPARAM_V4_DecodeFrequency(frequency_value,
-                                       &normalized_frequency,
-                                       &fast_sweep_completed) == 0U) ||
-        (normalized_frequency > MULTIPARAM_V4_FREQUENCY_MAX_HZ) ||
-        (!isfinite(*density_kg_m3)) || (*density_kg_m3 < MULTIPARAM_V4_DENSITY_MIN_KG_M3) ||
+    density_not_scanned = MULTIPARAM_V4_IsDensityNotScanned(frequency_value);
+    if ((!isfinite(*density_kg_m3)) || (*density_kg_m3 < MULTIPARAM_V4_DENSITY_MIN_KG_M3) ||
         (*density_kg_m3 > MULTIPARAM_V4_DENSITY_MAX_KG_M3) ||
         (!isfinite(*temperature_c)) || (*temperature_c < MULTIPARAM_V4_TEMPERATURE_MIN_C) ||
         (*temperature_c > MULTIPARAM_V4_TEMPERATURE_MAX_C)) {
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+    /* R04为0表示尚未扫到，清除可能残留的R07后交给上层继续等待。 */
+    if (density_not_scanned != 0U) {
+        normalized_frequency = 0U;
+        fast_sweep_completed = 0U;
+        *density_kg_m3 = 0.0f;
+    } else if ((MULTIPARAM_V4_DecodeFrequency(frequency_value,
+                                              &normalized_frequency,
+                                              &fast_sweep_completed) == 0U) ||
+               (normalized_frequency > MULTIPARAM_V4_FREQUENCY_MAX_HZ)) {
         return SENSOR_RESP_FORMAT_ERROR;
     }
 
@@ -358,6 +377,7 @@ uint32_t MULTIPARAM_V4_MeasurementReadDensity(float *frequency_hz,
                                                float *temperature_c)
 {
     multiparam_v4_snapshot_t snapshot;
+    uint8_t density_not_scanned;
     uint32_t result;
 
     if ((frequency_hz == NULL) || (density_kg_m3 == NULL) || (temperature_c == NULL)) {
@@ -383,9 +403,9 @@ uint32_t MULTIPARAM_V4_MeasurementReadDensity(float *frequency_hz,
     if (isnan(snapshot.density_kg_m3) || isnan(snapshot.temperature_c)) {
         return SENSOR_DATA_STALE;
     }
-    if ((snapshot.measurement_frequency_valid == 0U) ||
-        (snapshot.measurement_frequency_hz > MULTIPARAM_V4_FREQUENCY_MAX_HZ) ||
-        (!isfinite(snapshot.density_kg_m3)) ||
+    density_not_scanned =
+        MULTIPARAM_V4_IsDensityNotScanned(snapshot.measurement_frequency_raw);
+    if ((!isfinite(snapshot.density_kg_m3)) ||
         (snapshot.density_kg_m3 < MULTIPARAM_V4_DENSITY_MIN_KG_M3) ||
         (snapshot.density_kg_m3 > MULTIPARAM_V4_DENSITY_MAX_KG_M3) ||
         (!isfinite(snapshot.temperature_c)) ||
@@ -393,8 +413,16 @@ uint32_t MULTIPARAM_V4_MeasurementReadDensity(float *frequency_hz,
         (snapshot.temperature_c > MULTIPARAM_V4_TEMPERATURE_MAX_C)) {
         return SENSOR_RESP_FORMAT_ERROR;
     }
-    *frequency_hz = (float)snapshot.measurement_frequency_hz;
-    *density_kg_m3 = snapshot.density_kg_m3;
+    /* 主动快照沿用交互模式的未扫到语义，其他无效频率不放宽。 */
+    if (((snapshot.measurement_frequency_valid == 0U) && (density_not_scanned == 0U)) ||
+        ((snapshot.measurement_frequency_valid != 0U) &&
+         (snapshot.measurement_frequency_hz > MULTIPARAM_V4_FREQUENCY_MAX_HZ))) {
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+    *frequency_hz = (density_not_scanned != 0U)
+                        ? 0.0f
+                        : (float)snapshot.measurement_frequency_hz;
+    *density_kg_m3 = (density_not_scanned != 0U) ? 0.0f : snapshot.density_kg_m3;
     *temperature_c = snapshot.temperature_c;
     return NO_ERROR;
 }

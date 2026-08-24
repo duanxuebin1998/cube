@@ -3298,3 +3298,26 @@ CPU3通信和界面：
 - `cmake --build build/LTD_MAIN_CPU2 --clean-first`通过，生成CPU2 V1.42.2.0固件产物。
 - CP936源码编码检查、`git diff --check`和根目录布局Compare通过。
 - 尚未执行真实DM4传感器、RS485台架、多设备广播和现场验证。
+
+## 2026-08-24 - 修复连续速度运动状态与DM4密度未扫描等待
+
+版本：
+- CPU2：`V1.42.2.0 -> V1.42.3.0`（PATCH）。
+- CPU3：保持`V1.40.1.0`。
+
+协议版本/兼容性：
+- CPU2/CPU3 `DEVICE_PROTOCOL_VERSION`保持35；不新增或移动共享寄存器、共享命令、共享状态和共享字段，CPU3固件无需修改。
+- CPU2 `DEVICE_PARAM_VERSION`保持3，`DeviceParameters`结构大小、字段偏移、`struct_size`、CRC范围和FRAM布局不变；升级不恢复出厂、不清除现场参数。
+- DM4 V4帧格式、R04地址和有符号频率编码保持不变；仅细化密度模式下`R04=0`的业务解释，液位模式下0和`INT32_MIN`的异常语义保持不变。
+
+本次修改：
+- 连续速度运动新增独立运行态和500 ms启动观察窗口，使用`VZERO/VACTUAL`判断实际运动；启动窗口后仍未运动时执行安全停止并返回`MOTOR_STEP_ERROR`，避免位置模式目标到位位误清连续运动方向。
+- 电机正式接口和维护调试统一设置、保持和清理运动状态；油位位置边界检查前先轮询驱动位置与健康状态，不再使用可能过期的位置继续发布结果。
+- DM4 V4主动快照和交互读取在密度模式下把`R04=0`解释为尚未扫到有效密度，向既有等待逻辑返回频率0、密度0并继续轮询；同步正式Markdown和用户维护的20页PDF协议资料。
+- SIL软件架构资料以`ER02.二代计量仪软件架构设计V0.3.docx`替换旧`CG01.系统架构设计-V1.3.docx`；新文档覆盖CPU1、CPU2、CPU3、CPUW和CPU4未来边界。
+
+验证：
+- `cmake --build build/LTD_MAIN_CPU2 --clean-first -j 8`通过，生成CPU2 V1.42.3.0固件，`text=356660`、`data=2352`、`bss=59624`；固定名和版本名HEX的SHA-256均为`44D81A265FE40E1355957A0137EEC030D1A9BF7884461FC5F55DC95406AAF165`。
+- `py tools/check_motor_motion_target_plan.py`、`py tools/check_multiparam_v4_protocol.py`、`py -X utf8 tools/check_docs.py`和`git diff --check`通过；本机流程导航已同步到CPU2 V1.42.3.0，仅报告既有LF到CRLF转换提示。
+- DM4 PDF完成20页逐页渲染检查，无裁切、重叠或乱码；ER02 DOCX结构包含正文、样式、编号、10个媒体对象和10个嵌入对象，使用Word只读渲染为15页。
+- 尚未执行真实电机连续速度启动/停转、油位闭环、DM4密度扫频、RS485、目标板、台架、现场或SIL验证；ER02最后一页页脚显示“第12页 共11页”，且CPU1/CPUW/CPU4架构口径仍需正式评审确认，本次按用户“全部提交”要求原样纳入。

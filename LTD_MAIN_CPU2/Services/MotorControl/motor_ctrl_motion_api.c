@@ -126,8 +126,9 @@ static uint32_t MotorMotion_DistanceToTicks(float move_mm,
 static uint32_t MotorMotion_DisplayStateFromDirection(int dir);
 static uint32_t MotorMotion_DisplayStateFromTicks(int32_t ticks);
 static bool MotorMotion_IsDisplayStateActive(uint32_t display_state);
-static void MotorMotion_SetActiveState(uint32_t display_state, bool wait_active);
-static void MotorMotion_ClearActiveState(void);
+void MotorMotion_SetActiveState(uint32_t display_state, bool wait_active);
+void MotorMotion_SetVelocityActiveState(uint32_t display_state);
+void MotorMotion_ClearActiveState(void);
 static bool MotorMotion_ShouldStopAtTarget(float current_mm,
                                            float target_mm,
                                            float eps_mm,
@@ -649,7 +650,7 @@ uint32_t MotorCtrl_StartVelocity(int dir, uint32_t speed_x100)
     ret = MotorMotion_StartJogVelocity(dir);
     CHECK_ERROR(ret);
 
-    MotorMotion_SetActiveState(MotorMotion_DisplayStateFromDirection(dir), false);
+    MotorMotion_SetVelocityActiveState(MotorMotion_DisplayStateFromDirection(dir));
     return NO_ERROR;
 }
 
@@ -691,7 +692,7 @@ uint32_t MotorCtrl_StartFineVelocity(int dir, float speed_m_min)
     ret = MotorMotion_StartJogVelocity(dir);
     CHECK_ERROR(ret);
 
-    MotorMotion_SetActiveState(MotorMotion_DisplayStateFromDirection(dir), false);
+    MotorMotion_SetVelocityActiveState(MotorMotion_DisplayStateFromDirection(dir));
     return NO_ERROR;
 }
 
@@ -943,8 +944,16 @@ uint32_t MotorCtrl_GetDisplayState(void)
 
     if (!s_motor_driver.motion_command_active) {
         s_motor_driver.motion_wait_active = false;
+        s_motor_driver.continuous_velocity_active = false;
+        s_motor_driver.continuous_velocity_start_tick = 0U;
         g_measurement.debug_data.motor_state = 0U;
         return 0U;
+    }
+
+    /* 连续速度的停止有效性由50ms后台轮询统一验证，读取显示状态不能抢先清除命令方向。 */
+    if (s_motor_driver.continuous_velocity_active &&
+        MotorMotion_IsDisplayStateActive(motor_state)) {
+        return motor_state;
     }
 
     ret = MotorDriver_ReadMovingState(&stepper, &is_moving);
@@ -1642,7 +1651,7 @@ static bool MotorMotion_IsDisplayStateActive(uint32_t display_state)
  * @param display_state 待转换为文字或运动方向的上层电机显示状态。
  * @param wait_active true 表示进入需要等待完成的运动状态，false 表示只发布瞬时运动状态。
  */
-static void MotorMotion_SetActiveState(uint32_t display_state, bool wait_active)
+void MotorMotion_SetActiveState(uint32_t display_state, bool wait_active)
 {
     if (!MotorMotion_IsDisplayStateActive(display_state)) {
         MotorMotion_ClearActiveState();
@@ -1651,16 +1660,42 @@ static void MotorMotion_SetActiveState(uint32_t display_state, bool wait_active)
 
     s_motor_driver.motion_command_active = true;
     s_motor_driver.motion_wait_active = wait_active;
+    s_motor_driver.continuous_velocity_active = false;
+    s_motor_driver.continuous_velocity_start_tick = 0U;
     g_measurement.debug_data.motor_state = display_state;
+}
+
+/**
+ * @brief 发布连续速度命令的方向和首次启动时间。
+ *
+ * 同方向调速沿用原启动时间，避免频率闭环反复改速时无限延长启动观察窗口。
+ * @param display_state 本次连续速度命令对应的上行或下行显示状态。
+ */
+void MotorMotion_SetVelocityActiveState(uint32_t display_state)
+{
+    const bool keep_start_tick =
+            s_motor_driver.motion_command_active &&
+            s_motor_driver.continuous_velocity_active &&
+            (g_measurement.debug_data.motor_state == display_state);
+    const uint32_t start_tick = s_motor_driver.continuous_velocity_start_tick;
+
+    MotorMotion_SetActiveState(display_state, false);
+    if (MotorMotion_IsDisplayStateActive(display_state)) {
+        s_motor_driver.continuous_velocity_active = true;
+        s_motor_driver.continuous_velocity_start_tick =
+                keep_start_tick ? start_tick : HAL_GetTick();
+    }
 }
 
 /**
  * @brief 统一清除当前运动状态。
  */
-static void MotorMotion_ClearActiveState(void)
+void MotorMotion_ClearActiveState(void)
 {
     s_motor_driver.motion_command_active = false;
     s_motor_driver.motion_wait_active = false;
+    s_motor_driver.continuous_velocity_active = false;
+    s_motor_driver.continuous_velocity_start_tick = 0U;
     g_measurement.debug_data.motor_state = 0U;
 }
 

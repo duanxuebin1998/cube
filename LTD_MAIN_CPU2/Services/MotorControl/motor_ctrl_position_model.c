@@ -336,6 +336,8 @@ uint32_t MotorCtrl_PollRuntimePosition(void)
     if (!s_motor_driver.motion_command_active) {
         s_motor_driver.motion_command_active = false;
         s_motor_driver.motion_wait_active = false;
+        s_motor_driver.continuous_velocity_active = false;
+        s_motor_driver.continuous_velocity_start_tick = 0U;
         g_measurement.debug_data.motor_state = 0U;
         ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
         if (ret != NO_ERROR) {
@@ -344,7 +346,10 @@ uint32_t MotorCtrl_PollRuntimePosition(void)
         return NO_ERROR;
     }
 
-    ret = MotorDriver_ReadMovingState(&stepper, &is_moving);
+    /* 速度模式没有有效的位置目标，必须只用VZERO和VACTUAL判定实际运动。 */
+    ret = s_motor_driver.continuous_velocity_active ?
+          MotorDriver_ReadStoppingState(&stepper, &is_moving) :
+          MotorDriver_ReadMovingState(&stepper, &is_moving);
     if (ret != NO_ERROR) {
         uint32_t sync_ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
         if (sync_ret != NO_ERROR) {
@@ -354,6 +359,22 @@ uint32_t MotorCtrl_PollRuntimePosition(void)
     }
 
     if (!is_moving) {
+        if (s_motor_driver.continuous_velocity_active) {
+            /* 低速启动窗口内保持命令方向；窗口后仍为零速则安全停机并上报未启动。 */
+            if ((now - s_motor_driver.continuous_velocity_start_tick) <=
+                MOTOR_CONTINUOUS_VELOCITY_START_GRACE_MS) {
+                ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+                if (ret != NO_ERROR) {
+                    return ret;
+                }
+                return NO_ERROR;
+            }
+            ret = MotorDriver_StopAndMarkStopped();
+            if (ret != NO_ERROR) {
+                return ret;
+            }
+            return MOTOR_STEP_ERROR;
+        }
         if (s_motor_driver.motion_wait_active) {
             ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
             if (ret != NO_ERROR) {
@@ -365,6 +386,8 @@ uint32_t MotorCtrl_PollRuntimePosition(void)
             (g_measurement.debug_data.motor_state == 2U)) {
             s_motor_driver.motion_command_active = false;
             s_motor_driver.motion_wait_active = false;
+            s_motor_driver.continuous_velocity_active = false;
+            s_motor_driver.continuous_velocity_start_tick = 0U;
             g_measurement.debug_data.motor_state = 0U;
             ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
             if (ret != NO_ERROR) {

@@ -76,7 +76,13 @@ static uint32_t OilLevel_PositionCheckLimit(int32_t oil_level)
  */
 uint32_t OilLevel_UpdatePositionAndCheckBounds(void)
 {
-    int32_t oil_level = g_measurement.debug_data.sensor_position; /* 本轮传感器实时位置，单位为 0.1 mm。 */
+    int32_t oil_level;
+    uint32_t ret = MotorCtrl_PollRuntimePosition();
+
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+    oil_level = g_measurement.debug_data.sensor_position; /* 本轮传感器实时位置，单位为 0.1 mm。 */
 
     /* 先按当前设备状态发布位置，再复用统一边界保护。 */
     OilLevel_PositionPublishFollow(oil_level);

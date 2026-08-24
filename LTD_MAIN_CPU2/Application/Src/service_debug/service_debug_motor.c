@@ -153,9 +153,7 @@ static uint8_t Test_ShouldAbortForCommandSwitchNoError(void)
         printf("A/B/BE命令切换\t停止等待或切回位置模式失败\t返回=0x%08lX\r\n",
                (unsigned long)stop_ret);
     }
-    g_measurement.debug_data.motor_state = 0U;
-    s_motor_driver.motion_command_active = false;
-    s_motor_driver.motion_wait_active = false;
+    MotorMotion_ClearActiveState();
     Test_MotorTextClearIgnoredError();
     return 1U;
 }
@@ -224,9 +222,7 @@ static void Test_MotorTextRecoverDriverAfterCommandSwitch(const char *phase_name
     const char *name = (phase_name != NULL) ? phase_name : "B/BE退出";
     uint32_t ret;
 
-    g_measurement.debug_data.motor_state = 0U;
-    s_motor_driver.motion_command_active = false;
-    s_motor_driver.motion_wait_active = false;
+    MotorMotion_ClearActiveState();
 
     ret = MotorCtrl_Init();
     if (ret != NO_ERROR) {
@@ -246,9 +242,7 @@ static void Test_MotorTextRecoverDriverAfterCommandSwitch(const char *phase_name
         }
     }
 
-    g_measurement.debug_data.motor_state = 0U;
-    s_motor_driver.motion_command_active = false;
-    s_motor_driver.motion_wait_active = false;
+    MotorMotion_ClearActiveState();
     Test_MotorTextClearIgnoredError();
 }
 
@@ -358,7 +352,7 @@ static void Test_MotorTextMoveByNoCheck(float move_mm, int dir)
     s_motor_driver.applied_velocity = velocity;
 
     stpr_enableDriver(&stepper);
-    g_measurement.debug_data.motor_state = (dir == MOTOR_DIRECTION_UP) ? 1U : 2U;
+    MotorMotion_SetActiveState((dir == MOTOR_DIRECTION_UP) ? 1U : 2U, true);
     (void)stpr_writeInt(&stepper, TMC5130_RAMPMODE, TMC5130_MODE_POSITION);
     (void)stpr_writeInt(&stepper, TMC5130_VMAX, (int32_t)velocity);
     (void)stpr_writeInt(&stepper, TMC5130_XTARGET, s_motor_text_raw_target);
@@ -378,7 +372,7 @@ static void Test_MotorTextMoveToNoCheck(int32_t target, int dir)
     s_motor_text_raw_target = target;
 
     stpr_enableDriver(&stepper);
-    g_measurement.debug_data.motor_state = (dir == MOTOR_DIRECTION_UP) ? 1U : 2U;
+    MotorMotion_SetActiveState((dir == MOTOR_DIRECTION_UP) ? 1U : 2U, true);
     (void)stpr_writeInt(&stepper, TMC5130_RAMPMODE, TMC5130_MODE_POSITION);
     (void)stpr_writeInt(&stepper, TMC5130_VMAX, (int32_t)velocity);
     (void)stpr_writeInt(&stepper, TMC5130_XTARGET, target);
@@ -628,9 +622,7 @@ static uint32_t Test_MotorTextReinitForRestartNoExit(const char *phase_name,
         }
 
         retry_count++;
-        g_measurement.debug_data.motor_state = 0U;
-        s_motor_driver.motion_command_active = false;
-        s_motor_driver.motion_wait_active = false;
+        MotorMotion_ClearActiveState();
 
         ret = MotorCtrl_Init();
         if (ret == NO_ERROR) {
@@ -665,7 +657,7 @@ static void Test_MotorTextStartJogNoCheck(int dir, uint32_t speed_x100)
     s_motor_driver.applied_velocity = velocity;
 
     stpr_enableDriver(&stepper);
-    g_measurement.debug_data.motor_state = (dir == MOTOR_DIRECTION_UP) ? 1U : 2U;
+    MotorMotion_SetVelocityActiveState((dir == MOTOR_DIRECTION_UP) ? 1U : 2U);
     (void)stpr_writeInt(&stepper, TMC5130_VMAX, (int32_t)velocity);
     (void)stpr_writeInt(&stepper,
                         TMC5130_RAMPMODE,
@@ -765,7 +757,7 @@ static uint8_t Test_WaitMotorStoppedNoErrorCheck(const char *phase_name)
         if ((Test_MotorTextConfirmStoppedNoError(name, &known) != 0U) &&
             ((now - start_tick) >= MOTOR_TEXT_STOP_SETTLE_MS)) {
             Test_MotorTextSyncRawTargetNoError();
-            g_measurement.debug_data.motor_state = 0U;
+            MotorMotion_ClearActiveState();
             Test_MotorTextClearIgnoredError();
             return 1U;
         }
@@ -1329,9 +1321,7 @@ void motor_text_manual_stop(void)
 
     (void)stpr_stop(&stepper);
     (void)stpr_writeInt(&stepper, TMC5130_VMAX, 0);
-    g_measurement.debug_data.motor_state = 0U;
-    s_motor_driver.motion_command_active = false;
-    s_motor_driver.motion_wait_active = false;
+    MotorMotion_ClearActiveState();
     Test_MotorTextClearIgnoredError();
     printf("A指令\t停止命令已下发\r\n");
     Test_MotorTextExit(&error_snapshot);
@@ -1376,8 +1366,7 @@ void motor_text_manual_once(float run_distance_mm, int dir)
         return;
     }
 
-    s_motor_driver.motion_command_active = false;
-    s_motor_driver.motion_wait_active = false;
+    MotorMotion_ClearActiveState();
     Test_MotorTextClearIgnoredError();
     printf("%s\t运动完成\r\n", phase_name);
     Test_MotorTextExit(&error_snapshot);

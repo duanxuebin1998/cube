@@ -157,11 +157,15 @@ typedef struct {
 /* ===================== 内部共享状态 ===================== */
 
 /* 驱动运行态：只保存跨文件需要共享的驱动侧状态。 */
+#define MOTOR_CONTINUOUS_VELOCITY_START_GRACE_MS 500U /* 连续速度命令启动观察窗口，窗口内不得因瞬时零速清除方向。 */
+
 typedef struct {
     uint32_t applied_velocity;  /* 最近一次写入/准备写入 TMC5130 的 VMAX。 */
     bool initialized;           /* TMC5130 驱动是否已经完成初始化。 */
     bool motion_command_active; /* 已下发且尚未收尾的运动命令，决定 motor_state 能否保持上/下行。 */
     bool motion_wait_active;    /* 阻塞运动等待收尾时，后台轮询不得提前把 motor_state 清零。 */
+    bool continuous_velocity_active; /* 连续速度命令仍由业务保持有效，不能使用位置目标差判停。 */
+    uint32_t continuous_velocity_start_tick; /* 本次连续速度运动首次启动时间，同方向调速不得重置。 */
     bool boot_safe_stop_done; /* 上电安全停机或完整初始化已清除 TMC 旧运动状态。 */
 } MotorDriverRuntime;
 
@@ -245,6 +249,10 @@ int MotorDriver_IsDirValid(int dir);
  * @return 停止命令和等待停稳成功返回 NO_ERROR，否则返回实际错误码。
  */
 uint32_t MotorDriver_StopAndMarkStopped(void);
+
+void MotorMotion_SetActiveState(uint32_t display_state, bool wait_active);
+void MotorMotion_SetVelocityActiveState(uint32_t display_state);
+void MotorMotion_ClearActiveState(void);
 
 /**
  * @brief 检查是否有有效命令切换请求，并在需要时停止电机。

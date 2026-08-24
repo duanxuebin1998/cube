@@ -78,6 +78,8 @@ void MotorCtrl_InvalidateDriverInit(void)
     s_motor_driver.applied_velocity = 0U;
     s_motor_driver.motion_command_active = false;
     s_motor_driver.motion_wait_active = false;
+    s_motor_driver.continuous_velocity_active = false;
+    s_motor_driver.continuous_velocity_start_tick = 0U;
     s_motor_driver.boot_safe_stop_done = false;
 }
 
@@ -109,6 +111,8 @@ uint32_t MotorCtrl_BootSafeStop(void)
     s_motor_driver.applied_velocity = 0U;
     s_motor_driver.motion_command_active = false;
     s_motor_driver.motion_wait_active = false;
+    s_motor_driver.continuous_velocity_active = false;
+    s_motor_driver.continuous_velocity_start_tick = 0U;
     s_motor_driver.boot_safe_stop_done = false;
     g_measurement.debug_data.motor_state = 0U;
 
@@ -190,6 +194,8 @@ static uint32_t MotorDriver_ReinitIfMotionNotReady(void)
     printf("电机运动准备 | 驱动未初始化或安全停机状态失效，尝试重新初始化\r\n");
     s_motor_driver.motion_command_active = false;
     s_motor_driver.motion_wait_active = false;
+    s_motor_driver.continuous_velocity_active = false;
+    s_motor_driver.continuous_velocity_start_tick = 0U;
     g_measurement.debug_data.motor_state = 0U;
 
     ret = MotorCtrl_Init();
@@ -419,9 +425,25 @@ static uint32_t MotorDriver_SetSpeedInternal(uint32_t speed_x100, bool print_res
     g_measurement.debug_data.motor_speed = clamped_speed;
 
     if (s_motor_driver.initialized) {
-        ret = MotorCtrl_IsDriverMoving(&stepper, &is_running);
+        ret = s_motor_driver.continuous_velocity_active ?
+              MotorDriver_ReadStoppingState(&stepper, &is_running) :
+              MotorCtrl_IsDriverMoving(&stepper, &is_running);
         if (ret != NO_ERROR) {
             return ret;
+        }
+        if ((!is_running) && s_motor_driver.continuous_velocity_active) {
+            if ((HAL_GetTick() - s_motor_driver.continuous_velocity_start_tick) <=
+                MOTOR_CONTINUOUS_VELOCITY_START_GRACE_MS) {
+                /* 连续速度启动窗口内的参数更新继续按运行中下发，不能提前清除方向。 */
+                is_running = true;
+            } else {
+                /* 启动窗口后仍为零速时撤销速度命令并返回故障，禁止静默丢失方向。 */
+                ret = MotorDriver_StopAndMarkStopped();
+                if (ret != NO_ERROR) {
+                    return ret;
+                }
+                return MOTOR_STEP_ERROR;
+            }
         }
     }
 
@@ -453,6 +475,8 @@ static uint32_t MotorDriver_SetSpeedInternal(uint32_t speed_x100, bool print_res
         if (!is_running) {
             s_motor_driver.motion_command_active = false;
             s_motor_driver.motion_wait_active = false;
+            s_motor_driver.continuous_velocity_active = false;
+            s_motor_driver.continuous_velocity_start_tick = 0U;
         }
         g_measurement.debug_data.motor_state = 0U;
     }
@@ -797,6 +821,8 @@ uint32_t MotorDriver_StopAndMarkStopped(void)
     if (!is_moving) {
         s_motor_driver.motion_command_active = false;
         s_motor_driver.motion_wait_active = false;
+        s_motor_driver.continuous_velocity_active = false;
+        s_motor_driver.continuous_velocity_start_tick = 0U;
         g_measurement.debug_data.motor_state = 0U;
     }
     return NO_ERROR;

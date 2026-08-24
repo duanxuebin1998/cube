@@ -20,6 +20,8 @@ MotorDriverRuntime s_motor_driver = {
     .initialized = false,
     .motion_command_active = false,
     .motion_wait_active = false,
+    .continuous_velocity_active = false,
+    .continuous_velocity_start_tick = 0U,
     .boot_safe_stop_done = false,
 };
 
