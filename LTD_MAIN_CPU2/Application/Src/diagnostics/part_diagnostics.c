@@ -26,16 +26,19 @@
 #define READ_PART_PARAMS_REFRESH_INTERVAL_MS 1000U /* 部件参数诊断常规刷新周期，单位 ms。 */
 #define READ_PART_PARAMS_RSSI_REFRESH_INTERVAL_MS 5000U /* 无线 RSSI 低频刷新周期，单位 ms。 */
 /*
- * 函数用途：部件诊断读取V3密度数据前切换并等待稳定。
- * 调用场景：仅多参数V3驱动的维护参数刷新。
- * 关键约束：等待可被新命令打断，不改变其他驱动的模式时序。
+ * 函数用途：部件诊断读取密度组合量前统一切换到密度模式。
+ * 调用场景：所有已识别传感器的维护参数首轮读取和周期刷新。
+ * 关键约束：V3保留三秒稳定等待，其他驱动只确认模式且不增加固定等待。
  */
-static uint32_t PartDiagnostics_PrepareV3DensityMode(void)
+static uint32_t PartDiagnostics_PrepareDensityMode(uint8_t wait_for_v3_settle)
 {
     uint32_t result = SensorService_EnableDensityMode();
 
     if (result != NO_ERROR) {
         return result;
+    }
+    if (wait_for_v3_settle == 0U) {
+        return NO_ERROR;
     }
     printf("读取部件参数\tLTD已切换密度模式，等待%lu ms稳定\r\n",
            (unsigned long)SENSOR_DENSITY_MODE_SETTLE_MS);
@@ -176,11 +179,10 @@ static uint32_t PartDiagnostics_ReadAllInternal(uint8_t update_command_state)
         return STATE_SWITCH;
     }
 
-    if (is_ltd_sensor) {
-        ret = PartDiagnostics_PrepareV3DensityMode();
-        if (ret == STATE_SWITCH) {
-            return STATE_SWITCH;
-        }
+    /* 所有驱动都先建立密度模式，避免V4或DSM继承上一次液位模式后误读密度组合量。 */
+    ret = PartDiagnostics_PrepareDensityMode(is_ltd_sensor);
+    if (ret == STATE_SWITCH) {
+        return STATE_SWITCH;
     }
 
     if (ret == NO_ERROR) {

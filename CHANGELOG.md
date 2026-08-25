@@ -3321,3 +3321,23 @@ CPU3通信和界面：
 - `py tools/check_motor_motion_target_plan.py`、`py tools/check_multiparam_v4_protocol.py`、`py -X utf8 tools/check_docs.py`和`git diff --check`通过；本机流程导航已同步到CPU2 V1.42.3.0，仅报告既有LF到CRLF转换提示。
 - DM4 PDF完成20页逐页渲染检查，无裁切、重叠或乱码；ER02 DOCX结构包含正文、样式、编号、10个媒体对象和10个嵌入对象，使用Word只读渲染为15页。
 - 尚未执行真实电机连续速度启动/停转、油位闭环、DM4密度扫频、RS485、目标板、台架、现场或SIL验证；ER02最后一页页脚显示“第12页 共11页”，且CPU1/CPUW/CPU4架构口径仍需正式评审确认，本次按用户“全部提交”要求原样纳入。
+
+## 2026-08-25 - 修复部件参数读取及DM4通信自检模式前置
+
+版本：
+- CPU2：`V1.42.3.0 -> V1.42.4.0`（PATCH）。
+- CPU3：保持`V1.40.1.0`。
+
+协议版本/兼容性：
+- CPU2/CPU3 `DEVICE_PROTOCOL_VERSION`保持35；共享寄存器、共享命令、共享状态和共享字段不变，CPU3固件无需修改。
+- CPU2 `DEVICE_PARAM_VERSION`保持3，`DeviceParameters`结构、FRAM布局和现场参数兼容性不变；升级不恢复出厂、不清除现场参数。
+- DM4 V4、DSM和V3通信帧及错误码保持兼容；仅在读取密度前补齐既有密度模式切换，V3继续保留3秒稳定等待。
+
+本次修改：
+- 命令15读取部件参数时，对已识别传感器统一调用`SensorService_EnableDensityMode()`，避免V4或DSM继承液位模式后读取密度触发`0x000D002F`传感器模式不一致。
+- DM4通信自检和无线综合通信测试在读取密度前显式切换密度模式，切换失败时记录原错误并停止本次密度读取，避免把残留测量模式误报为通信失败。
+
+验证：
+- `py tools/check_read_part_params_refresh_contract.py`、`check_multiparam_v4_protocol.py`、`check_sensor_service_architecture.py`、`check_sensor_fault_contract.py`、`check_dsm_compat_contract.py`和`check_parameter_measurement_fault_contract.py`通过。
+- `cmake --build build/LTD_MAIN_CPU2 --clean-first -j 8`通过，132个目标完成编译链接，生成CPU2 V1.42.4.0 ELF/HEX/BIN；`text=356716`、`data=2352`、`bss=59624`。
+- 尚未执行真实DM4/DSM传感器、RS485、无线滑环、目标板、台架、现场或SIL验证；需在传感器先处于液位模式时复测命令15和DM4通信自检。

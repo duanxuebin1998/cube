@@ -1122,6 +1122,12 @@ static void __attribute__((unused)) Sensor_CommCheckAndLog(const char *tag)
                tag,
                (unsigned long)g_deviceParams.sensorType);
 
+        /* 通信自检先建立密度模式，避免把上一次液位流程的残留模式误报为通信失败。 */
+        ret = SensorService_EnableDensityMode();
+        Test_SensorCommPrintResult(tag, "DM4切换密度模式", ret, &comm_fail_cnt);
+        if (ret != NO_ERROR) {
+            return;
+        }
         ret = SensorService_ReadDensity(&frequency, &density, &temp);
         Test_SensorCommPrintResult(tag, "DM4读取频率/密度/温度", ret, &comm_fail_cnt);
         if (ret == NO_ERROR) {
@@ -1274,9 +1280,13 @@ void SensorWireless_CommTest(void)
             printf("DSM一代密度数据: 频率=%.3f Hz 密度=%.3f 温度=%.3f\r\n", frequency, density, temp);
         }
     } else if (g_deviceParams.sensorType == DM4_SENSOR) {
-        ret = SensorService_ReadDensity(&frequency, &density, &temp);
-        if (Test_CommRecordResult("DM4单次读取频率/密度/温度", ret, &ok_count, &fail_count)) {
-            printf("DM4密度数据: 频率=%.3f Hz 密度=%.3f 温度=%.3f\r\n", frequency, density, temp);
+        /* 综合通信测试也必须显式建立业务模式，不能依赖传感器上一次运行状态。 */
+        ret = SensorService_EnableDensityMode();
+        if (Test_CommRecordResult("DM4切换密度模式", ret, &ok_count, &fail_count)) {
+            ret = SensorService_ReadDensity(&frequency, &density, &temp);
+            if (Test_CommRecordResult("DM4单次读取频率/密度/温度", ret, &ok_count, &fail_count)) {
+                printf("DM4密度数据: 频率=%.3f Hz 密度=%.3f 温度=%.3f\r\n", frequency, density, temp);
+            }
         }
     } else if (g_deviceParams.sensorType == LTD_SENSOR) {
         ret = (uint32_t)MULTIPARAM_V3_Read_Density(&density);
