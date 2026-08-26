@@ -2,18 +2,19 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "CPU2: 配置CMake",
+      "label": "CPU2 Debug: 配置CMake",
       "type": "shell",
       "command": "cmake",
       "args": [
         "-S",
         "${workspaceFolder}\\LTD_MAIN_CPU2",
         "-B",
-        "${workspaceFolder}\\build\\LTD_MAIN_CPU2",
+        "${workspaceFolder}\\build\\LTD_MAIN_CPU2\\debug",
         "-G",
         "Ninja",
         "-DCMAKE_TOOLCHAIN_FILE=${workspaceFolder}\\cmake\\toolchain-arm-none-eabi.cmake",
-        "-DCMAKE_BUILD_TYPE=Debug"
+        "-DCMAKE_BUILD_TYPE=Debug",
+        "-DCPU2_BUILD_VARIANT=debug"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -21,19 +22,15 @@
       "problemMatcher": []
     },
     {
-      "label": "CPU2: 编译",
+      "label": "CPU2 Debug: 编译",
       "type": "shell",
       "command": "cmake",
       "args": [
         "--build",
-        "${workspaceFolder}\\build\\LTD_MAIN_CPU2"
+        "${workspaceFolder}\\build\\LTD_MAIN_CPU2\\debug"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
-      },
-      "group": {
-        "kind": "build",
-        "isDefault": true
       },
       "problemMatcher": [
         "$gcc"
@@ -52,14 +49,14 @@
       "problemMatcher": []
     },
     {
-      "label": "CPU2: STLINK下载",
+      "label": "CPU2 Debug: STLINK下载",
       "type": "process",
       "command": "C:\\Program Files (x86)\\STMicroelectronics\\STM32 ST-LINK Utility\\ST-LINK Utility\\ST-LINK_CLI.exe",
       "args": [
         "-c",
         "SWD",
         "-P",
-        "${workspaceFolder}\\build\\LTD_MAIN_CPU2\\LTD_MAIN_CPU2.hex",
+        "${workspaceFolder}\\build\\LTD_MAIN_CPU2\\debug\\LTD_MAIN_CPU2_DEBUG.hex",
         "-V",
         "after_programming",
         "-Rst",
@@ -72,7 +69,7 @@
       "problemMatcher": []
     },
     {
-      "label": "CPU2: STLINK下载(复位连接)",
+      "label": "CPU2 Debug: STLINK下载(复位连接)",
       "type": "process",
       "command": "C:\\Program Files (x86)\\STMicroelectronics\\STM32 ST-LINK Utility\\ST-LINK Utility\\ST-LINK_CLI.exe",
       "args": [
@@ -80,7 +77,7 @@
         "SWD",
         "UR",
         "-P",
-        "${workspaceFolder}\\build\\LTD_MAIN_CPU2\\LTD_MAIN_CPU2.hex",
+        "${workspaceFolder}\\build\\LTD_MAIN_CPU2\\debug\\LTD_MAIN_CPU2_DEBUG.hex",
         "-V",
         "after_programming",
         "-Rst",
@@ -93,20 +90,122 @@
       "problemMatcher": []
     },
     {
-      "label": "CPU2: 编译并下载",
+      "label": "CPU2 Debug: 编译并下载",
       "dependsOrder": "sequence",
       "dependsOn": [
-        "CPU2: 编译",
-        "CPU2: STLINK下载"
+        "CPU2 Debug: 配置CMake",
+        "CPU2 Debug: 编译",
+        "CPU2 Debug: STLINK下载"
       ],
       "problemMatcher": []
     },
     {
-      "label": "CPU2: 编译并下载(复位连接)",
+      "label": "CPU2 Debug: 编译并下载(复位连接)",
       "dependsOrder": "sequence",
       "dependsOn": [
-        "CPU2: 编译",
-        "CPU2: STLINK下载(复位连接)"
+        "CPU2 Debug: 配置CMake",
+        "CPU2 Debug: 编译",
+        "CPU2 Debug: STLINK下载(复位连接)"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "CPU2 Release: 配置CMake",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "-S",
+        "${workspaceFolder}\\LTD_MAIN_CPU2",
+        "-B",
+        "${workspaceFolder}\\build\\LTD_MAIN_CPU2\\release",
+        "-G",
+        "Ninja",
+        "-DCMAKE_TOOLCHAIN_FILE=${workspaceFolder}\\cmake\\toolchain-arm-none-eabi.cmake",
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DCPU2_BUILD_VARIANT=release"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "CPU2 Release: 编译",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build",
+        "${workspaceFolder}\\build\\LTD_MAIN_CPU2\\release"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+    {
+      "label": "CPU2 Release: STLINK下载",
+      "type": "process",
+      "command": "C:\\Program Files (x86)\\STMicroelectronics\\STM32 ST-LINK Utility\\ST-LINK Utility\\ST-LINK_CLI.exe",
+      "args": [
+        "-c",
+        "SWD",
+        "-P",
+        "${workspaceFolder}\\build\\LTD_MAIN_CPU2\\release\\LTD_MAIN_CPU2_RELEASE.hex",
+        "-V",
+        "after_programming",
+        "-Rst",
+        "-Run",
+        "-NoPrompt"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "CPU2 Release: STLINK下载(复位连接)",
+      "type": "process",
+      "command": "C:\\Program Files (x86)\\STMicroelectronics\\STM32 ST-LINK Utility\\ST-LINK Utility\\ST-LINK_CLI.exe",
+      "args": [
+        "-c",
+        "SWD",
+        "UR",
+        "-P",
+        "${workspaceFolder}\\build\\LTD_MAIN_CPU2\\release\\LTD_MAIN_CPU2_RELEASE.hex",
+        "-V",
+        "after_programming",
+        "-Rst",
+        "-Run",
+        "-NoPrompt"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "CPU2 Release: 编译并下载",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "CPU2 Release: 配置CMake",
+        "CPU2 Release: 编译",
+        "CPU2 Release: STLINK下载"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "CPU2 Release: 编译并下载(复位连接)",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "CPU2 Release: 配置CMake",
+        "CPU2 Release: 编译",
+        "CPU2 Release: STLINK下载(复位连接)"
       ],
       "problemMatcher": []
     },

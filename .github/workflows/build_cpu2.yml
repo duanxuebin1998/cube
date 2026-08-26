@@ -15,10 +15,19 @@ jobs:
         include:
           - target: cpu2-debug
             source_dir: LTD_MAIN_CPU2
-            build_dir: build/LTD_MAIN_CPU2
+            build_dir: build/LTD_MAIN_CPU2/debug
+            build_type: Debug
+            variant: debug
+          - target: cpu2-release
+            source_dir: LTD_MAIN_CPU2
+            build_dir: build/LTD_MAIN_CPU2/release
+            build_type: Release
+            variant: release
           - target: cpu3-debug
             source_dir: LTD_DISPLAY_CPU3
             build_dir: build/LTD_DISPLAY_CPU3
+            build_type: Debug
+            variant: debug
 
     steps:
       - name: Checkout
@@ -37,7 +46,8 @@ jobs:
         run: |
           cmake -S "${{ matrix.source_dir }}" -B "${{ matrix.build_dir }}" -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="${GITHUB_WORKSPACE}/cmake/toolchain-arm-none-eabi.cmake" \
-            -DCMAKE_BUILD_TYPE=Debug
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCPU2_BUILD_VARIANT=${{ matrix.variant }}
 
       - name: Build (${{ matrix.target }})
         run: |

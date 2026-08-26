@@ -23,6 +23,7 @@
 /* USER CODE BEGIN 0 */
 #include "stdio.h"
 #include "hostcommu.h"
+#include "serial_command.h"
 #include "Protocols/Dm4/V4/multiparam_v4_communication.h"
 #include "sensor_uart6_owner.h"
 #ifdef __GNUC__
@@ -173,6 +174,11 @@ void CPU2_UartRecoveryPollFromTim4Isr(void)
 		if (huart == NULL) {
 			continue;
 		}
+#if !CPU2_USART1_COMMAND_RX_ENABLED
+		if (index == 0U) {
+			continue;
+		}
+#endif
 
 		/* 发送期间DMA接收按现有半双工流程暂停，不得被健康检查提前切回接收。 */
 		if (huart->gState == HAL_UART_STATE_BUSY_TX) {
@@ -447,7 +453,13 @@ void MX_USART1_UART_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN USART1_Init 2 */
+	#if CPU2_USART1_COMMAND_RX_ENABLED
 	(void)CPU2_UartRestartRxDMA(&huart1);
+	#else
+	__HAL_UART_DISABLE_IT(&huart1, UART_IT_IDLE);
+	(void)HAL_UART_DMAStop(&huart1);
+	HAL_NVIC_DisableIRQ(USART1_IRQn);
+	#endif
   /* USER CODE END USART1_Init 2 */
 
 }

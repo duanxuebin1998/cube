@@ -3382,3 +3382,26 @@ CPU3通信和界面：
 - 基于HEAD `bfcb00db8b67`叠加本次USART1 RX上拉和V1.42.5.1版本头，在隔离候选树执行`cmake --build build/LTD_MAIN_CPU2 --clean-first -j 8`通过，132个目标完成编译链接；`text=357740`、`data=2352`、`bss=59624`。
 - 固件固定名与版本名HEX的SHA-256均为`49D34E627DE9CEFC506781259F4680339FDA99974129DE22DFFD7F3C9303DBC6`，BIN的SHA-256为`D6DB26704E91B840AD5F47F2849CB4EFE98323A2E7DBFC50B29A0668E3C4309F`；源文件编码、`git diff --check`和版本门禁在提交前复核。
 - 当前主工作树clean-first构建受既有未纳入本次提交的DM4文件改动阻断；未执行真实目标板、示波器/逻辑分析仪、串口外部上拉冲突和现场验证。
+
+## 2026-08-26 - CPU2 Debug/Release双构建
+
+版本：
+- CPU2：`V1.42.5.1 -> V1.42.6.0`（PATCH）。
+- CPU3：保持`V1.40.1.0`。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION`保持35，CPU2/CPU3共享寄存器、命令、状态和字段不变。
+- CPU2 `DEVICE_PARAM_VERSION`保持3，CPU3 `CPU3_PARAM_VERSION`保持`0x0007`；参数布局、元信息和CRC范围不变，升级不恢复出厂、不清除现场参数。
+- Debug固件保留USART1调试命令接收；Release固件关闭USART1 RX DMA、IDLE中断和USART1恢复轮询。USART1发送、CPU2测量控制和对外业务协议不变。
+
+本次修改：
+- CMake增加`CPU2_BUILD_VARIANT=debug|release`，按变体注入`CPU2_USART1_COMMAND_RX_ENABLED`并拒绝非法值。
+- 固件固定名和版本名增加`DEBUG`或`RELEASE`后缀，避免两种构建产物互相覆盖。
+- VS Code增加CPU2 Debug/Release独立配置、编译和烧写任务；GitHub Actions同时构建CPU2 Debug、CPU2 Release和CPU3 Debug。
+- CPU2版本升至V1.42.6.0，并补充对应改动与测试方案。
+
+验证：
+- `.vscode/tasks.json`解析通过，CMake非法`production`变体按预期拒绝；源码编码和`git diff --check`通过。
+- CPU2 V1.42.6.0 Debug和Release在基于HEAD `692c51d047e0`的隔离候选树执行clean-first构建，均完成132个目标；变体宏分别为1和0。
+- Debug为`text=357956`、`data=2352`、`bss=59624`，固定名与版本名HEX的SHA-256均为`D0B42D76A5B967D87BADCC4E8C22612A52AE02447905D8B18354D8A2826BD524`；Release为`text=318156`、`data=2352`、`bss=59600`，对应HEX的SHA-256均为`971095980AD0998E8B7D3EAB2B4360BCFECF114A46365EABE30E59B9D7AAC87F`。
+- 尚未执行目标板烧写、USART1 Debug命令实机收发、Release RX静默、DMA/IDLE中断观测、台架或现场验证。

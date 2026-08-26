@@ -10,6 +10,10 @@
 
 #include <stdint.h>
 
+#ifndef CPU2_USART1_COMMAND_RX_ENABLED
+#define CPU2_USART1_COMMAND_RX_ENABLED 1U
+#endif
+
 /**
  * @brief 在 USART1 中断中记录一个调试串口接收字节。
  *
