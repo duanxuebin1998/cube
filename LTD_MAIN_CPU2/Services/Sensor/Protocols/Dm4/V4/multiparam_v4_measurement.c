@@ -8,6 +8,7 @@
 
 #include "main.h"
 #include "multiparam_v4_communication.h"
+#include "multiparam_v4_internal.h" /* 频率解码与原始值转换接口，支撑R04/R07/R06无效值判定。 */
 #include "system_parameter.h"
 
 #include <math.h>
@@ -293,19 +294,33 @@ static uint32_t MULTIPARAM_V4_RefreshInteractiveDebugAfterCoreRead(void)
 }
 
 /*
- * 函数用途：识别四代密度模式尚未扫到有效结果的组合值。
- * 调用场景：交互读取或主动快照同时得到R04频率和R07密度后。
- * 关键约束：仅R04为0时返回真，INT32_MIN和其他无效频率仍按故障处理。
+ * 函数用途：识别V4密度模式中R04是否为无效频率值。
+ * 调用场景：交互读取和主动快照统一判断R04数据有效性。
+ * 关键约束：0、INT32_MIN及超过业务上限的频率均按无效值处理。
  */
 static uint8_t MULTIPARAM_V4_IsDensityNotScanned(int32_t raw_frequency)
 {
-    return (uint8_t)((raw_frequency == 0) ? 1U : 0U);
+    uint32_t frequency_hz = 0U;
+    uint8_t fast_sweep_completed = 0U;
+
+    /* R04为0表示快扫尚未扫到结果。 */
+    if (raw_frequency == 0) {
+        return 1U;
+    }
+    /* 解码失败的组合值同样代表未上报有效频率，按未扫到交给上层等待。 */
+    if (MULTIPARAM_V4_DecodeFrequency(raw_frequency,
+                                      &frequency_hz,
+                                      &fast_sweep_completed) == 0U) {
+        return 1U;
+    }
+    /* 超过业务上限的频率视为无效，避免误报格式错误打断密度等待。 */
+    return (uint8_t)(frequency_hz > MULTIPARAM_V4_FREQUENCY_MAX_HZ);
 }
 
 /*
  * 函数用途：在交互通信方式下读取并发布密度模式的R04、R07和R06。
  * 调用场景：密度测量流程需要一次同步结果时。
- * 关键约束：先读R02确认密度模式，全部核心量通过范围检查后才更新输出和调试快照。
+ * 关键约束：先读R02确认密度模式；R04/R07无效值按0归一后交给上层继续等待，R06温度无效置NAN。
  */
 static uint32_t MULTIPARAM_V4_ReadInteractiveDensity(float *frequency_hz,
                                                       float *density_kg_m3,
@@ -315,7 +330,8 @@ static uint32_t MULTIPARAM_V4_ReadInteractiveDensity(float *frequency_hz,
     int32_t frequency_value;
     uint32_t normalized_frequency;
     uint8_t fast_sweep_completed;
-    uint8_t density_not_scanned;
+    uint8_t density_not_scanned = 0U;
+    uint32_t temperature_raw;
     uint32_t status_word;
     uint32_t primask;
     uint32_t result;
@@ -329,38 +345,68 @@ static uint32_t MULTIPARAM_V4_ReadInteractiveDensity(float *frequency_hz,
     }
     result = MULTIPARAM_V4_ReadIntParam(4U, &frequency_value);
     if (result == NO_ERROR) {
-        result = MULTIPARAM_V4_ReadFloatParam(7U, density_kg_m3);
+        /* 先判定R04有效性：无效时跳过频率解码，后续统一按未扫到语义归零等待。 */
+        if (MULTIPARAM_V4_IsDensityNotScanned(frequency_value) != 0U) {
+            density_not_scanned = 1U;
+            normalized_frequency = 0U;
+            fast_sweep_completed = 0U;
+        } else if (MULTIPARAM_V4_DecodeFrequency(frequency_value,
+                                                 &normalized_frequency,
+                                                 &fast_sweep_completed) == 0U) {
+            density_not_scanned = 1U;
+            normalized_frequency = 0U;
+            fast_sweep_completed = 0U;
+        }
     }
     if (result == NO_ERROR) {
-        result = MULTIPARAM_V4_ReadFloatParam(6U, temperature_c);
+        uint32_t density_raw = 0U;
+
+        /* R07改读原始值：范围外的密度归0交给上层继续等待，不再提前返回格式错误。 */
+        result = MULTIPARAM_V4_ReadParamRaw(7U, &density_raw);
+        if (result == NO_ERROR) {
+            *density_kg_m3 = MULTIPARAM_V4_RawToFloat(density_raw);
+            if ((!isfinite(*density_kg_m3)) ||
+                (*density_kg_m3 < MULTIPARAM_V4_DENSITY_MIN_KG_M3) ||
+                (*density_kg_m3 > MULTIPARAM_V4_DENSITY_MAX_KG_M3)) {
+                *density_kg_m3 = 0.0f;
+            }
+        }
+        if (density_not_scanned != 0U) {
+            *density_kg_m3 = 0.0f;
+        }
+    }
+    if (result == NO_ERROR) {
+        /* R06温度无效时置NAN：温度异常不中断密度等待，由上层按无效温度处理。 */
+        result = MULTIPARAM_V4_ReadParamRaw(6U, &temperature_raw);
+        if (result == NO_ERROR) {
+            *temperature_c = MULTIPARAM_V4_RawToFloat(temperature_raw);
+            if ((!isfinite(*temperature_c)) ||
+                (*temperature_c < MULTIPARAM_V4_TEMPERATURE_MIN_C) ||
+                (*temperature_c > MULTIPARAM_V4_TEMPERATURE_MAX_C)) {
+                *temperature_c = NAN;
+            }
+        }
     }
     if (result != NO_ERROR) {
         return result;
     }
-    density_not_scanned = MULTIPARAM_V4_IsDensityNotScanned(frequency_value);
-    if ((!isfinite(*density_kg_m3)) || (*density_kg_m3 < MULTIPARAM_V4_DENSITY_MIN_KG_M3) ||
-        (*density_kg_m3 > MULTIPARAM_V4_DENSITY_MAX_KG_M3) ||
-        (!isfinite(*temperature_c)) || (*temperature_c < MULTIPARAM_V4_TEMPERATURE_MIN_C) ||
-        (*temperature_c > MULTIPARAM_V4_TEMPERATURE_MAX_C)) {
-        return SENSOR_RESP_FORMAT_ERROR;
-    }
-    /* R04为0表示尚未扫到，清除可能残留的R07后交给上层继续等待。 */
+    /* R04无效时按0处理，R07无效值也按0交给上层继续等待。 */
     if (density_not_scanned != 0U) {
         normalized_frequency = 0U;
         fast_sweep_completed = 0U;
         *density_kg_m3 = 0.0f;
-    } else if ((MULTIPARAM_V4_DecodeFrequency(frequency_value,
-                                              &normalized_frequency,
-                                              &fast_sweep_completed) == 0U) ||
-               (normalized_frequency > MULTIPARAM_V4_FREQUENCY_MAX_HZ)) {
-        return SENSOR_RESP_FORMAT_ERROR;
+    } else {
+        density_not_scanned = 0U;
     }
 
     *frequency_hz = (float)normalized_frequency;
     primask = __get_PRIMASK();
     __disable_irq();
     g_measurement.debug_data.frequency = normalized_frequency;
-    g_measurement.debug_data.temperature = TEMP_TO_RAW(*temperature_c);
+    /* 温度无效时调试快照记0，避免NAN转原始值写入垃圾数据。 */
+    g_measurement.debug_data.temperature = isfinite(*temperature_c)
+                                               ? TEMP_TO_RAW(*temperature_c)
+                                               : 0U;
     if (primask == 0U) {
         __enable_irq();
     }
@@ -370,7 +416,7 @@ static uint32_t MULTIPARAM_V4_ReadInteractiveDensity(float *frequency_hz,
 /*
  * 函数用途：按当前V4通信方式读取频率、密度和温度三项核心量。
  * 调用场景：DM4驱动的统一密度读取回调。
- * 关键约束：主动方式消费同一份新鲜快照；交互方式保持原R07事务及无效值语义。
+ * 关键约束：主动方式消费同一份新鲜快照；未扫到及无效值按0/NAN归一后返回，交给上层等待。
  */
 uint32_t MULTIPARAM_V4_MeasurementReadDensity(float *frequency_hz,
                                                float *density_kg_m3,
@@ -400,25 +446,23 @@ uint32_t MULTIPARAM_V4_MeasurementReadDensity(float *frequency_hz,
         (MULTIPARAM_V4_STATUS_TEMPERATURE_NEW | MULTIPARAM_V4_STATUS_DENSITY_NEW)) {
         return SENSOR_DATA_STALE;
     }
-    if (isnan(snapshot.density_kg_m3) || isnan(snapshot.temperature_c)) {
-        return SENSOR_DATA_STALE;
-    }
     density_not_scanned =
         MULTIPARAM_V4_IsDensityNotScanned(snapshot.measurement_frequency_raw);
-    if ((!isfinite(snapshot.density_kg_m3)) ||
-        (snapshot.density_kg_m3 < MULTIPARAM_V4_DENSITY_MIN_KG_M3) ||
-        (snapshot.density_kg_m3 > MULTIPARAM_V4_DENSITY_MAX_KG_M3) ||
-        (!isfinite(snapshot.temperature_c)) ||
+    /* 快照温度越界或非有限值时置NAN，温度异常不阻断密度结果发布。 */
+    if ((!isfinite(snapshot.temperature_c)) ||
         (snapshot.temperature_c < MULTIPARAM_V4_TEMPERATURE_MIN_C) ||
         (snapshot.temperature_c > MULTIPARAM_V4_TEMPERATURE_MAX_C)) {
-        return SENSOR_RESP_FORMAT_ERROR;
+        snapshot.temperature_c = NAN;
     }
-    /* 主动快照沿用交互模式的未扫到语义，其他无效频率不放宽。 */
-    if (((snapshot.measurement_frequency_valid == 0U) && (density_not_scanned == 0U)) ||
-        ((snapshot.measurement_frequency_valid != 0U) &&
-         (snapshot.measurement_frequency_hz > MULTIPARAM_V4_FREQUENCY_MAX_HZ))) {
-        return SENSOR_RESP_FORMAT_ERROR;
+    /* 密度未扫到或范围外时归0，交给上层等待循环继续轮询。 */
+    if (density_not_scanned != 0U) {
+        snapshot.density_kg_m3 = 0.0f;
+    } else if ((!isfinite(snapshot.density_kg_m3)) ||
+               (snapshot.density_kg_m3 < MULTIPARAM_V4_DENSITY_MIN_KG_M3) ||
+               (snapshot.density_kg_m3 > MULTIPARAM_V4_DENSITY_MAX_KG_M3)) {
+        snapshot.density_kg_m3 = 0.0f;
     }
+    /* 未扫到时频率与密度输出0，向调用方表达继续等待语义。 */
     *frequency_hz = (density_not_scanned != 0U)
                         ? 0.0f
                         : (float)snapshot.measurement_frequency_hz;
