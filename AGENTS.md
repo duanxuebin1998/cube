@@ -17,7 +17,7 @@
 
 ## 仓库根目录与临时产物门禁
 
-- 仓库根目录目录白名单为：`.agents/`、`.git/`、`.github/`、`.metadata/`、`.vscode/`、`.worktrees/`、`build/`、`cmake/`、`docs/`、`docs-site/`、`LTD_DISPLAY_CPU3/`、`LTD_MAIN_CPU2/`、`old/`、`outputs/`、`tmp/`、`tools/`、`WirelessHost_V4.1_init/`。`.agents/` 只存放仓库级 Codex skill。机器可执行白名单以 `tools/check_workspace_root_layout.ps1` 中的 `$AllowedRootDirectories` 为准；新增根目录前必须先取得明确批准并同步更新本节和脚本。
+- 仓库根目录目录白名单为：`.agents/`、`.git/`、`.github/`、`.metadata/`、`.vscode/`、`.worktrees/`、`.workbuddy/`、`build/`、`cmake/`、`docs/`、`docs-site/`、`LTD_DISPLAY_CPU3/`、`LTD_MAIN_CPU2/`、`old/`、`outputs/`、`tmp/`、`tools/`、`WirelessHost_V4.1_init/`。`.agents/` 只存放仓库级 Codex skill；`.workbuddy/` 仅用于保留 WorkBuddy 本机记忆和任务辅助数据，不纳入 Git 跟踪。机器可执行白名单以 `tools/check_workspace_root_layout.ps1` 中的 `$AllowedRootDirectories` 为准；新增根目录前必须先取得明确批准并同步更新本节和脚本。
 - `build/` 专用于 CPU2/CPU3 固件构建，一级子项只允许 `build/LTD_MAIN_CPU2/` 和 `build/LTD_DISPLAY_CPU3/`；不得在其中存放主机测试、分析器、调试日志、临时可执行文件或其它工具产物。
 - 固件以外的临时产物只能写入 `tmp/<任务号>/`；需要长期保留的本机证据写入 `outputs/<任务号>/`。`outputs/` 不纳入 Git 跟踪，历史跟踪文件删除后不得使用 `git add -f` 恢复。主机测试及分析器的编译输出统一放在 `tmp/<任务号>/build/`，不得在仓库根目录、`build/` 或源码、正式文档目录旁创建临时文件夹。任务号优先使用 Codex 任务 ID；没有任务 ID 时使用唯一、可追溯的任务标签。
 - 任务开始前运行 `powershell -ExecutionPolicy Bypass -File tools/check_workspace_root_layout.ps1 -Mode Snapshot -SnapshotPath tmp/<任务号>/root-layout-before.json`；任务结束前运行同一脚本的 `-Mode Compare`。基线后新增的白名单外根目录必须立即失败并先追查来源，不得继续交付。

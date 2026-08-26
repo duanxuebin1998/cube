@@ -71,3 +71,12 @@ tools/
 
 # Local generated outputs. Keep the entire directory on this machine only.
 outputs/
+
+# Local-only unit test sources and documents. Keep them available for local
+# verification, but do not add them to Git commits.
+LTD_MAIN_CPU2/tests/
+LTD_DISPLAY_CPU3/tests/
+docs/06_SIL功能安全认证/01_计划与清单/单元测试*
+
+# WorkBuddy agent workspace data (local only, never commit).
+.workbuddy/
