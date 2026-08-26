@@ -3362,3 +3362,23 @@ CPU3通信和界面：
 - `check_sensor_probe_trace.py`、`check_wireless_rssi_contract.py`和`check_sensor_service_architecture.py`通过；CP936源码严格解码和CRLF检查通过。
 - CPU2 V1.42.5.0在隔离候选树执行clean-first构建通过，132个目标完成编译链接；`text=357556`、`data=2352`、`bss=59624`。固定名和版本名HEX的SHA-256均为`AF6335F2A55C0C4FC367F0D71FAD715E9F8DD1C592F6CA57C764B5C4353A6424`，BIN的SHA-256为`A8E3C771537EAAFDB4CDA5CB81F5F20486FBEBBF3027B9703DCFA62CBE0C7090`。
 - 尚未执行真实DM4、V3、DSM、CH9141K、RS485、目标板、台架、现场或SIL验证；需复测V4主动上报、交互模式空气探头及真实通信超时场景。
+
+## 2026-08-26 - CPU2 USART1 RX引脚启用内部上拉
+
+版本：
+- CPU2：`V1.42.5.0 -> V1.42.5.1`（BUILD）。
+- CPU3：保持`V1.40.1.0`。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION`保持35；不修改CPU2/CPU3共享寄存器、共享命令、共享状态和共享字段。
+- CPU2 `DEVICE_PARAM_VERSION`保持3；`DeviceParameters`结构、CRC范围和FRAM布局不变，升级不恢复出厂、不清除现场参数。
+- USART1仍使用PA9/PA10和GPIO_AF7_USART1，串口帧格式、波特率和DMA链路保持兼容；仅改变PA10 RX的GPIO内部偏置。
+
+本次修改：
+- CPU2 `HAL_UART_MspInit()`将USART1 TX与RX分开初始化，PA9 TX保持`GPIO_NOPULL`，PA10 RX设置`GPIO_PULLUP`。
+- CubeMX配置同步记录`PA10.GPIO_PuPd=GPIO_PULLUP`，避免后续重新生成代码时丢失硬件配置。
+
+验证：
+- 基于HEAD `bfcb00db8b67`叠加本次USART1 RX上拉和V1.42.5.1版本头，在隔离候选树执行`cmake --build build/LTD_MAIN_CPU2 --clean-first -j 8`通过，132个目标完成编译链接；`text=357740`、`data=2352`、`bss=59624`。
+- 固件固定名与版本名HEX的SHA-256均为`49D34E627DE9CEFC506781259F4680339FDA99974129DE22DFFD7F3C9303DBC6`，BIN的SHA-256为`D6DB26704E91B840AD5F47F2849CB4EFE98323A2E7DBFC50B29A0668E3C4309F`；源文件编码、`git diff --check`和版本门禁在提交前复核。
+- 当前主工作树clean-first构建受既有未纳入本次提交的DM4文件改动阻断；未执行真实目标板、示波器/逻辑分析仪、串口外部上拉冲突和现场验证。
