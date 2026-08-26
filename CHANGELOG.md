@@ -3341,3 +3341,24 @@ CPU3通信和界面：
 - `py tools/check_read_part_params_refresh_contract.py`、`check_multiparam_v4_protocol.py`、`check_sensor_service_architecture.py`、`check_sensor_fault_contract.py`、`check_dsm_compat_contract.py`和`check_parameter_measurement_fault_contract.py`通过。
 - `cmake --build build/LTD_MAIN_CPU2 --clean-first -j 8`通过，132个目标完成编译链接，生成CPU2 V1.42.4.0 ELF/HEX/BIN；`text=356716`、`data=2352`、`bss=59624`。
 - 尚未执行真实DM4/DSM传感器、RS485、无线滑环、目标板、台架、现场或SIL验证；需在传感器先处于液位模式时复测命令15和DM4通信自检。
+
+## 2026-08-26 - 修复SC传感器识别顺序与空气密度无效判定
+
+版本：
+- CPU2：`V1.42.4.0 -> V1.42.5.0`（PATCH）。
+- CPU3：保持`V1.40.1.0`。
+
+协议版本/兼容性：
+- CPU2/CPU3 `DEVICE_PROTOCOL_VERSION`保持35；共享寄存器、共享命令、共享状态和共享字段不变，CPU3固件无需修改。
+- CPU2 `DEVICE_PARAM_VERSION`保持3，`DeviceParameters`结构、字段偏移、CRC范围和FRAM布局不变；升级不恢复出厂、不清除现场参数。
+- DM4 V4、V3、DSM和CH9141K线上帧格式、命令及错误码保持兼容；仅调整CPU2调试命令`SC`的调用顺序和结果归类。
+
+本次修改：
+- `SC`不再在传感器识别前单独执行蓝牙AT状态查询，统一委托识别流程先监听V4主动帧；主动帧未命中时才查询蓝牙并在恢复透传后再次监听，避免主动DMA占用UART6时误报`0x000D0021`。
+- DM4交互读取返回`SENSOR_DATA_STALE`时，`SC`按空气中允许无有效密度处理，记录通信正常但不伪造测量值；主动流超时和其它错误仍计为异常。
+- 同步CPU2串口调试说明、V1.42.5.0改动与测试方案和本机传感器流程导航。
+
+验证：
+- `check_sensor_probe_trace.py`、`check_wireless_rssi_contract.py`和`check_sensor_service_architecture.py`通过；CP936源码严格解码和CRLF检查通过。
+- CPU2 V1.42.5.0在隔离候选树执行clean-first构建通过，132个目标完成编译链接；`text=357556`、`data=2352`、`bss=59624`。固定名和版本名HEX的SHA-256均为`AF6335F2A55C0C4FC367F0D71FAD715E9F8DD1C592F6CA57C764B5C4353A6424`，BIN的SHA-256为`A8E3C771537EAAFDB4CDA5CB81F5F20486FBEBBF3027B9703DCFA62CBE0C7090`。
+- 尚未执行真实DM4、V3、DSM、CH9141K、RS485、目标板、台架、现场或SIL验证；需复测V4主动上报、交互模式空气探头及真实通信超时场景。

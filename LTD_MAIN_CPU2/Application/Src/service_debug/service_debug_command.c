@@ -107,24 +107,6 @@ static uint8_t Test_CommRecordResult(const char *name, uint32_t ret, uint32_t *o
 }
 
 /**
- * @brief  检查手动通信测试是否需要中止
- * @note   串口调试过程中收到新的有效命令时退出，避免测试函数长时间占用设备。
- *
- * @param fail_count 当前连续或累计通信失败次数，用于判断是否达到提前停止门限。
- * @return 1 表示检测到有效命令切换请求，函数已递增 fail_count 并要求结束通信测试；0 表示当前没有命令切换请求，可继续测试。
- */
-static uint8_t Test_CommShouldStop(uint32_t *fail_count)
-{
-    if (Test_ShouldAbortForCommandSwitch()) {
-        (*fail_count)++;
-        printf("通信测试被命令切换打断\r\n");
-        return 1U;
-    }
-
-    return 0U;
-}
-
-/**
  * @brief 处理测试过程中收到的外部命令切换请求。
  * @return 1 表示检测到并已处理外部命令切换请求；没有有效切换请求时返回 0。
  */
@@ -1254,13 +1236,7 @@ void SensorWireless_CommTest(void)
         return;
     }
 
-    ret = WirelessPairing_CheckBluetoothLink();
-    (void)Test_CommRecordResult("蓝牙主机/从机连接状态检查", ret, &ok_count, &fail_count);
-
-    if (Test_CommShouldStop(&fail_count)) {
-        return;
-    }
-
+    /* 识别流程先监听V4主动帧，未命中才查询蓝牙，避免主动DMA占用UART6时进入AT模式。 */
     ret = SensorService_Detect();
     if (!Test_CommRecordResult("传感器协议识别", ret, &ok_count, &fail_count)) {
         printf("协议识别失败，跳过传感器参数读取\r\n");
@@ -1284,7 +1260,12 @@ void SensorWireless_CommTest(void)
         ret = SensorService_EnableDensityMode();
         if (Test_CommRecordResult("DM4切换密度模式", ret, &ok_count, &fail_count)) {
             ret = SensorService_ReadDensity(&frequency, &density, &temp);
-            if (Test_CommRecordResult("DM4单次读取频率/密度/温度", ret, &ok_count, &fail_count)) {
+            if ((ret == SENSOR_DATA_STALE) &&
+                (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_INTERACTIVE)) {
+                /* 空气中允许密度无效；交互查询已完成，综合通信测试不计故障。 */
+                ok_count++;
+                printf("[正常]\tDM4单次读取频率/密度/温度\t交互通信正常，当前密度无有效值（空气中允许）\r\n");
+            } else if (Test_CommRecordResult("DM4单次读取频率/密度/温度", ret, &ok_count, &fail_count)) {
                 printf("DM4密度数据: 频率=%.3f Hz 密度=%.3f 温度=%.3f\r\n", frequency, density, temp);
             }
         }
