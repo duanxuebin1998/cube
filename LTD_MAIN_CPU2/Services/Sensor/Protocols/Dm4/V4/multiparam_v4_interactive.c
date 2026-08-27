@@ -1,7 +1,8 @@
 /*
  * 模块职责：执行DM4-V4的8字节读写事务、模式切换和密度模式功能开关。
- * 半双工约束：主动帧结束后至少等待15ms才可发送切换指令；过晚则放弃当前窗口，
- * 等待下一主动帧重新计时。停流事务中若主动帧抢占，必须先保存该帧再重试。
+ * 半双工约束：任意V4事务退出后至少等待30ms才发送下一请求；主动帧结束后
+ * 还需至少等待15ms才可发送切换指令。过晚则放弃当前窗口，等待下一主动帧重新计时。
+ * 停流事务中若主动帧抢占，必须先保存该帧再重试。
  * 重试边界：只有读操作和明确值写入可按幂等策略重试，L/M翻转命令不得盲目重发。
  */
 #include "multiparam_v4_internal.h"
@@ -17,6 +18,51 @@
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
+
+static uint32_t s_last_v4_transaction_end_tick = 0U;
+static uint8_t s_last_v4_transaction_end_valid = 0U;
+
+/*
+ * 函数用途：判断上一笔V4事务结束后是否已满足最小帧间隔。
+ * 调用场景：普通交互发送前的等待以及主动转交互安全窗口判定。
+ * 关键约束：首笔事务直接允许；时间差使用无符号减法以兼容滴答回绕。
+ */
+static uint8_t MULTIPARAM_V4_IsInterFrameGapElapsed(void)
+{
+    if (s_last_v4_transaction_end_valid == 0U) {
+        return 1U;
+    }
+    return ((HAL_GetTick() - s_last_v4_transaction_end_tick) >=
+            MULTIPARAM_V4_INTER_FRAME_GAP_MS) ? 1U : 0U;
+}
+
+/*
+ * 函数用途：在下一笔V4请求前等待最小帧间隔。
+ * 调用场景：所有普通V4交互事务申请UART6所有权之前。
+ * 关键约束：只能在线程态调用；允许命令切换的调用可在等待期间退出。
+ */
+static uint32_t MULTIPARAM_V4_WaitInterFrameGap(uint8_t check_command_switch)
+{
+    while (MULTIPARAM_V4_IsInterFrameGapElapsed() == 0U) {
+        if ((check_command_switch != 0U) &&
+            (HasEffectiveCommandSwitchRequest() != 0U)) {
+            return STATE_SWITCH;
+        }
+        HAL_Delay(1U);
+    }
+    return NO_ERROR;
+}
+
+/*
+ * 函数用途：记录本笔V4事务退出的时刻。
+ * 调用场景：普通交互事务和停止主动上报事务返回后。
+ * 关键约束：无论有效应答、异常帧或超时都重新起算30ms间隔。
+ */
+static void MULTIPARAM_V4_MarkTransactionEnd(void)
+{
+    s_last_v4_transaction_end_tick = HAL_GetTick();
+    s_last_v4_transaction_end_valid = 1U;
+}
 /*
  * 函数用途：返回V4交互请求使用的总线地址。
  * 调用场景：普通V4读写、模式控制和识别阶段R67读取。
@@ -200,6 +246,7 @@ static uint32_t MULTIPARAM_V4_TransceiveStopActiveOnce(const uint8_t request[8],
     }
     result = MULTIPARAM_V4_TransceiveStopActiveOwned(
         request, reply, timeout_ms, active_preempted);
+    MULTIPARAM_V4_MarkTransactionEnd();
     if (SensorUart6Owner_Is(SENSOR_UART6_OWNER_DM4_V4_INTERACTIVE) != 0U) {
         (void)SensorUart6Owner_Release(SENSOR_UART6_OWNER_DM4_V4_INTERACTIVE);
     }
@@ -325,12 +372,17 @@ static uint32_t MULTIPARAM_V4_TransceiveOnceInternal(
 {
     uint32_t result;
 
+    result = MULTIPARAM_V4_WaitInterFrameGap(check_command_switch);
+    if (result != NO_ERROR) {
+        return result;
+    }
     /* 普通交互事务同样必须串行占用UART6，失败时不启动任何DMA。 */
     if (SensorUart6Owner_Acquire(SENSOR_UART6_OWNER_DM4_V4_INTERACTIVE) == 0U) {
         return SENSOR_MODE_NOT_READY;
     }
     result = MULTIPARAM_V4_TransceiveOnceOwned(
         request, reply, timeout_ms, check_command_switch, address_policy);
+    MULTIPARAM_V4_MarkTransactionEnd();
     (void)SensorUart6Owner_Release(SENSOR_UART6_OWNER_DM4_V4_INTERACTIVE);
     return result;
 }
@@ -821,7 +873,8 @@ uint32_t MULTIPARAM_V4_EnterInteractive(void)
             event_age = HAL_GetTick() - s_last_active_frame_end_tick;
             /* 15ms是最早发送边界；100ms是本周期最晚边界，超出后等待下一帧以免撞帧。 */
             if ((event_age >= MULTIPARAM_V4_ACTIVE_COMMAND_GUARD_MS) &&
-                (event_age <= MULTIPARAM_V4_ACTIVE_WINDOW_LATEST_MS)) {
+                (event_age <= MULTIPARAM_V4_ACTIVE_WINDOW_LATEST_MS) &&
+                (MULTIPARAM_V4_IsInterFrameGapElapsed() != 0U)) {
                 MULTIPARAM_V4_StopActiveReceive();
                 /* 停止DMA前可能刚完成另一帧解析，发送前再次执行15ms半双工门禁。 */
                 MULTIPARAM_V4_WaitActiveFrameGuard();

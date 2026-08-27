@@ -37,6 +37,8 @@
 
 /* 交互事务超时、主动转交互窗口及接收恢复时序。 */
 #define MULTIPARAM_V4_TRANSACTION_TIMEOUT_MS         DSM_CMD_TIMEOUT
+/* 上一笔V4事务结束到下一次CPU2请求发送的最小间隔，单位ms。 */
+#define MULTIPARAM_V4_INTER_FRAME_GAP_MS              30U
 /* 切换为主动通信后等待首帧确认的超时，单位ms。 */
 #define MULTIPARAM_V4_ACTIVE_RESPONSE_TIMEOUT_MS     300U
 /* 主动帧结束后可发送切换命令的最晚窗口，单位ms。 */

@@ -3425,3 +3425,24 @@ CPU3通信和界面：
 验证：
 - 已执行V4协议检查、传感器服务架构检查和源码编码检查；结果通过。
 - 已执行CPU2 Debug clean-first构建；目标板、真实V4传感器、R04/R06/R07异常帧和长时间恢复场景尚未实测。
+
+## 2026-08-27 - 增加V4事务帧间隔门禁与负频率不稳定提示
+
+版本：
+- CPU2：`V1.42.7.0 -> V1.42.8.0`（PATCH）。
+- CPU3：保持`V1.40.1.0`。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION`保持35；CPU2/CPU3共享寄存器、共享命令、共享状态和共享字段不变，CPU3固件无需修改。
+- CPU2 `DEVICE_PARAM_VERSION`保持3，`DeviceParameters`结构、字段偏移、CRC范围和FRAM布局不变；升级不恢复出厂、不清除现场参数。
+- DM4 V4帧格式、R/W/D/L/M/S命令、参数65通信方式切换、错误码和既有参数4负值解析语义保持兼容；仅增加事务间最小等待和前台提示。
+
+本次修改：
+- CPU2所有V4交互事务在发送前检查上一笔事务退出时间，上一笔有效应答、业务校验失败、异常帧或超时均至少间隔30 ms；主动转交互同时保留主动帧15～100 ms窗口约束。
+- 参数4在密度和液位前台读取路径检测到负值时打印“当前频率不稳定，当前频率可能不可信”及原始值，不改变返回码、原始值保存和既有绝对值/无效值处理。
+- 同步V4.0正式协议Markdown和PDF中的30 ms帧间隔及负频率说明。
+
+验证：
+- 已执行`check_multiparam_v4_protocol.py`、`check_sensor_service_architecture.py`、`check_sensor_fault_contract.py`、`check_parameter_measurement_fault_contract.py`、`check_read_part_params_refresh_contract.py`、`check_dsm_compat_contract.py`和`check_sensor_probe_trace.py`，结果通过；`git diff --check`通过。
+- CPU2 `V1.42.8.0` Debug clean-first构建通过，132个目标完成；产物位于`build/LTD_MAIN_CPU2`，规模为`text=357012`、`data=2352`、`bss=59632`。
+- 尚未执行目标板烧写、真实DM4/RS485间隔测量、负频率实机日志、故障注入或SIL验证；详见对应改动与测试方案。

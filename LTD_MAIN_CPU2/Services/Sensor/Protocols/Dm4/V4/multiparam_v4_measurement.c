@@ -12,6 +12,7 @@
 #include "system_parameter.h"
 
 #include <math.h>
+#include <stdio.h>
 /* V4测量频率允许的最大值，单位Hz。 */
 #define MULTIPARAM_V4_FREQUENCY_MAX_HZ       6600
 /* V4温度业务有效范围下限，单位摄氏度。 */
@@ -55,6 +56,19 @@ static uint32_t s_last_published_generation = 0U;
 static uint32_t s_last_interactive_debug_refresh_tick = 0U;
 /* 交互附加刷新节拍已经建立基线的标志。 */
 static uint8_t s_interactive_debug_refresh_valid = 0U;
+
+/*
+ * 函数用途：在前台读到R04负频率时打印稳定性提示和原始值。
+ * 调用场景：交互或主动通信方式的密度、液位前台读取入口。
+ * 关键约束：只允许在线程态调用，不改变取绝对值、数据发布和错误码语义。
+ */
+static void MULTIPARAM_V4_PrintNegativeFrequencyWarning(int32_t raw_frequency)
+{
+    if (raw_frequency < 0) {
+        printf("当前频率不稳定，当前频率可能不可信，原始频率=%ld Hz\r\n",
+               (long)raw_frequency);
+    }
+}
 
 /*
  * 函数用途：重置V4测量发布代次和交互附加量刷新节流状态。
@@ -345,6 +359,7 @@ static uint32_t MULTIPARAM_V4_ReadInteractiveDensity(float *frequency_hz,
     }
     result = MULTIPARAM_V4_ReadIntParam(4U, &frequency_value);
     if (result == NO_ERROR) {
+        MULTIPARAM_V4_PrintNegativeFrequencyWarning(frequency_value);
         /* 先判定R04有效性：无效时跳过频率解码，后续统一按未扫到语义归零等待。 */
         if (MULTIPARAM_V4_IsDensityNotScanned(frequency_value) != 0U) {
             density_not_scanned = 1U;
@@ -446,6 +461,7 @@ uint32_t MULTIPARAM_V4_MeasurementReadDensity(float *frequency_hz,
         (MULTIPARAM_V4_STATUS_TEMPERATURE_NEW | MULTIPARAM_V4_STATUS_DENSITY_NEW)) {
         return SENSOR_DATA_STALE;
     }
+    MULTIPARAM_V4_PrintNegativeFrequencyWarning(snapshot.measurement_frequency_raw);
     density_not_scanned =
         MULTIPARAM_V4_IsDensityNotScanned(snapshot.measurement_frequency_raw);
     /* 快照温度越界或非有限值时置NAN，温度异常不阻断密度结果发布。 */
@@ -502,6 +518,7 @@ uint32_t MULTIPARAM_V4_MeasurementReadLevelFrequency(uint32_t *frequency_hz)
         if (result != NO_ERROR) {
             return result;
         }
+        MULTIPARAM_V4_PrintNegativeFrequencyWarning(frequency_value);
         if ((MULTIPARAM_V4_DecodeFrequency(frequency_value,
                                            &normalized_frequency,
                                            &fast_sweep_completed) == 0U) ||
@@ -525,6 +542,7 @@ uint32_t MULTIPARAM_V4_MeasurementReadLevelFrequency(uint32_t *frequency_hz)
     if (snapshot.measurement_mode != MULTIPARAM_V4_MEASUREMENT_LEVEL) {
         return SENSOR_MODE_MISMATCH;
     }
+    MULTIPARAM_V4_PrintNegativeFrequencyWarning(snapshot.measurement_frequency_raw);
     if ((snapshot.measurement_frequency_valid == 0U) ||
         (snapshot.measurement_frequency_hz > MULTIPARAM_V4_FREQUENCY_MAX_HZ)) {
         return SONIC_FREQ_ABNORMAL;
