@@ -1,14 +1,15 @@
 # CPU2 串口调试命令协议卷
 
-更新日期：2026-07-28
+更新日期：2026-08-31
 
 本文定义 CPU2 本地调试串口的接入参数、文本帧格式、应答口径、命令语法和安全边界。它面向现场调试人员、串口工具配置维护者和固件开发人员；详细过程打印另见 `CPU2串口调试指令与打印信息梳理.md`。
 
 ## 1. 适用范围与版本边界
 
 - 接口为 CPU2 `USART1` 本地调试串口，不是 CPU2/CPU3 内部 Modbus 共享协议，也不是 DSM、SI、Wartsila 或 HART 外部协议。
+- 本卷描述 Debug 构建的命令接收行为。自 CPU2 `V1.42.6.0` 起，Release 构建关闭 USART1 命令接收，不解析、不应答也不执行本文命令；现场使用前必须先确认烧录产物后缀为 `DEBUG`。
 - 本协议新增或收紧本地调试命令时，需要评估 CPU2 固件版本，但不单独升级 `DEVICE_PROTOCOL_VERSION`。
-- 当前正式版本为CPU2 `V1.40.0.0`、共享协议 `34`，CPU2参数存储版本为 `3`；协议34不改变本地调试串口命令格式。
+- 当前工程基线为 CPU2 `V1.42.8.0`、CPU3 `V1.40.1.0`、共享协议 `35`，CPU2 参数存储版本为 `3`；协议 35 不改变本地调试串口命令格式。
 
 ## 2. 串口与文本帧
 
@@ -16,7 +17,9 @@
 | --- | --- |
 | 波特率 | `115200` |
 | 数据格式 | `8N1`，无硬件流控 |
-| 命令编码 | ASCII，大写且区分大小写 |
+| 接收构建 | 仅 Debug；Release 不接收命令 |
+| RX 引脚 | `PA10/USART1_RX`，启用 MCU 内部上拉 |
+| 命令编码 | 命令关键字使用大写 ASCII 且区分大小写；`SPN=` 后的名称按原始字节精确匹配 |
 | 结束符 | 推荐 `CRLF`；固件同时接受单独 `LF` |
 | 命令正文最大长度 | 63 字节，不含结束符 |
 | 首尾空白 | 不忽略；带空格会按格式错误或不支持处理 |
@@ -119,7 +122,7 @@ POWER_BOOT 电源监测启动：结果=成功，ADC=2707，24V电压=24000毫伏
 
 ### 6.1 多参数 V4 传感器调试
 
-V4 调试命令在 `MeasureStart` 之前执行，不启动电机，也不把命令失败写入整机全局故障状态。除只读快照和诊断命令外，每次交互事务都会打印实际 TX/RX 长度、HEX、结果和校验阶段。当前 V4 探测和普通读取仍遵循通信层的临时广播地址策略；写寄存器必须使用探测得到的单播地址。
+V4 调试命令在 `MeasureStart` 之前执行，不启动电机，也不把命令失败写入整机全局故障状态。除只读快照和诊断命令外，每次交互事务都会打印实际 TX/RX 长度、HEX、结果和校验阶段。当前 V4 探测和普通读取仍遵循通信层的临时广播地址策略；写寄存器必须使用探测得到的单播地址。自 CPU2 `V1.42.8.0` 起，任一 V4 交互事务结束后至少等待 `30 ms` 才允许发送下一帧；从主动通信切换到交互通信还必须同时满足主动帧结束后的 `15 ms` 保护时间窗。
 
 | 命令 | 作用 | 关键行为 |
 | --- | --- | --- |
@@ -133,7 +136,7 @@ V4 调试命令在 `MeasureStart` 之前执行，不启动电机，也不把命�
 | `V4M=0` / `V4M=1` | 明确关闭/开启磁零点 | 仅密度模式有效；与测水互斥，必要时先关闭测水 |
 | `V4O` | 读取并解码 R02 | 输出模式、附加功能、温度/密度/粘度新值位、陀螺/测水异常位及电压正常位 |
 | `V4R=<n>` | 读取参数原始值 | `n` 仅允许 `0..25` 或 `65..159`；输出 RAW、U32、I32 和 IEEE754 FLOAT 四种视图 |
-| `V4W=<n>,<raw32>` | 写入 V4 参数原始值 | `n` 仅允许 `66..159`；必须已经处于交互通信且已学习单播地址；P65 不通过此命令写入 |
+| `V4W=<n>,<raw32>` | 写入 V4 参数原始值 | `n` 仅允许 `66..159`，`raw32` 为 `0..4294967295` 十进制整数；必须已经处于交互通信且已学习单播地址；P65 不通过此命令写入 |
 | `V4F` | 查看最近主动帧 | 输出完整 72 字节原包、地址、序号、代次、年龄，以及 P0-P14 逐项解包 |
 | `V4G` | 查看通信质量和最近异常包 | 除原有帧校验、UART、恢复和事务计数外，输出有效包、预计包、丢包数、丢包率、当前/最大连续异常、告警次数，以及最近异常的错误码、年龄、长度和最多 122 字节 HEX |
 | `V4C` | 清零通信质量诊断 | 清累计计数、当前连续异常、待上报质量故障和最近异常包；保留通信方式、DMA 主动接收、最近有效快照、序号基线和已经锁存的本轮主动超时状态 |
@@ -146,7 +149,9 @@ V4 调试命令在 `MeasureStart` 之前执行，不启动电机，也不把命�
 
 R02 的 Bit8、Bit9、Bit10 是读后清除的新值标志。`V4O` 会直接读取 R02；`V4D`、`V4S`、`V4L=0|1`、`V4M=0|1` 也会为了确认最终状态读取 R02，因此这些命令可能清除对应新值标志，现场分析时应结合原始 TX/RX 的先后顺序判断。
 
-协议限制：P26-P64 不可读；P65 只通过 `V4I/V4A` 的半双工安全时序修改；`V4W` 仅开放 P66-P159，并拒绝未知地址或广播地址写入，避免误改地址、存储周期和标定参数。模式、功能和通信方式只通过具有状态确认和恢复策略的专用命令修改。
+读取 R04 得到负频率时，CPU2 会在线程态打印 `当前频率不稳定，当前频率可能不可信` 和原始值。该提示本身不是 UART、帧格式或 CRC 故障，也不改变取绝对值、数据发布和错误码语义。密度模式中，R04 为 0、`INT32_MIN`、解码失败或超过 `6600 Hz`，以及 R07 密度非有限或越界时，按当前未获得稳定值归零并交给上层继续等待，不按通信格式错误处理；R06 温度非有限或越界时发布为 `NAN`，不阻断密度结果。
+
+协议限制：P26-P64 不可读；P65 只通过 `V4I/V4A` 的半双工安全时序修改；`V4W` 仅开放 P66-P159，并拒绝未知地址或广播地址写入，避免误改地址、存储周期和标定参数。当前实现虽然在语法上允许写 P66，但写成功后不会同步 CPU2 本地的期望地址，后续主动帧校验和写操作仍可能使用旧地址，因此 P66 禁止现场使用，待本地地址同步闭环修复后再放开。模式、功能和通信方式只通过具有状态确认和恢复策略的专用命令修改。
 
 ### 6.2 多参数 V3 传感器调试
 
@@ -157,7 +162,7 @@ V3 调试命令同样只在已经识别为 LTD/V3 传感器后执行。`V3W` 使
 | `V3?` | 打印 V3 命令帮助 | 不访问传感器 |
 | `V3P` | 探测 V3 协议 | 读取协议版本并确认 V3 设备 |
 | `V3D` / `V3L` | 切换密度 / 液位模式 | 使用 V3 原有模式切换和应答校验 |
-| `V3R=<n>` | 读取 V3 参数 | 使用 V3 参数表和类型解码 |
+| `V3R=<n>` | 读取 V3 参数 | `n` 仅允许 `0/4/6/7/8/9/17/18/22`，按 V3 参数类型解码 |
 | `V3W=<n>,<value>` | 写入 V3 参数 | `n` 仅允许 `20..114`；写入后按整数或单浮点类型读回校验 |
 | `V3A` | 批量读取常用参数 | 仅输出诊断数据，不改变业务流程 |
 
@@ -185,7 +190,7 @@ V3 调试命令同样只在已经识别为 LTD/V3 传感器后执行。`V3W` 使
 
 | 格式 | 用途 |
 | --- | --- |
-| `B<mm>` | 按电机记步模型往返 |
+| `B<mm>` | 按电机记步模型往返，`mm` 为 `1..4294967295` 十进制整数 |
 | `B<mm>S`、`B<mm>,1` | 电机记步往返并启用传感器通信 |
 | `BE<mm>` | 按编码轮读数往返 |
 | `BE<mm>S`、`BE<mm>,1` | 编码轮往返并启用传感器通信 |
@@ -280,10 +285,14 @@ V3 调试命令同样只在已经识别为 LTD/V3 传感器后执行。`V3W` 使
 | 参数越界 | `BE200,6.1`、`BE200,2,21` | `INVALID_FORMAT` |
 | V4 命令严格匹配 | `V4?`、`V4P`、`V4R=0`、`V4R=159` | 识别为测试命令，不调用 `MeasureStart()` |
 | V4 参数不可访问 | `V4R=26`、`V4R=64`、`V4R=160` | `INVALID_FORMAT`，不访问传感器 |
-| V4 写入前置条件 | `V4W=66,1` 未执行 `V4I`，或尚未学习单播地址 | 返回交互状态/地址条件错误，不发送广播写帧 |
+| V4 写入前置条件 | `V4W=67,1` 未执行 `V4I`，或尚未学习单播地址 | 返回交互状态/地址条件错误，不发送广播写帧 |
+| V4 地址写入边界 | `V4W=66,<new>` | 当前未形成 CPU2 本地期望地址同步闭环，禁止执行现场写入用例 |
 | V3 写入范围 | `V3W=19,1`、`V3W=115,1` | `INVALID_FORMAT`，不访问传感器 |
-| V4 模式切换 | `V4I`→`V4D`→`V4A` | 每次交互打印 TX/RX；主动模式首帧打印 64 字节原包和 P0-P12 解包 |
+| V3 读取集合 | `V3R=0`、`V3R=22`；`V3R=1`、`V3R=255` | 前两项按类型读取；后两项 `INVALID_FORMAT`，不访问传感器 |
+| V4 模式切换 | `V4I`→`V4D`→`V4A` | 每次交互打印 TX/RX；主动模式首帧打印 72 字节原包和 P0-P14 解包 |
+| V4 事务帧间隔 | 连续执行 `V4O`、`V4R=4`、`V4R=7` | 相邻 V4 交互事务结束到下一事务发送不少于 30 ms |
 | V4 状态诊断 | `V4O`、`V4G`、`V4C` | 解码 R02；诊断可读、可清零且不改变通信方式和最近快照 |
+| Debug/Release 边界 | 分别烧录同版本 Debug、Release 产物并发送 `VER?` | Debug 返回版本；Release 不接收、不应答也不执行命令，USART1 发送路径仍可输出业务日志 |
 | LF 默认参数查询 | `LF?` | 返回 `LF CONFIG ...`，不调用 `MeasureStart()`、不启动电机 |
 | LF 临时参数 | `LF=5200,15` | `ACK` 后执行一次闭环，覆盖值不写 FRAM |
 | LF 参数越界 | `LF=0`、`LF=6501`、`LF=5200,0` | `INVALID_FORMAT`，不启动电机 |
@@ -301,15 +310,20 @@ V3 调试命令同样只在已经识别为 LTD/V3 传感器后执行。`V3W` 使
 
 ## 13. 源码依据
 
-- `LTD_MAIN_CPU2/Application/Src/serial_command_parser.c`
-- `LTD_MAIN_CPU2/Application/Src/serial_command.c`
-- `LTD_MAIN_CPU2/Application/Src/fixed_frequency_level_search.c`
-- `LTD_MAIN_CPU2/Application/Src/measure.c`
-- `LTD_MAIN_CPU2/Application/Src/test.c`
-- `LTD_MAIN_CPU2/Services/Sensor/multiparam_v4_communication.c`
-- `LTD_MAIN_CPU2/Services/Sensor/multiparam_v4_communication.h`
-- `LTD_MAIN_CPU2/Application/Src/app_main.c`
+- `LTD_MAIN_CPU2/Application/Src/commands/serial_command_parser.c`
+- `LTD_MAIN_CPU2/Application/Src/commands/serial_command.c`
+- `LTD_MAIN_CPU2/Application/Src/service_debug/service_debug_command.c`
+- `LTD_MAIN_CPU2/Application/Src/service_debug/service_debug_sensor_protocol.c`
+- `LTD_MAIN_CPU2/Application/Src/service_debug/service_debug_fixed_frequency.c`
+- `LTD_MAIN_CPU2/Application/Src/measurement/measure.c`
+- `LTD_MAIN_CPU2/Application/Src/measurement/oil_level/oil_level_search.c`
+- `LTD_MAIN_CPU2/Services/Sensor/Protocols/Dm4/V4/multiparam_v4_communication.c`
+- `LTD_MAIN_CPU2/Services/Sensor/Protocols/Dm4/V4/multiparam_v4_communication.h`
+- `LTD_MAIN_CPU2/Services/Sensor/Protocols/Dm4/V4/multiparam_v4_interactive.c`
+- `LTD_MAIN_CPU2/Services/Sensor/Protocols/Dm4/V4/multiparam_v4_measurement.c`
+- `LTD_MAIN_CPU2/Application/Src/app/app_main.c`
 - `LTD_MAIN_CPU2/Core/Src/stm32f4xx_it.c`
 - `LTD_MAIN_CPU2/Core/Src/usart.c`
 - `LTD_MAIN_CPU2/Services/power_monitor.c`
 - `LTD_MAIN_CPU2/Services/Encoder/encoder.c`
+- `LTD_MAIN_CPU2/CMakeLists.txt`
