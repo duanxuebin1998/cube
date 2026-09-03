@@ -106,6 +106,8 @@ typedef struct {
     uint8_t request[MULTIPARAM_V4_INTERACTIVE_FRAME_SIZE]; /* 最近交互事务实际发送的8字节请求。 */
     uint8_t reply[MULTIPARAM_V4_INTERACTIVE_FRAME_SIZE]; /* 最近交互事务收到的前8字节应答。 */
     uint16_t received_length; /* 最近事务实际接收长度，单位字节。 */
+    uint8_t valid; /* 本快照是否对应一次真正启动的UART事务。 */
+    uint8_t failure_packets_printed; /* 当前事务的失败原包是否已经输出，供上层去重。 */
     uint32_t elapsed_ms; /* 从发送开始到事务结束的耗时，单位ms。 */
     uint32_t uart_error; /* 事务结束时锁存的HAL UART硬件错误位。 */
     uint32_t uart_state; /* 事务结束时锁存的HAL UART状态位。 */
@@ -192,6 +194,9 @@ void MULTIPARAM_V4_RecordTransactionDiagnostic(const uint8_t reply[8],
                                                 uint16_t received_length,
                                                 uint32_t start_tick,
                                                 const char *stage);
+void MULTIPARAM_V4_PrintTransactionFailureAttempt(uint32_t result,
+                                                  uint32_t attempt,
+                                                  uint32_t max_attempts);
 
 /*
  * 主动接收内部接口：调用方必须已取得V4对应UART6所有权。

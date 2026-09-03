@@ -275,6 +275,7 @@ void MULTIPARAM_V4_BeginTransactionDiagnostic(const uint8_t request[8])
     memset(&s_last_transaction_diagnostic, 0, sizeof(s_last_transaction_diagnostic));
     if (request != NULL) {
         memcpy(s_last_transaction_diagnostic.request, request, 8U);
+        s_last_transaction_diagnostic.valid = 1U;
     }
 }
 
@@ -333,15 +334,25 @@ static void MULTIPARAM_V4_FormatReplyBytes(char *text, size_t text_size)
 }
 
 /*
- * 函数用途：打印最近一次V4交互事务的请求包和实际接收包。
- * 调用场景：部件参数读取已经失败，需要保留现场原始收发内容时。
+ * 函数用途：按指定场景打印最近一次V4交互事务的请求包和实际接收包。
+ * 调用场景：部件参数或测量异常需要保留现场原始收发内容时。
  * 关键约束：只在任务上下文调用；帧校验通过后发生的值域错误要明确标记为业务校验失败。
  */
-void MULTIPARAM_V4_PrintLastTransactionPackets(const char *operation,
-                                               uint32_t result)
+static void MULTIPARAM_V4_PrintLastTransactionPacketsForScene(
+    const char *scene,
+    const char *operation,
+    uint32_t result,
+    uint32_t attempt,
+    uint32_t max_attempts)
 {
     const char *stage = s_last_transaction_diagnostic.stage;
 
+    if (s_last_transaction_diagnostic.valid == 0U) {
+        return;
+    }
+    if (scene == NULL) {
+        scene = "未指定";
+    }
     if (operation == NULL) {
         operation = "未指定";
     }
@@ -351,22 +362,34 @@ void MULTIPARAM_V4_PrintLastTransactionPackets(const char *operation,
         stage = "帧校验通过，业务校验失败";
     }
 
-    printf("通信包\t协议=V4\t场景=读取部件参数\t操作=%s\t指令=%c%02u"
-           "\t方向=TX\t长度=8\tHEX=",
+    printf("通信包\t协议=V4\t场景=%s\t操作=%s\t指令=%c%02u",
+           scene,
            operation,
            (char)s_last_transaction_diagnostic.request[1],
            (unsigned int)s_last_transaction_diagnostic.request[6]);
+    if (max_attempts != 0U) {
+        printf("\t尝试=%lu/%lu",
+               (unsigned long)attempt,
+               (unsigned long)max_attempts);
+    }
+    printf("\t方向=TX\t长度=8\tHEX=");
     for (uint16_t index = 0U; index < MULTIPARAM_V4_INTERACTIVE_FRAME_SIZE; index++) {
         printf((index == 0U) ? "%02X" : " %02X",
                s_last_transaction_diagnostic.request[index]);
     }
     printf("\r\n");
 
-    printf("通信包\t协议=V4\t场景=读取部件参数\t操作=%s\t指令=%c%02u"
-           "\t方向=RX\t长度=%u\tHEX=",
+    printf("通信包\t协议=V4\t场景=%s\t操作=%s\t指令=%c%02u",
+           scene,
            operation,
            (char)s_last_transaction_diagnostic.request[1],
-           (unsigned int)s_last_transaction_diagnostic.request[6],
+           (unsigned int)s_last_transaction_diagnostic.request[6]);
+    if (max_attempts != 0U) {
+        printf("\t尝试=%lu/%lu",
+               (unsigned long)attempt,
+               (unsigned long)max_attempts);
+    }
+    printf("\t方向=RX\t长度=%u\tHEX=",
            (unsigned int)s_last_transaction_diagnostic.received_length);
     for (uint16_t index = 0U;
          index < s_last_transaction_diagnostic.received_length;
@@ -381,6 +404,120 @@ void MULTIPARAM_V4_PrintLastTransactionPackets(const char *operation,
            (unsigned long)s_last_transaction_diagnostic.elapsed_ms,
            (unsigned long)s_last_transaction_diagnostic.uart_state,
            (unsigned long)s_last_transaction_diagnostic.uart_error);
+    s_last_transaction_diagnostic.failure_packets_printed = 1U;
+}
+
+/*
+ * 函数用途：打印V4幂等事务某一次失败的原始收发包。
+ * 调用场景：协议事务确认失败可重试后、开始下一次发送之前。
+ * 关键约束：只在线程态打印；操作名由实际请求功能码和参数号生成。
+ */
+void MULTIPARAM_V4_PrintTransactionFailureAttempt(uint32_t result,
+                                                  uint32_t attempt,
+                                                  uint32_t max_attempts)
+{
+    char operation[8];
+
+    if ((result == NO_ERROR) || (result == STATE_SWITCH)) {
+        return;
+    }
+    (void)snprintf(operation,
+                   sizeof(operation),
+                   "%c%02u",
+                   (char)s_last_transaction_diagnostic.request[1],
+                   (unsigned int)s_last_transaction_diagnostic.request[6]);
+    MULTIPARAM_V4_PrintLastTransactionPacketsForScene(
+        "协议事务重试", operation, result, attempt, max_attempts);
+}
+
+/*
+ * 函数用途：打印最近一次V4交互事务的请求包和实际接收包。
+ * 调用场景：部件参数读取已经失败，需要保留现场原始收发内容时。
+ * 关键约束：只在任务上下文调用，保持既有“读取部件参数”场景名称。
+ */
+void MULTIPARAM_V4_PrintLastTransactionPackets(const char *operation,
+                                               uint32_t result)
+{
+    if (s_last_transaction_diagnostic.failure_packets_printed != 0U) {
+        return;
+    }
+    MULTIPARAM_V4_PrintLastTransactionPacketsForScene(
+        "读取部件参数", operation, result, 0U, 0U);
+}
+
+/*
+ * 函数用途：在业务异常后按当前通信方式打印最近一次V4原始通信包。
+ * 调用场景：液位频率读取失败或频率值被业务层拒绝之后。
+ * 关键约束：只在线程态打印，不发送额外请求；主动模式复制原包后再恢复中断。
+ */
+void MULTIPARAM_V4_PrintFailurePackets(const char *operation,
+                                       uint32_t result)
+{
+    uint8_t frame[MULTIPARAM_V4_ABNORMAL_FRAME_MAX_SIZE];
+    const char *source = "无";
+    const char *communication_mode =
+        (s_communication_mode == MULTIPARAM_V4_COMMUNICATION_ACTIVE) ?
+        "主动" : "未知";
+    uint16_t length = 0U;
+    uint32_t received_tick = 0U;
+    uint32_t primask;
+
+    if ((result == NO_ERROR) || (result == STATE_SWITCH)) {
+        return;
+    }
+    if (s_communication_mode == MULTIPARAM_V4_COMMUNICATION_INTERACTIVE) {
+        if (s_last_transaction_diagnostic.failure_packets_printed == 0U) {
+            MULTIPARAM_V4_PrintLastTransactionPacketsForScene(
+                "异常后诊断", operation, result, 0U, 0U);
+        }
+        return;
+    }
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    if ((s_last_abnormal_frame.valid != 0U) &&
+        (s_last_abnormal_frame.error_code == result) &&
+        ((int32_t)(s_last_abnormal_frame.received_tick -
+                   s_latest_snapshot.received_tick) >= 0)) {
+        length = s_last_abnormal_frame.length;
+        if (length > MULTIPARAM_V4_ABNORMAL_FRAME_MAX_SIZE) {
+            length = MULTIPARAM_V4_ABNORMAL_FRAME_MAX_SIZE;
+        }
+        if (length != 0U) {
+            memcpy(frame, s_last_abnormal_frame.data, length);
+        }
+        received_tick = s_last_abnormal_frame.received_tick;
+        source = "最近异常包";
+    } else if (s_latest_active_frame_valid != 0U) {
+        length = MULTIPARAM_V4_ACTIVE_FRAME_SIZE;
+        memcpy(frame, s_latest_active_frame, length);
+        received_tick = s_latest_snapshot.received_tick;
+        source = "最近有效主动包";
+    }
+    if (primask == 0U) {
+        __enable_irq();
+    }
+
+    printf("通信包\t协议=V4\t场景=异常后诊断\t操作=%s"
+           "\t通信方式=%s\t来源=%s\t方向=RX\t长度=%u\tHEX=",
+           (operation != NULL) ? operation : "未指定",
+           communication_mode,
+           source,
+           (unsigned int)length);
+    if (length == 0U) {
+        printf("<无原包>");
+    } else {
+        for (uint16_t index = 0U; index < length; index++) {
+            printf((index == 0U) ? "%02X" : " %02X", frame[index]);
+        }
+    }
+    printf("\t结果=0x%08lX\t阶段=业务读取失败",
+           (unsigned long)result);
+    if (received_tick != 0U) {
+        printf("\t帧年龄=%lu ms",
+               (unsigned long)(HAL_GetTick() - received_tick));
+    }
+    printf("\r\n");
 }
 
 /*

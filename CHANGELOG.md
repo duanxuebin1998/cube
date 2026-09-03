@@ -3446,3 +3446,26 @@ CPU3通信和界面：
 - 已执行`check_multiparam_v4_protocol.py`、`check_sensor_service_architecture.py`、`check_sensor_fault_contract.py`、`check_parameter_measurement_fault_contract.py`、`check_read_part_params_refresh_contract.py`、`check_dsm_compat_contract.py`和`check_sensor_probe_trace.py`，结果通过；`git diff --check`通过。
 - CPU2 `V1.42.8.0` Debug clean-first构建通过，132个目标完成；产物位于`build/LTD_MAIN_CPU2`，规模为`text=357012`、`data=2352`、`bss=59632`。
 - 尚未执行目标板烧写、真实DM4/RS485间隔测量、负频率实机日志、故障注入或SIL验证；详见对应改动与测试方案。
+
+## 2026-09-03 - 修复V4通信重试、异常包打印与液位频率判定
+
+版本：
+- CPU2：`V1.42.8.0 -> V1.42.9.0`（PATCH）。
+- CPU3：保持`V1.40.1.0`。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION`保持35；CPU2/CPU3共享寄存器、共享命令、共享状态和共享字段不变，CPU3固件无需修改。
+- CPU2 `DEVICE_PARAM_VERSION`保持3，`DeviceParameters`结构、字段偏移、CRC范围和FRAM布局不变；升级不恢复出厂、不清除现场参数。
+- DM4 V4帧格式、参数地址、功能码和错误码保持兼容；幂等交互事务只对超时、UART传输、响应格式、BCC和地址不匹配最多尝试3次。参数写入仍为单次写命令加读回确认，取水和磁零点等非幂等命令不盲目重发。
+
+本次修改：
+- V4幂等交互事务在每次可重试通信错误后打印本次TX/RX原包、失败阶段和尝试序号；后续成功记录恢复日志。主动模式业务读取失败时打印匹配的最近异常帧或最近有效主动帧，不重复打印同一交互事务。
+- 读取部件参数沿用统一V4参数读取路径，因此状态、密度、温度、水位电容等交互读取获得相同的最多3次通信尝试和失败包证据；未稳定数据不按通信错误处理。
+- V4测量层将液位频率0作为当前未稳定并返回0，不直接上报频率异常；非零频率样本交由液位业务层按`1..6500 Hz`判定。运动流程收到0时先停机等待，非零越界样本按连续计数和有限模式恢复处理。
+- 自动恢复保留首次触发错误，电机初始化或部件检查失败使用独立计数；达到配置上限后停止恢复，避免每秒无限检查。
+
+验证：
+- `check_v4_retry_zero_recovery_contract.py`、`check_multiparam_v4_protocol.py`、`check_sensor_service_architecture.py`、`check_density_level_control_contract.py`、`check_read_part_params_refresh_contract.py`、`check_sensor_fault_contract.py`、`check_tmc5130_diagnostic_contract.py`和`check_sensor_safe_cpu2_integration.py`通过。
+- 隔离验证树按主工作区最终14个固件文件SHA-256逐项一致后执行CPU2 `V1.42.9.0` Debug clean-first构建，132个目标完成；`text=360060`、`data=2360`、`bss=59632`。固定名和版本名HEX的SHA-256均为`D1E5F2C5FEBD55AEF11DC9AC36A7F5210452FD816449AF0D9D53DAE1467985A3`。
+- `check_flow_docs.py`、CP936源码解码/换行检查、`git diff --check`和仓库根目录门禁在提交前复核；本机流程导航同步但不提交。
+- 尚未执行目标板烧写、真实DM4传感器、RS485抓包、错误注入、运动停机时序、长期自动恢复、现场或SIL验证。

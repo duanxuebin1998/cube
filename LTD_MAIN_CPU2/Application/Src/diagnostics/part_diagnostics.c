@@ -17,6 +17,7 @@
 
 #include "motor_ctrl.h"
 #include "sensor_service.h"
+#include "sensor_comm_diagnostics.h"
 #include "Protocols/Dm4/V4/multiparam_v4_communication.h"
 #include "Wireless/wireless_pairing.h"
 
@@ -73,17 +74,15 @@ static uint32_t PartDiagnostics_UpdateWirelessRssi(uint8_t force_update)
     return WirelessPairing_UpdateConnectionStatusSnapshot();
 }
 /*
- * 函数用途：在V4交互部件参数读取失败时打印最后一组原始收发包。
+ * 函数用途：在V4真实故障后按当前通信方式补打对应原始通信包。
  * 调用场景：姿态角、密度组合量或水位电容读取返回错误后、错误码上抛前。
- * 关键约束：主动上报路径没有对应交互事务，禁止打印可能属于旧事务的缓存包。
+ * 关键约束：未稳定数据不按故障打印；交互重试自动去重，主动模式使用匹配错误码的原包。
  */
 static uint32_t PartDiagnostics_ReportV4Failure(const char *operation,
                                                  uint32_t result)
 {
-    if ((result != NO_ERROR) &&
-        (SensorService_GetDm4ProtocolMode() == SENSOR_DM4_PROTOCOL_V4) &&
-        (MULTIPARAM_V4_GetCommunicationMode() == MULTIPARAM_V4_COMMUNICATION_INTERACTIVE)) {
-        MULTIPARAM_V4_PrintLastTransactionPackets(operation, result);
+    if (result != SENSOR_DATA_STALE) {
+        SensorComm_PrintFailurePackets(result, operation);
     }
     return result;
 }

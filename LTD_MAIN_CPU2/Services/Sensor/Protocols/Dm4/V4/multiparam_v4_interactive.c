@@ -372,6 +372,8 @@ static uint32_t MULTIPARAM_V4_TransceiveOnceInternal(
 {
     uint32_t result;
 
+    /* 间隔等待或所有权申请失败时没有实际发包，先清除旧事务避免上层误打印旧包。 */
+    MULTIPARAM_V4_BeginTransactionDiagnostic(NULL);
     result = MULTIPARAM_V4_WaitInterFrameGap(check_command_switch);
     if (result != NO_ERROR) {
         return result;
@@ -400,27 +402,39 @@ static uint32_t MULTIPARAM_V4_TransceiveOnce(const uint8_t request[8],
         request, reply, timeout_ms, 1U, MULTIPARAM_V4_REPLY_ADDRESS_STRICT);
 }
 
+/* 只有总线传输或应答完整性错误允许重试；状态、配置和远端明确报错直接返回。 */
+static uint8_t MULTIPARAM_V4_IsRetryableTransactionError(uint32_t result)
+{
+    return (uint8_t)((result == SENSOR_DEVICE_COMM_TIMEOUT) ||
+                     (result == COMM_UART_TRANSFER_ERROR) ||
+                     (result == SENSOR_RESP_FORMAT_ERROR) ||
+                     (result == SENSOR_BCC_ERROR) ||
+                     (result == SENSOR_ADDRESS_MISMATCH));
+}
 /*
- * 函数用途：按统一次数重试可安全重复执行的V4交互事务。
- * 调用场景：读取、明确值写入以及可重复的D/S模式命令。
- * 关键约束：成功或命令切换立即结束；L/M翻转命令禁止调用本函数，避免状态二次翻转。
+ * 幂等V4事务仅重试通信错误并保留原包；状态、配置和远端错误立即返回，L/M非幂等命令禁止调用。
  */
 static uint32_t MULTIPARAM_V4_TransceiveIdempotent(const uint8_t request[8], uint8_t reply[8])
 {
-    uint32_t last_error = SENSOR_DEVICE_COMM_TIMEOUT;
-
+    uint32_t last_error = SENSOR_DEVICE_COMM_TIMEOUT, last_retry_error = NO_ERROR;
     for (uint32_t attempt = 0U; attempt < MULTIPARAM_V4_MAX_RETRY; attempt++) {
-        last_error = MULTIPARAM_V4_TransceiveOnce(request,
-                                                  reply,
-                                                  MULTIPARAM_V4_TRANSACTION_TIMEOUT_MS);
-        if ((last_error == NO_ERROR) || (last_error == STATE_SWITCH)) {
+        last_error = MULTIPARAM_V4_TransceiveOnce(request, reply, MULTIPARAM_V4_TRANSACTION_TIMEOUT_MS);
+        if ((last_error == NO_ERROR) && (last_retry_error != NO_ERROR)) {
+            /* 错误 阶段：重试成功 模块：传感器 操作：V4协议事务 原因：最近一次通信错误。 */
+            ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR, "V4协议事务", ErrorLog_GetReasonByCode(last_retry_error), attempt + 1U, MULTIPARAM_V4_MAX_RETRY);
+        }
+        if ((last_error == NO_ERROR) || (last_error == STATE_SWITCH) ||
+            (MULTIPARAM_V4_IsRetryableTransactionError(last_error) == 0U)) {
             return last_error;
         }
-        HAL_Delay(DSM_BCC_DELAY);
+        last_retry_error = last_error;
+        MULTIPARAM_V4_PrintTransactionFailureAttempt(last_error, attempt + 1U, MULTIPARAM_V4_MAX_RETRY);
+        /* 错误 阶段：错误重试 模块：传感器 操作：V4协议事务 原因：本次通信错误。 */
+        ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR, "V4协议事务", ErrorLog_GetReasonByCode(last_error), attempt + 1U, MULTIPARAM_V4_MAX_RETRY, last_error);
+        if ((attempt + 1U) < MULTIPARAM_V4_MAX_RETRY) { HAL_Delay(DSM_BCC_DELAY); }
     }
     return last_error;
 }
-
 /*
  * 函数用途：不经过通信方式门禁读取一个V4参数原始值。
  * 调用场景：普通交互读取和参数65写应答丢失后的事实恢复。

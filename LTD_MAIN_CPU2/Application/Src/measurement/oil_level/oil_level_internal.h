@@ -109,8 +109,15 @@ uint8_t OilLevel_IsCurrentFrequencyInOil(void);
 uint8_t OilLevel_IsMotorStopped(void);
 /** 停机状态下恢复无效的液位频率样本。 */
 uint32_t OilLevel_RecoverLevelFrequencyWhenStopped(void);
+/** 读取一次原始频率样本，0表示当前未稳定。 */
+uint32_t OilLevel_ReadFrequencySample(volatile uint32_t *frequency_out);
 /** 读取一个通过范围校验的频率样本。 */
 uint32_t OilLevel_ReadValidatedFrequency(volatile uint32_t *frequency_out);
+/** 在统一截止时间内读取一个通过范围校验的频率样本，超时值0表示不限制。 */
+uint32_t OilLevel_ReadValidatedFrequencyWithDeadline(
+    volatile uint32_t *frequency_out,
+    uint32_t start_tick,
+    uint32_t timeout_ms);
 /** 读取一组频率样本并返回平均值。 */
 uint32_t OilLevel_ReadAverageFrequency(volatile uint32_t *frequency_out);
 /** 带阶段日志和重试的平均频率读取入口。 */

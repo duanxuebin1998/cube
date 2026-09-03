@@ -249,10 +249,18 @@ void MULTIPARAM_V4_SetProbeTraceEnabled(uint8_t enabled);
 /*
  * 函数用途：打印最近一次V4交互事务的TX、RX和失败阶段。
  * 调用场景：部件参数交互读取失败后。
- * 关键约束：只在线程态调用；主动上报读取失败不得打印可能属于旧事务的数据。
+ * 关键约束：只在线程态调用；已由协议重试打印的事务自动去重，主动模式不打印旧事务。
  */
 void MULTIPARAM_V4_PrintLastTransactionPackets(const char *operation,
                                                uint32_t result);
+
+/*
+ * 函数用途：在业务异常后按当前通信方式打印最近一次V4原始通信包。
+ * 调用场景：测量重试日志需要关联交互TX/RX或主动RX原帧时。
+ * 关键约束：只在线程态打印，不发送额外请求；无原包时明确输出长度0。
+ */
+void MULTIPARAM_V4_PrintFailurePackets(const char *operation,
+                                       uint32_t result);
 
 /*
  * 函数用途：复制V4累计通信质量和事务计数。

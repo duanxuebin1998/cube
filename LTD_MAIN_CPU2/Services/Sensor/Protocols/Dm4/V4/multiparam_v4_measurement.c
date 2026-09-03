@@ -490,7 +490,7 @@ uint32_t MULTIPARAM_V4_MeasurementReadDensity(float *frequency_hz,
 /*
  * 函数用途：按当前V4通信方式读取液位模式频率。
  * 调用场景：液位搜索、跟随和模式状态判断。
- * 关键约束：只返回采样结果，不在本层切换液位模式或驱动电机执行恢复动作。
+ * 关键约束：频率0作为未稳定样本返回，不在本层切换模式、驱动电机或直接报错。
  */
 uint32_t MULTIPARAM_V4_MeasurementReadLevelFrequency(uint32_t *frequency_hz)
 {
@@ -519,13 +519,21 @@ uint32_t MULTIPARAM_V4_MeasurementReadLevelFrequency(uint32_t *frequency_hz)
             return result;
         }
         MULTIPARAM_V4_PrintNegativeFrequencyWarning(frequency_value);
-        if ((MULTIPARAM_V4_DecodeFrequency(frequency_value,
-                                           &normalized_frequency,
-                                           &fast_sweep_completed) == 0U) ||
-            (normalized_frequency > MULTIPARAM_V4_FREQUENCY_MAX_HZ)) {
+        if (frequency_value == 0) {
+            /* 频率0表示当前测量尚未稳定，交给液位业务层执行无效样本重试。 */
+            *frequency_hz = 0U;
+            return NO_ERROR;
+        }
+        if (MULTIPARAM_V4_DecodeFrequency(frequency_value,
+                                          &normalized_frequency,
+                                          &fast_sweep_completed) == 0U) {
             return SONIC_FREQ_ABNORMAL;
         }
         *frequency_hz = normalized_frequency;
+        /* 非零越界值交给液位业务层统一连续三次判定，V4层不提前报错。 */
+        if (normalized_frequency > MULTIPARAM_V4_FREQUENCY_MAX_HZ) {
+            return NO_ERROR;
+        }
         primask = __get_PRIMASK();
         __disable_irq();
         g_measurement.debug_data.frequency = normalized_frequency;
@@ -543,10 +551,15 @@ uint32_t MULTIPARAM_V4_MeasurementReadLevelFrequency(uint32_t *frequency_hz)
         return SENSOR_MODE_MISMATCH;
     }
     MULTIPARAM_V4_PrintNegativeFrequencyWarning(snapshot.measurement_frequency_raw);
-    if ((snapshot.measurement_frequency_valid == 0U) ||
-        (snapshot.measurement_frequency_hz > MULTIPARAM_V4_FREQUENCY_MAX_HZ)) {
+    if (snapshot.measurement_frequency_raw == 0) {
+        /* 主动包中的频率0同样表示未稳定，不改变快照有效性或发布缓存。 */
+        *frequency_hz = 0U;
+        return NO_ERROR;
+    }
+    if (snapshot.measurement_frequency_valid == 0U) {
         return SONIC_FREQ_ABNORMAL;
     }
+    /* 主动模式同样只返回本次非零频率，由液位业务层统一判断范围。 */
     *frequency_hz = (uint32_t)snapshot.measurement_frequency_hz;
     return NO_ERROR;
 }

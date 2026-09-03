@@ -1,15 +1,37 @@
 /*
- * 模块职责：在传感器事务超时后统一检查无线滑环链路，并把链路故障映射为更具体错误。
- * 调用边界：只在线程态诊断已发生的超时，不参与协议探测、正常收发或错误重试。
- * 结果约束：非超时结果原样返回；蓝牙链路正常也不代表具体传感器事务已经成功。
+ * 模块职责：关联DM4 V4失败结果与原始通信包，并在事务超时后检查无线滑环链路。
+ * 调用边界：只在线程态打印既有诊断快照或执行超时归因，不参与协议探测和正常收发。
+ * 结果约束：包证据不改变错误码；蓝牙链路正常也不代表具体传感器事务已经成功。
  */
 #include "sensor_comm_diagnostics.h"
 
 #include "error_log.h"
+#include "Protocols/Dm4/V4/multiparam_v4_communication.h"
+#include "sensor_runtime.h"
 #include "system_parameter.h"
 #include "Wireless/wireless_pairing.h"
 
 #include <stdio.h>
+
+/*
+ * 函数用途：把当前DM4 V4失败结果与协议层保存的原始通信包一起打印。
+ * 调用场景：液位频率读取返回错误或业务层拒绝频率值之后。
+ * 关键约束：只在线程态调用；协议重试已打印的事务自动去重，不改变通信方式或错误码。
+ */
+void SensorComm_PrintFailurePackets(uint32_t result, const char *context)
+{
+    if ((result == NO_ERROR) || (result == STATE_SWITCH) ||
+        (SensorRuntime_IsDetectionValid() == 0U) ||
+        (g_deviceParams.sensorType != DM4_SENSOR) ||
+        (SensorRuntime_GetDm4ProtocolMode() != SENSOR_DM4_PROTOCOL_V4)) {
+        return;
+    }
+
+    MULTIPARAM_V4_PrintFailurePackets(
+        (context != NULL) ? context : "未知操作",
+        result);
+}
+
 /*
  * 函数用途：在传感器无响应后统一诊断无线滑环的蓝牙链路并保留原操作上下文。
  * 调用场景：SensorService完成协议调用且结果为通信超时时。

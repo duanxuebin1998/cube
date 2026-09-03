@@ -7,7 +7,7 @@
 #include "abortable_delay.h"
 #include "fault_manager.h"
 #include "motor_ctrl.h"
-#include "sensor_service.h"
+
 #include "system_parameter.h"
 #include "weight.h"
 #include <math.h>
@@ -160,7 +160,7 @@ int SearchAir() {
  * @param state_out 用于返回液位频率相对上下阈值的判定状态。
  * @param allow_mode_recovery 允许模式。
  * @return Level_StateTypeDef 返回液位状态。
- * @note 函数内部会调用 OilLevel_ReadValidatedFrequency 获取当前频率值。
+ * @note 静态检测使用完整校验；运动检测遇到0值会停机等待，禁止将未稳定样本判为油相。
  * @note 输出信息包括当前频率值和传感器状态（空气中或油中）。
  */
 static uint32_t determine_level_status_internal(Level_StateTypeDef *state_out, uint8_t allow_mode_recovery) {
@@ -176,8 +176,19 @@ static uint32_t determine_level_status_internal(Level_StateTypeDef *state_out, u
     if (allow_mode_recovery) {
         ret = OilLevel_ReadValidatedFrequency(&g_measurement.oil_measurement.current_frequency);
     } else {
-        /* 运动中不执行模式恢复；统一入口会按V4主动快照或交互R04读取，并拒绝未知类型。 */
-        ret = SensorService_ReadLevelFrequency(&current_frequency);
+        do {
+            /* 运动中只读取一个样本；0表示未稳定，必须先停机再等待。 */
+            ret = OilLevel_ReadFrequencySample(&current_frequency);
+            CHECK_COMMAND_SWITCH(ret);
+            if ((ret == NO_ERROR) && (current_frequency == 0U)) {
+                ret = MotorCtrl_SlowStop();
+                if (ret == NO_ERROR) {
+                    printf("液位状态检测[运动]\t频率未稳定，停机等待下一样本\r\n");
+                    ret = AbortableDelay_CommandSwitch(FREQUENCY_LEVEL_SAMPLE_DELAY_MS, 50U);
+                    CHECK_COMMAND_SWITCH(ret);
+                }
+            }
+        } while ((ret == NO_ERROR) && (current_frequency == 0U));
     }
 
     CHECK_COMMAND_SWITCH(ret);

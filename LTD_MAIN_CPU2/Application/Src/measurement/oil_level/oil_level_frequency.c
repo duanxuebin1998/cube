@@ -467,7 +467,7 @@ static uint32_t FrequencyLevel_ReadCurrentWithGuards(int active_dir, uint8_t che
             return ret;
         }
     }
-    return OilLevel_ReadValidatedFrequency(
+    return OilLevel_ReadFrequencySample(
             &g_measurement.oil_measurement.current_frequency);
 }
 
@@ -630,10 +630,60 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
                 return FrequencyLevel_StopAndReturn(ret, "读取频率或运动保护失败");
             }
         } else {
-            ret = OilLevel_ReadValidatedFrequency(
+            ret = OilLevel_ReadFrequencySample(
                     &g_measurement.oil_measurement.current_frequency);
             if (ret != NO_ERROR) {
                 return FrequencyLevel_StopAndReturn(ret, "读取液位频率失败");
+            }
+        }
+
+        if (g_measurement.oil_measurement.current_frequency == 0U) {
+            ret = LevelVelocity_StartOrUpdateMotion(OIL_LEVEL_DIRECTION_NONE,
+                                                    0U,
+                                                    &active_dir,
+                                                    &active_speed_x100);
+            if (ret != NO_ERROR) {
+                return FrequencyLevel_StopAndReturn(ret, "频率未稳定停机失败");
+            }
+            fine_motion_active = 0U;
+            active_fine_speed_m_min = 0.0f;
+            stable_count = 0U;
+            g_measurement.oil_measurement.probe_at_liquid_level = 0U;
+            g_measurement.oil_measurement.liquid_stable = 0U;
+            printf("频率找液位\t频率未稳定，停机等待下一样本\r\n");
+
+            if ((follow_mode == 0U) &&
+                ((HAL_GetTick() - start_tick) > FREQUENCY_LEVEL_SEARCH_TIMEOUT_MS)) {
+                return FrequencyLevel_StopAndReturn(
+                        MEASUREMENT_FREQUENCY_LEVEL_TIMEOUT,
+                        "频率闭环超时");
+            }
+            ret = AbortableDelay_CommandSwitch(FREQUENCY_LEVEL_SAMPLE_DELAY_MS, 50U);
+            if (ret != NO_ERROR) {
+                return FrequencyLevel_StopAndReturn(ret, "命令切换");
+            }
+            continue;
+        }
+
+        if (g_measurement.oil_measurement.current_frequency > FREQUENCY_LEVEL_VALID_MAX_HZ) {
+            ret = LevelVelocity_StartOrUpdateMotion(OIL_LEVEL_DIRECTION_NONE,
+                                                    0U,
+                                                    &active_dir,
+                                                    &active_speed_x100);
+            if (ret != NO_ERROR) {
+                return FrequencyLevel_StopAndReturn(ret, "频率越界停机失败");
+            }
+            fine_motion_active = 0U;
+            active_fine_speed_m_min = 0.0f;
+            stable_count = 0U;
+            g_measurement.oil_measurement.probe_at_liquid_level = 0U;
+            g_measurement.oil_measurement.liquid_stable = 0U;
+            ret = OilLevel_ReadValidatedFrequencyWithDeadline(
+                    &g_measurement.oil_measurement.current_frequency,
+                    start_tick,
+                    (follow_mode == 0U) ? FREQUENCY_LEVEL_SEARCH_TIMEOUT_MS : 0U);
+            if (ret != NO_ERROR) {
+                return FrequencyLevel_StopAndReturn(ret, "液位频率越界恢复失败");
             }
         }
 

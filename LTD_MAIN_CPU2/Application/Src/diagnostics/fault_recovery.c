@@ -19,11 +19,13 @@
 typedef struct {
     uint8_t active;               /* 是否存在待恢复命令；为 0 时主循环不进入恢复轮询。 */
     CommandType command;          /* 失败前正在执行的命令，恢复成功后由主循环重跑。 */
-    uint32_t error_code;          /* 最近一次真实故障码，用于保持现场错误状态和恢复前附加动作判断。 */
+    uint32_t trigger_error_code;  /* 首次触发本轮恢复的错误码，恢复检查不得覆盖。 */
+    uint32_t error_code;          /* 最近一次真实错误码，用于保持现场错误状态和恢复前附加动作判断。 */
     DeviceState device_state;     /* 进入恢复时的设备状态，等待期反复恢复，避免空闲兜底清掉错误态。 */
     uint32_t zero_point_status;   /* 进入恢复时的零点状态，等待期保持给 CPU3/显示侧读取。 */
     uint32_t last_check_tick;     /* 上次恢复检查时刻，用于 1 秒节流，避免连续刷通信和日志。 */
     uint32_t command_retry_count; /* 已经由自动恢复触发的业务命令重跑次数。 */
+    uint32_t check_failure_count; /* 连续恢复检查失败次数，防止部件检查无限轮询。 */
     uint8_t awaiting_retry_result; /* 已触发重跑后置 1，等待命令结果决定清理或继续恢复。 */
 } FaultRecoveryContext;
 
@@ -31,11 +33,13 @@ typedef struct {
 static FaultRecoveryContext s_fault_recovery = {
     .active = 0U,
     .command = CMD_NONE,
+    .trigger_error_code = NO_ERROR,
     .error_code = NO_ERROR,
     .device_state = STATE_ERROR,
     .zero_point_status = 0U,
     .last_check_tick = 0U,
     .command_retry_count = 0U,
+    .check_failure_count = 0U,
     .awaiting_retry_result = 0U,
 };
 
@@ -187,11 +191,13 @@ static void FaultRecovery_ClearContext(void)
 {
     s_fault_recovery.active = 0U;                  /* 清除恢复任务标志。 */
     s_fault_recovery.command = CMD_NONE;           /* 清除待重跑命令，避免下次误恢复旧命令。 */
+    s_fault_recovery.trigger_error_code = NO_ERROR; /* 清除首次触发错误码。 */
     s_fault_recovery.error_code = NO_ERROR;        /* 清除恢复上下文错误码；全局错误状态由调用方决定。 */
     s_fault_recovery.device_state = STATE_ERROR;   /* 保持默认错误态，下一次启动恢复会重新覆盖。 */
     s_fault_recovery.zero_point_status = 0U;       /* 清除恢复期保持给显示侧的零点状态。 */
     s_fault_recovery.last_check_tick = 0U;         /* 清除节流时间，下一次启动时重新计时。 */
     s_fault_recovery.command_retry_count = 0U;     /* 清除自动重跑计数，新命令重新计算。 */
+    s_fault_recovery.check_failure_count = 0U;     /* 清除连续检查失败计数。 */
     s_fault_recovery.awaiting_retry_result = 0U;   /* 清除等待重跑结果标志。 */
 }
 
@@ -274,8 +280,9 @@ static void FaultRecovery_StopAfterMaxRetry(uint32_t error_code)
     g_measurement.device_status.zero_point_status = 1U;
     g_measurement.device_status.current_command = CMD_NONE;
 
-    printf("自动恢复\t测量重跑次数达到上限%lu次，停止自动重跑，错误码=0x%08lX\r\n",
+    printf("自动恢复\t测量重跑次数达到上限%lu次，停止自动重跑，触发错误码=0x%08lX，最终错误码=0x%08lX\r\n",
            (unsigned long)retry_limit,
+           (unsigned long)s_fault_recovery.trigger_error_code,
            (unsigned long)error_code);
 
     ErrorLog_Warn(ERROR_LOG_MODULE_SYSTEM,
@@ -283,6 +290,40 @@ static void FaultRecovery_StopAfterMaxRetry(uint32_t error_code)
                   ERROR_LOG_REASON_AUTO_RECOVER_FAIL,
                   ERROR_LOG_ACTION_STOP_MEASURE);
     FaultRecovery_ClearContext();
+}
+
+/*
+ * 函数用途：记录一次恢复检查失败，并在连续失败达到配置上限时停止恢复。
+ * 调用场景：电机初始化或PartDiagnostics_CheckAll返回真实错误后。
+ * 关键约束：检查失败计数独立于业务命令重跑次数；命令切换不进入本函数。
+ */
+static void FaultRecovery_HandleCheckFailure(uint32_t error_code,
+                                             uint32_t retry_limit)
+{
+    s_fault_recovery.check_failure_count++;
+    /* 错误 阶段：错误重试 模块：系统 操作：自动恢复 尝试：连续检查失败次数/上限。 */
+    ErrorLog_Retry(ERROR_LOG_MODULE_SYSTEM,
+                   ERROR_LOG_OP_AUTO_RECOVER,
+                   ERROR_LOG_REASON_AUTO_RECOVER_FAIL,
+                   s_fault_recovery.check_failure_count,
+                   retry_limit,
+                   error_code);
+    FaultRecovery_RecordFailure(error_code);
+    if (s_fault_recovery.check_failure_count >= retry_limit) {
+        g_measurement.device_status.device_state = STATE_ERROR;
+        g_measurement.device_status.error_code = error_code;
+        g_measurement.device_status.zero_point_status = 1U;
+        g_measurement.device_status.current_command = CMD_NONE;
+        printf("自动恢复\t连续部件检查失败达到上限%lu次，停止自动恢复，触发错误码=0x%08lX，本次错误码=0x%08lX\r\n",
+               (unsigned long)retry_limit,
+               (unsigned long)s_fault_recovery.trigger_error_code,
+               (unsigned long)error_code);
+        ErrorLog_Warn(ERROR_LOG_MODULE_SYSTEM,
+                      ERROR_LOG_OP_AUTO_RECOVER,
+                      ERROR_LOG_REASON_AUTO_RECOVER_FAIL,
+                      ERROR_LOG_ACTION_STOP_MEASURE);
+        FaultRecovery_ClearContext();
+    }
 }
 
 /**
@@ -295,6 +336,7 @@ static void FaultRecovery_StopAfterMaxRetry(uint32_t error_code)
 static void FaultRecovery_Start(CommandType command, uint32_t error_code)
 {
     uint32_t retry_count = 0U;
+    uint32_t trigger_error_code = error_code;
 
     /* 正常结果和用户命令切换不启动自动恢复，避免把主动中断误判成故障。 */
     if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
@@ -319,6 +361,7 @@ static void FaultRecovery_Start(CommandType command, uint32_t error_code)
     /* 同一命令再次进入恢复时继承已经完成的业务重跑次数，防止重新建上下文绕过总重试上限。 */
     if (s_fault_recovery.active && (s_fault_recovery.command == command)) {
         retry_count = s_fault_recovery.command_retry_count;
+        trigger_error_code = s_fault_recovery.trigger_error_code;
     }
 
     /* 首次进入恢复且设备尚未发布错误态时先执行统一停机，随后固定错误状态等待部件检查。 */
@@ -331,11 +374,13 @@ static void FaultRecovery_Start(CommandType command, uint32_t error_code)
 
     s_fault_recovery.active = 1U;                                             /* 标记主循环后续由恢复模块接管。 */
     s_fault_recovery.command = command;                                       /* 保存原命令，恢复成功后由主循环重跑。 */
-    s_fault_recovery.error_code = error_code;                                 /* 保存失败原因，恢复前判断是否需要先初始化电机。 */
+    s_fault_recovery.trigger_error_code = trigger_error_code;                 /* 首次触发原因跨检查和业务重跑保持不变。 */
+    s_fault_recovery.error_code = error_code;                                 /* 保存最近失败原因，恢复前判断是否需要先初始化电机。 */
     s_fault_recovery.device_state = g_measurement.device_status.device_state; /* 保存当前错误态，等待期反复恢复。 */
     s_fault_recovery.zero_point_status = g_measurement.device_status.zero_point_status; /* 保存显示侧需要看到的零点状态。 */
     s_fault_recovery.last_check_tick = HAL_GetTick();                         /* 从启动恢复时开始计 1 秒检查间隔。 */
     s_fault_recovery.command_retry_count = retry_count;                       /* 同一命令多轮恢复时保留已重跑次数。 */
+    s_fault_recovery.check_failure_count = 0U;                                /* 新一轮恢复重新统计连续检查失败。 */
     s_fault_recovery.awaiting_retry_result = 0U;                              /* 重新进入恢复等待，还没有触发下一次重跑。 */
 
     ErrorLog_Warn(ERROR_LOG_MODULE_SYSTEM,
@@ -433,7 +478,7 @@ void FaultRecovery_Cancel(const char *reason)
  * 未激活恢复上下文时返回全零结果；恢复激活后立即标记本轮已经处理，并重新发布原错误状态，避免等待期间被空闲逻辑误清除。
  * 配置的重试次数为 0 时关闭恢复；其他情况按 FAULT_RECOVERY_INTERVAL_MS 节流检查，防止每轮主循环重复初始化电机、访问传感器和刷写日志。
  * 原错误属于电机驱动类或驱动初始化状态已经失效时，先重新执行 MotorCtrl_Init；随后统一读取全部部件参数，确认命令切换、传感器通信和电机位置刷新链路可用。
- * 初始化或部件检查失败时记录本次恢复失败并保留上下文；达到业务命令重试上限时停止恢复。检查成功且仍有额度时只在结果中返回原命令，由主循环负责真正重跑。
+ * 初始化或部件检查连续失败达到配置上限时停止恢复；检查成功后清零检查计数，并在业务重跑仍有额度时通知主循环重跑原命令。
  * 部件检查成功只代表具备重跑条件，恢复上下文保持到重跑命令结束，再由 FaultRecovery_OnCommandFinished 根据最终结果清除或继续恢复。
  *
  * @return 恢复处理结果，包含是否已处理、是否需要重跑命令以及重跑命令号。
@@ -472,7 +517,9 @@ FaultRecoveryResult FaultRecovery_Poll(void)
     }
     s_fault_recovery.last_check_tick = now; /* 记录本轮检查时刻，下一轮继续节流。 */
 
-    need_motor_init = FaultRecovery_IsMotorDriverError(s_fault_recovery.error_code) ? 1U : 0U;
+    need_motor_init =
+        (FaultRecovery_IsMotorDriverError(s_fault_recovery.trigger_error_code) ||
+         FaultRecovery_IsMotorDriverError(s_fault_recovery.error_code)) ? 1U : 0U;
     if (!MotorCtrl_IsDriverInitValid()) {
         need_motor_init = 1U;
     }
@@ -484,15 +531,9 @@ FaultRecoveryResult FaultRecovery_Poll(void)
             FaultRecovery_Cancel("command switch");
             return result;
         }
-        /* 需要重建电机驱动的恢复检查失败时保留本轮真实错误，本轮不允许重跑原测量命令。 */
+        /* 电机初始化失败计入连续恢复检查上限，本轮不允许重跑原测量命令。 */
         if (check_ret != NO_ERROR) {
-            ErrorLog_Retry(ERROR_LOG_MODULE_SYSTEM,
-                           ERROR_LOG_OP_AUTO_RECOVER,
-                           ERROR_LOG_REASON_AUTO_RECOVER_FAIL,
-                           1U,
-                           1U,
-                           check_ret);
-            FaultRecovery_RecordFailure(check_ret);
+            FaultRecovery_HandleCheckFailure(check_ret, retry_limit);
             return result;
         }
     }
@@ -503,18 +544,13 @@ FaultRecoveryResult FaultRecovery_Poll(void)
         FaultRecovery_Cancel("command switch");
         return result;
     }
-    /* 无需重建驱动的健康检查失败同样锁存真实错误，禁止仅因检查路径较短就继续业务重试。 */
+    /* 部件检查失败计入连续检查上限，避免恢复状态机永久每秒重复通信。 */
     if (check_ret != NO_ERROR) {
-        ErrorLog_Retry(ERROR_LOG_MODULE_SYSTEM,
-                       ERROR_LOG_OP_AUTO_RECOVER,
-                       ERROR_LOG_REASON_AUTO_RECOVER_FAIL,
-                       1U,
-                       1U,
-                       check_ret);
-        FaultRecovery_RecordFailure(check_ret);
+        FaultRecovery_HandleCheckFailure(check_ret, retry_limit);
         return result;
     }
 
+    s_fault_recovery.check_failure_count = 0U; /* 完整检查成功后结束本次连续失败段。 */
     /* 部件检查成功后仍需先核对业务重跑上限；只有尚有额度时才向主循环返回原命令。 */
     if (s_fault_recovery.command_retry_count >= retry_limit) {
         FaultRecovery_StopAfterMaxRetry(s_fault_recovery.error_code);

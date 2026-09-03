@@ -311,11 +311,37 @@ uint32_t OilLevel_RecoverLevelFrequencyWhenStopped(void)
 }
 
 /*
- * 函数用途：读取并校验液位频率，在连续无效时执行最多三轮受控恢复。
- * 调用场景：液位搜索和跟随需要一个可靠整数Hz频率时。
- * 关键约束：每轮三次无效值不等同串口重试；通信错误立即传播，恢复耗尽返回频率异常。
+ * 函数用途：读取一次液位频率样本并保留通信错误诊断。
+ * 调用场景：运动闭环需要区分0值未稳定与真实通信错误时。
+ * 关键约束：0作为成功但未稳定样本写入输出；本函数不等待、不切换模式、不驱动电机。
  */
-uint32_t OilLevel_ReadValidatedFrequency(volatile uint32_t *frequency_out) {
+uint32_t OilLevel_ReadFrequencySample(volatile uint32_t *frequency_out) {
+	uint32_t ret;
+	uint32_t hz = 0U;
+
+	if (frequency_out == NULL) {
+		return SYSTEM_CALL_CONDITION_ERROR;
+	}
+
+	ret = SensorService_ReadLevelFrequency(&hz);
+	if (ret != NO_ERROR) {
+		SensorComm_PrintFailurePackets(ret, "读取液位频率");
+		return SensorComm_DiagnoseTimeout(ret, "读取液位频率");
+	}
+
+	*frequency_out = hz;
+	return NO_ERROR;
+}
+
+/*
+ * 函数用途：读取并校验液位频率，在连续非零越界时执行最多三轮受控恢复。
+ * 调用场景：液位搜索和跟随需要一个可靠整数Hz频率时。
+ * 关键约束：0表示当前未稳定并持续等待；通信错误立即传播，非零越界恢复耗尽才返回频率异常。
+ */
+static uint32_t OilLevel_ReadValidatedFrequencyInternal(
+    volatile uint32_t *frequency_out,
+    uint32_t start_tick,
+    uint32_t timeout_ms) {
 	if (frequency_out == NULL) {
 		return SYSTEM_CALL_CONDITION_ERROR;   /* 比设备通信错误更合理 */
 	}
@@ -327,31 +353,60 @@ uint32_t OilLevel_ReadValidatedFrequency(volatile uint32_t *frequency_out) {
 	int mode_switch_recovery_count = 0;
 
 	while (1) {
-		for (int attempt = 0; attempt < MAX_INVALID_FREQ_RETRY; attempt++) {
-			ret = SensorService_ReadLevelFrequency(&hz);
+		int invalid_frequency_count = 0;
 
+		if ((timeout_ms != 0U) &&
+		    ((HAL_GetTick() - start_tick) >= timeout_ms)) {
+			return MEASUREMENT_FREQUENCY_LEVEL_TIMEOUT;
+		}
+		while (invalid_frequency_count < MAX_INVALID_FREQ_RETRY) {
+			if ((timeout_ms != 0U) &&
+			    ((HAL_GetTick() - start_tick) >= timeout_ms)) {
+				return MEASUREMENT_FREQUENCY_LEVEL_TIMEOUT;
+			}
+			ret = OilLevel_ReadFrequencySample(&hz);
 			if (ret != NO_ERROR) {
-				return SensorComm_DiagnoseTimeout(ret, "读取液位频率");  /* 读取失败直接返回错误码 */
+				return ret;
+			}
+			if ((timeout_ms != 0U) &&
+			    ((HAL_GetTick() - start_tick) >= timeout_ms)) {
+				return MEASUREMENT_FREQUENCY_LEVEL_TIMEOUT;
 			}
 
-			if (hz != 0 && hz <= 6500) {
+			if ((hz > 0U) && (hz <= 6500U)) {
 				*frequency_out = hz;
 				printf("液位频率: %lu Hz\r\n", (unsigned long)*frequency_out);
 				return NO_ERROR;
 			}
 
+            if (hz == 0U) {
+                /* 0表示当前测量尚未稳定，只等待下一样本，不计错、不恢复通信方式。 */
+				ret = AbortableDelay_CommandSwitch(1000U, 100U);
+				if (ret != NO_ERROR) {
+					return ret;
+				}
+                continue;
+            }
+
+            invalid_frequency_count++;
             ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
                            ERROR_LOG_OP_READ_LEVEL_FREQ,
                            ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL),
-                           (uint32_t)(attempt + 1),
+                           (uint32_t)invalid_frequency_count,
                            MAX_INVALID_FREQ_RETRY,
                            SONIC_FREQ_ABNORMAL);
+            /* 非零频率超过液位业务上限时打印对应V4包，便于核对R02和R04。 */
+            SensorComm_PrintFailurePackets(SONIC_FREQ_ABNORMAL, "读取液位频率");
 			ret = AbortableDelay_CommandSwitch(1000U, 100U);
 			if (ret != NO_ERROR) {
 				return ret;
 			}
 		}
 
+		if ((timeout_ms != 0U) &&
+		    ((HAL_GetTick() - start_tick) >= timeout_ms)) {
+			return MEASUREMENT_FREQUENCY_LEVEL_TIMEOUT;
+		}
 		if (mode_switch_recovery_count >= MAX_MODE_SWITCH_RECOVERY) {
 			return SONIC_FREQ_ABNORMAL;
 		}
@@ -373,6 +428,20 @@ uint32_t OilLevel_ReadValidatedFrequency(volatile uint32_t *frequency_out) {
                          (uint32_t)mode_switch_recovery_count,
                          MAX_MODE_SWITCH_RECOVERY);
 	}
+}
+
+/* 兼容静态读取场景：0值可等待到稳定，仅允许命令切换打断。 */
+uint32_t OilLevel_ReadValidatedFrequency(volatile uint32_t *frequency_out) {
+	return OilLevel_ReadValidatedFrequencyInternal(frequency_out, 0U, 0U);
+}
+
+/* 连续查找场景共享外层截止时间，避免内部重试和恢复绕过总超时。 */
+uint32_t OilLevel_ReadValidatedFrequencyWithDeadline(
+    volatile uint32_t *frequency_out,
+    uint32_t start_tick,
+    uint32_t timeout_ms) {
+	return OilLevel_ReadValidatedFrequencyInternal(
+		frequency_out, start_tick, timeout_ms);
 }
 
 /*
