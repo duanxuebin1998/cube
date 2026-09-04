@@ -21,8 +21,10 @@
 #include "stm32f4xx_hal.h"
 #include "system_parameter.h"
 
-/* SI 剖面默认首测点距基准 100.0 mm，单位为 0.1 mm。 */
+/* SI 剖面默认首个后续测点绝对位置 100.0 mm，单位为 0.1 mm。 */
 #define SI_PROFILE_DEFAULT_FIRST_POINT_01MM 1000U
+/* SearchBottom 成功后已上提 100.0 mm；历史罐底参考按此偏移恢复 Point0。 */
+#define SI_PROFILE_BOTTOM_RELEASE_OFFSET_01MM 1000U
 /* SI 剖面默认相邻测点间隔 1000.0 mm，单位为 0.1 mm。 */
 #define SI_PROFILE_DEFAULT_INCREMENT_01MM 10000U
 /* SI 剖面到达每个测点后的默认停留时间 10 s。 */
@@ -45,8 +47,8 @@
 #define SI_PROFILE_DENSITY_TEMP_EPS_C 0.2f
 /* SI 剖面本周期罐底位置基准已经建立的标志。 */
 static uint8_t s_si_profile_bottom_ref_valid = 0U;
-/* SI 剖面本周期罐底基准位置，单位为 0.1 mm。 */
-static int32_t s_si_profile_bottom_position_01mm = 0;
+/* SI 剖面由可信罐底确定的 Point0 实际测量位置，单位为 0.1 mm。 */
+static int32_t s_si_profile_point0_position_01mm = 0;
 /* 距上次 SI 探底完成后已执行的剖面次数。 */
 static uint32_t s_si_profile_count_since_bottom = 0U;
 /* SI 剖面上电后的首轮标志，用于强制建立罐底基准。 */
@@ -255,7 +257,7 @@ uint32_t SiProfile_CompleteAfterReturnToLevel(void)
  * @details 调用场景：SI profile 每轮开始前，由 CPU2 独立 profile 流程调用。
  * @note 关键约束：这里只做运行期兜底，不写回 FRAM；参数持久化归一化仍由参数存储层负责。
  *
- * @param first_point_01mm SI Profile 中 Point0 之后首个候选点相对底部的距离，单位 0.1 mm。
+ * @param first_point_01mm SI Profile 中 Point0 之后首个候选点的绝对位置，单位 0.1 mm。
  * @param increment_01mm SI Profile 相邻候选测点之间的间距，单位 0.1 mm。
  * @param dwell_time_s 用于返回归一化后的测点停留时间，单位 s。
  * @param bottom_detect_interval 用于返回 SI Profile 重新探底的周期间隔；1 表示每轮探底。
@@ -347,6 +349,28 @@ static int32_t SiProfile_ResolveBottomPositionFromCable(int32_t bottom_cable_01m
 }
 
 /**
+ * @brief 根据可信罐底参考恢复不会重新触底的 Point0 位置。
+ *
+ * @details 调用场景：上电后复用普通探底参考，或本轮不重新探底时沿用既有 Point0。
+ * @note 关键约束：偏移量必须与 SearchBottom 成功收尾的上提距离保持一致。
+ *
+ * @param bottom_cable_01mm 探底流程记录的罐底尺带长度，单位 0.1 mm。
+ * @return 返回罐底坐标上方 100.0 mm 的 Point0 位置，单位 0.1 mm，并钳位到 INT32_MAX。
+ */
+static int32_t SiProfile_ResolveReleasedPoint0FromCable(int32_t bottom_cable_01mm)
+{
+    int64_t point0_position =
+            (int64_t)SiProfile_ResolveBottomPositionFromCable(bottom_cable_01mm) +
+            (int64_t)SI_PROFILE_BOTTOM_RELEASE_OFFSET_01MM;
+
+    if (point0_position > INT32_MAX) {
+        point0_position = INT32_MAX;
+    }
+
+    return (int32_t)point0_position;
+}
+
+/**
  * @brief 在本轮新探底前快照普通探底流程已经建立的可信底部参考。
  *
  * @details 调用场景：SI Profile 每轮探底判断之前。
@@ -356,50 +380,58 @@ static void SiProfile_CaptureSharedBottomReference(void)
 {
     if ((s_si_profile_bottom_ref_valid == 0U) &&
         (g_measurement.height_measurement.bottom_reference_valid != 0U)) {
-        s_si_profile_bottom_position_01mm =
-                SiProfile_ResolveBottomPositionFromCable(TankHeight_GetBottomCableLength01mm());
+        s_si_profile_point0_position_01mm =
+                SiProfile_ResolveReleasedPoint0FromCable(TankHeight_GetBottomCableLength01mm());
         s_si_profile_bottom_ref_valid = 1U;
         printf("SI Profile 已快照普通探底参考: 尺带=%ld(0.1mm) Point0=%.1fmm\r\n",
                (long)TankHeight_GetBottomCableLength01mm(),
-               (double)s_si_profile_bottom_position_01mm / 10.0);
+               (double)s_si_profile_point0_position_01mm / 10.0);
     }
 }
 
 /**
- * @brief 确定 SI profile 的底部基准位置。
+ * @brief 确定 SI profile 的 Point0 实际测量位置。
  *
  * @details 调用场景：探底成功、探底失败或本轮跳过探底后。
- * @note 关键约束：探底失败时优先沿用旧底部；没有旧底部则使用当前位置继续本轮测量。
+ * @note 关键约束：新探底成功后直接采用 SearchBottom 上提后的当前位置；后续周期沿用该释放位置，不再回到触底坐标。
  *
- * @param bottom_search_done 罐底。
- * @param bottom_search_ret 罐底。
- * @return 返回 SI Profile 使用的罐底绝对位置，单位 0.1 mm；已有有效罐底参考时返回锁存值，否则返回当前电机位置作为兼容回退。
+ * @param bottom_search_done 本轮已经调用 SearchBottom 的标志。
+ * @param bottom_search_ret 本轮 SearchBottom 的返回值。
+ * @return 返回 SI Profile 使用的 Point0 实际位置，单位 0.1 mm；没有有效参考时返回当前位置作为兼容回退。
  */
-static int32_t SiProfile_SelectBottomPosition(uint8_t bottom_search_done,
+static int32_t SiProfile_SelectPoint0Position(uint8_t bottom_search_done,
                                                   uint32_t bottom_search_ret)
 {
     int32_t current_position = g_measurement.debug_data.sensor_position;
 
+    if (current_position < 0) {
+        current_position = 0;
+    }
+
     if ((bottom_search_done != 0U) && (bottom_search_ret == NO_ERROR)) {
-        s_si_profile_bottom_position_01mm =
+        int32_t resolved_bottom_position =
                 SiProfile_ResolveBottomPositionFromCable(TankHeight_GetBottomCableLength01mm());
+
+        /* SearchBottom 已完成 100 mm 上提，直接把实际停留位置作为 Point0。 */
+        s_si_profile_point0_position_01mm = current_position;
         s_si_profile_bottom_ref_valid = 1U;
         s_si_profile_first_run = 0U;
         g_measurement.height_measurement.bottom_reference_valid = 1U;
-        printf("SI Profile 新探底基准: 罐高=%lu(0.1mm) 尺带=%ld(0.1mm) Point0=%.1fmm\r\n",
+        printf("SI Profile 新探底基准: 罐高=%lu(0.1mm) 尺带=%ld(0.1mm) 罐底=%.1fmm Point0=%.1fmm\r\n",
                (unsigned long)g_deviceParams.tankHeight,
                (long)TankHeight_GetBottomCableLength01mm(),
-               (double)s_si_profile_bottom_position_01mm / 10.0);
-        return s_si_profile_bottom_position_01mm;
+               (double)resolved_bottom_position / 10.0,
+               (double)s_si_profile_point0_position_01mm / 10.0);
+        return s_si_profile_point0_position_01mm;
     }
 
     if (s_si_profile_bottom_ref_valid != 0U) {
-        printf("SI Profile 探底未更新，沿用旧底部位置 %.1fmm\r\n",
-               (double)s_si_profile_bottom_position_01mm / 10.0);
-        return s_si_profile_bottom_position_01mm;
+        printf("SI Profile 探底未更新，沿用已释放 Point0 位置 %.1fmm\r\n",
+               (double)s_si_profile_point0_position_01mm / 10.0);
+        return s_si_profile_point0_position_01mm;
     }
 
-    printf("SI Profile 无旧底部位置，使用当前位置 %.1fmm 继续\r\n",
+    printf("SI Profile 无旧 Point0 位置，使用当前位置 %.1fmm 继续\r\n",
            (double)current_position / 10.0);
     return current_position;
 }
@@ -407,17 +439,17 @@ static int32_t SiProfile_SelectBottomPosition(uint8_t bottom_search_done,
 /**
  * @brief 按 SI profile 语义生成 Point0 和后续候选停点。
  *
- * @details 调用场景：SI profile 确定底部基准后。
- * @note 关键约束：不预先找液位；Point0 固定为底部点，后续点只按罐高和 200 点上限生成。
+ * @details 调用场景：SI profile 确定 Point0 实际测量位置后。
+ * @note 关键约束：不预先找液位；Point0 使用罐底释放后的实际位置，后续点保持 40001 绝对位置语义。
  *
- * @param bottom_position_01mm SI Profile 使用的罐底坐标位置，单位 0.1 mm。
- * @param first_point_01mm SI Profile 中 Point0 之后首个候选点相对底部的距离，单位 0.1 mm。
+ * @param point0_position_01mm SI Profile 使用的 Point0 实际测量位置，单位 0.1 mm。
+ * @param first_point_01mm SI Profile 中 Point0 之后首个候选点的绝对位置，单位 0.1 mm。
  * @param increment_01mm SI Profile 相邻候选测点之间的间距，单位 0.1 mm。
  * @param points01 用于接收 Point0 及后续候选停点的数组，元素单位为 0.1 mm。
  * @param point_count 用于返回实际生成的候选停点数量，最大为 200。
- * @return NO_ERROR 表示已生成至少一个且不超过 200 个合法停点；空输出指针返回 SYSTEM_CALL_CONDITION_ERROR，底部、首点、间距、容量或生成结果非法时返回 MEASUREMENT_DENSITY_PLAN_INVALID。
+ * @return NO_ERROR 表示已生成至少一个且不超过 200 个合法停点；空输出指针返回 SYSTEM_CALL_CONDITION_ERROR，Point0、首点、间距、容量或生成结果非法时返回 MEASUREMENT_DENSITY_PLAN_INVALID。
  */
-static uint32_t SiProfile_BuildPoints(int32_t bottom_position_01mm,
+static uint32_t SiProfile_BuildPoints(int32_t point0_position_01mm,
                                           uint32_t first_point_01mm,
                                           uint32_t increment_01mm,
                                           int32_t *points01,
@@ -426,7 +458,7 @@ static uint32_t SiProfile_BuildPoints(int32_t bottom_position_01mm,
     uint32_t n = 0U;
     int64_t target;
     int64_t tank_height = (int64_t)g_deviceParams.tankHeight;
-    int64_t bottom = (int64_t)bottom_position_01mm;
+    int64_t bottom = (int64_t)point0_position_01mm;
 
     if ((points01 == NULL) || (point_count == NULL)) {
         return SYSTEM_CALL_CONDITION_ERROR;
@@ -544,7 +576,7 @@ static void SiProfile_FillPointSample(SiProfilePointSample *sample,
  * @brief SI profile 到点后读取密度并判断该点是液体点还是液面以上点。
  *
  * @details 调用场景：SiProfile_RunPoints01mmWithDwell() 逐点调用。
- * @note 关键约束：密度/频率立即满足空气条件时直接返回空气点，避免沿用普通单点测量的 5 分钟零密度等待。
+ * @note 关键约束：零值和非有限值不在首次读取时判空气；等待满 5 分钟后沿用原有末次液体值、频率异常或零密度空气处理，不新增整轮未就绪出口。
  *
  * @param sample 待处理的单次测量样本。
  * @param stable_win_ms 传感器读数必须持续满足稳定条件的窗口时长，单位 ms。
@@ -556,6 +588,7 @@ static uint32_t SiProfile_ReadPointAndClassify(SiProfilePointSample *sample,
     uint32_t ret;
     uint32_t start_tick;
     uint32_t stable_start = 0U;
+    uint32_t invalid_sample_count = 0U;
     uint8_t first_sample = 1U;
     uint8_t has_valid_frequency = 0U;
     uint8_t current_frequency_invalid = 0U;
@@ -574,11 +607,6 @@ static uint32_t SiProfile_ReadPointAndClassify(SiProfilePointSample *sample,
         return SYSTEM_CALL_CONDITION_ERROR;
     }
 
-    ret = SensorService_EnableDensityMode();
-    if (ret == STATE_SWITCH) {
-        return STATE_SWITCH;
-    }
-    CHECK_ERROR(ret);
 
     if (stable_win_ms == 0U) {
         stable_win_ms = 5000U;
@@ -597,22 +625,22 @@ static uint32_t SiProfile_ReadPointAndClassify(SiProfilePointSample *sample,
         if ((now - start_tick) >= SI_PROFILE_DENSITY_MAX_WAIT_MS) {
             if (have_last_liquid != 0U) {
                 SiProfile_FillPointSample(sample,
-                                              last_liquid_freq,
-                                              last_liquid_density,
-                                              last_liquid_temp,
-                                              0U,
-                                              "timeout_last_liquid");
+                                          last_liquid_freq,
+                                          last_liquid_density,
+                                          last_liquid_temp,
+                                          0U,
+                                          "timeout_last_liquid");
                 return NO_ERROR;
             }
             if ((has_valid_frequency == 0U) || (current_frequency_invalid != 0U)) {
                 return SONIC_FREQ_ABNORMAL;
             }
             SiProfile_FillPointSample(sample,
-                                          cur_freq,
-                                          0.0f,
-                                          cur_temp,
-                                          1U,
-                                          "density_timeout_zero");
+                                      cur_freq,
+                                      0.0f,
+                                      cur_temp,
+                                      1U,
+                                      "density_timeout_zero");
             return NO_ERROR;
         }
 
@@ -624,6 +652,34 @@ static uint32_t SiProfile_ReadPointAndClassify(SiProfilePointSample *sample,
             return ret;
         }
 
+        if ((!isfinite(cur_freq)) || (!isfinite(cur_density)) || (!isfinite(cur_temp)) ||
+            (cur_freq <= 0.0f) || (cur_density <= 0.0f)) {
+            if (isfinite(cur_freq) && (cur_freq > 0.0f)) {
+                has_valid_frequency = 1U;
+                current_frequency_invalid = 0U;
+            } else {
+                current_frequency_invalid = 1U;
+            }
+            invalid_sample_count++;
+            first_sample = 1U;
+            stable_start = 0U;
+            if ((invalid_sample_count == 1U) || ((invalid_sample_count % 25U) == 0U)) {
+                printf("SI Profile 测点数据未稳定: 频率=%.3f 密度=%.3f 温度=%.3f 次数=%lu\r\n",
+                       (double)cur_freq,
+                       (double)cur_density,
+                       (double)cur_temp,
+                       (unsigned long)invalid_sample_count);
+            }
+            ret = AbortableDelay_CommandSwitch(SI_PROFILE_DENSITY_SAMPLE_MS, 50U);
+            if (ret != NO_ERROR) {
+                return ret;
+            }
+            continue;
+        }
+        invalid_sample_count = 0U;
+        has_valid_frequency = 1U;
+        current_frequency_invalid = 0U;
+
         if (SiProfile_IsAirPoint(cur_density, cur_freq, &air_reason) != 0U) {
             SiProfile_FillPointSample(sample,
                                           cur_freq,
@@ -633,18 +689,6 @@ static uint32_t SiProfile_ReadPointAndClassify(SiProfilePointSample *sample,
                                           air_reason);
             return NO_ERROR;
         }
-
-        if (cur_freq <= 0.0f) {
-            current_frequency_invalid = 1U;
-            first_sample = 1U;
-            ret = AbortableDelay_CommandSwitch(SI_PROFILE_DENSITY_SAMPLE_MS, 50U);
-            if (ret != NO_ERROR) {
-                return ret;
-            }
-            continue;
-        }
-        has_valid_frequency = 1U;
-        current_frequency_invalid = 0U;
 
         last_liquid_freq = cur_freq;
         last_liquid_density = cur_density;
@@ -698,12 +742,14 @@ static uint32_t SiProfile_ReadPointAndClassify(SiProfilePointSample *sample,
  * @param n 测点数组中参与打印或测量的有效点数。
  * @param dist 密度分布测量结果对象。
  * @param dwell_time_s 测点到位后的稳定停留时间，单位 s。
+ * @param point0_already_reached 非零表示新探底已上提到 Point0，本轮禁止再次下行定位 Point0。
  * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 static uint32_t SiProfile_RunPoints01mmWithDwell(const int32_t *p01,
                                                      uint32_t n,
                                                      DensityDistribution *dist,
-                                                     uint32_t dwell_time_s)
+                                                     uint32_t dwell_time_s,
+                                                     uint8_t point0_already_reached)
 {
     uint32_t valid = 0U;
     uint64_t sum_temp_raw = 0U;
@@ -727,22 +773,35 @@ static uint32_t SiProfile_RunPoints01mmWithDwell(const int32_t *p01,
         SiProfilePointSample sample;
         uint32_t report_position_01mm;
 
-        printf("SI Profile 移动到候选点%lu 位置 %.1f mm\r\n",
-               (unsigned long)i,
-               pos_mm);
+        if ((i == 0U) && (point0_already_reached != 0U)) {
+            printf("SI Profile 候选点0复用探底上提后位置 %.1f mm，不再下行\r\n", pos_mm);
+        } else {
+            printf("SI Profile 移动到候选点%lu 位置 %.1f mm\r\n",
+                   (unsigned long)i,
+                   pos_mm);
 
-        ret = MotorCtrl_JogMoveToPosition(pos_mm, MotorCtrl_GetDefaultSpeedX100());
+            ret = MotorCtrl_JogMoveToPosition(pos_mm, MotorCtrl_GetDefaultSpeedX100());
+            if (ret == STATE_SWITCH) {
+                return STATE_SWITCH;
+            }
+            if (ret != NO_ERROR) {
+                printf("SI Profile 电机移动失败: 位置=%.1fmm 错误码=%lu\r\n", pos_mm, (unsigned long)ret);
+                return ret;
+            }
+        }
+
+        ret = SensorService_EnableDensityMode();
         if (ret == STATE_SWITCH) {
             return STATE_SWITCH;
         }
         if (ret != NO_ERROR) {
-            printf("SI Profile 电机移动失败: 位置=%.1fmm 错误码=%lu\r\n", pos_mm, (unsigned long)ret);
+            printf("SI Profile 切换密度模式失败: 位置=%.1fmm 错误码=%lu\r\n", pos_mm, (unsigned long)ret);
             return ret;
         }
 
         /*
-         * 40003表示到点停稳后的纯等待时间，不兼作传感器稳定判定窗口；
-         * 等待结束后再用固定稳定窗口读取，保证1～3600秒配置都按原值执行。
+         * 先切换密度模式，再执行40003配置的到点驻留时间，让传感器在驻留期间完成模式稳定；
+         * 驻留结束后仍使用固定稳定窗口读取，保证1～3600秒配置都按原值执行。
          */
         if (dwell_ms > 0U) {
             ret = AbortableDelay_CommandSwitch(dwell_ms, 100U);
@@ -840,7 +899,7 @@ void CMD_SiProfile(void)
     uint8_t should_detect_bottom;
     uint8_t bottom_search_done = 0U;
     uint32_t bottom_search_ret = NO_ERROR;
-    int32_t bottom_position_01mm;
+    int32_t point0_position_01mm;
     int32_t points01[MAX_MEASUREMENT_POINTS];
     uint32_t point_count = 0U;
     uint32_t primask;
@@ -880,9 +939,9 @@ void CMD_SiProfile(void)
         }
     }
 
-    bottom_position_01mm = SiProfile_SelectBottomPosition(bottom_search_done, bottom_search_ret);
+    point0_position_01mm = SiProfile_SelectPoint0Position(bottom_search_done, bottom_search_ret);
 
-    ret = SiProfile_BuildPoints(bottom_position_01mm,
+    ret = SiProfile_BuildPoints(point0_position_01mm,
                                     first_point_01mm,
                                     increment_01mm,
                                     points01,
@@ -898,11 +957,14 @@ void CMD_SiProfile(void)
     ret = SiProfile_RunPoints01mmWithDwell(points01,
                                            point_count,
                                            &s_si_profile_candidate,
-                                           dwell_time_s);
+                                           dwell_time_s,
+                                           ((bottom_search_done != 0U) &&
+                                            (bottom_search_ret == NO_ERROR)) ? 1U : 0U);
     if (ret == STATE_SWITCH) {
         SiProfile_HandleCancel();
         return;
     }
+
     if (ret != NO_ERROR) {
         SiProfile_HandleFailure();
         printf("SI Profile 测量失败，错误码=0x%08lX\r\n", (unsigned long)ret);

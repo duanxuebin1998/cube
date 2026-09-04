@@ -3469,3 +3469,26 @@ CPU3通信和界面：
 - 隔离验证树按主工作区最终14个固件文件SHA-256逐项一致后执行CPU2 `V1.42.9.0` Debug clean-first构建，132个目标完成；`text=360060`、`data=2360`、`bss=59632`。固定名和版本名HEX的SHA-256均为`D1E5F2C5FEBD55AEF11DC9AC36A7F5210452FD816449AF0D9D53DAE1467985A3`。
 - `check_flow_docs.py`、CP936源码解码/换行检查、`git diff --check`和仓库根目录门禁在提交前复核；本机流程导航同步但不提交。
 - 尚未执行目标板烧写、真实DM4传感器、RS485抓包、错误注入、运动停机时序、长期自动恢复、现场或SIL验证。
+
+## 2026-09-04 - 修复 SI 探底 Point0 与密度模式稳定读取
+
+版本：
+- CPU2：`V1.42.9.0 -> V1.42.10.0`（PATCH）。
+- CPU3：保持 `V1.40.1.0`。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 35；CPU2/CPU3 共享寄存器、共享命令、共享状态和 SI 对外寄存器语义不变，CPU3 固件无需修改。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构、字段偏移、CRC 范围和 FRAM 布局不变；升级不恢复出厂、不清除现场参数。
+- SI 参数 `40001~40003` 含义不变，本次仅调整 CPU2 内部 Point0 定位、密度模式切换和读数判定时序。
+
+本次修改：
+- `SearchBottom()` 成功后直接以上提 100 mm 的当前实际停机位置作为 Point0，本轮不再下行；复用可信旧底时按旧底上方 100 mm 恢复 Point0，并继续报告实际位置。
+- 每个候选点到位后先切换 D 模式，再执行 `40003` 配置的停留时间，停留完成后才读取频率、密度和温度。
+- 零值、非有限值或非正值按未稳定继续读取，不立即判为空气点；真实通信和帧错误仍按原错误链返回。
+- 单点等待满 5 分钟时保留原回退逻辑：有液体样本采用最后一次液体样本，无有效频率返回频率异常，已有有效频率但密度未稳定则按零密度空气点结束；不新增整次 SI profile stale 取消。
+
+验证：
+- `check_si_protocol_contract.py`、`check_flow_docs.py`、`check_flow_impact.py --files LTD_MAIN_CPU2/Application/Src/measurement/density/measure_density_si.c --strict` 和 `check_version_bumped.py` 通过。
+- CPU2 `V1.42.10.0` Debug clean-first 构建通过，132 个目标完成；`text=359332`、`data=2360`、`bss=59632`。固定名和版本名 HEX 的 SHA-256 均为 `4FC5E4517B6FB6D980435A3632949384EA3757E64941E01A66025ACA02F22E2E`。
+- SI 源码通过 CP936 严格解码并保持 LF 换行，版本头通过 CP936 严格解码并保持 CRLF 换行；本机流程导航同步但不提交。
+- 尚未执行目标板烧写、真实 SI 传感器、RS485 抓包、电机实际行程、连续 5 分钟未稳定、故障注入、现场或 SIL 验证；详见对应改动与测试方案。
