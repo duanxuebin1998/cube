@@ -398,12 +398,17 @@ uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode)
 /**
  * @brief 在频率闭环运动期间检查位置、称重碰撞和丢步。
  *
- * @param dir 当前已执行或即将执行的运动方向；无方向时只刷新位置。
- * @param check_lost_step 非0表示执行常规丢步检测；精细速度低于0.03m/min时传0。
- * @return NO_ERROR 表示可继续；其他值为位置、称重通信/碰撞或丢步错误。
- * @note 位置边界只阻止继续向外越界，不阻止从罐顶或盲区向安全区退回。
+ * @param guard_direction 本轮位置和称重保护使用的方向；无方向时只刷新位置。
+ * @param check_lost_step 非0表示执行丢步检测；精细速度低于0.03m/min时传0。
+ * @param command_direction 当前已经下发并覆盖上一时段的有效运动方向。
+ * @param effective_command_speed_m_min 当前运动阶段已下发的有效指令速度，单位m/min。
+ * @return NO_ERROR表示可继续；其他值为位置、称重通信/碰撞或丢步错误。
+ * @note 保护方向可以是下一步期望方向；丢步检测必须使用当前已下发方向，避免换向前提前切换累计方向。
  */
-static uint32_t FrequencyLevel_CheckMotionGuards(int dir, uint8_t check_lost_step)
+static uint32_t FrequencyLevel_CheckMotionGuards(int guard_direction,
+                                                 uint8_t check_lost_step,
+                                                 int command_direction,
+                                                 float effective_command_speed_m_min)
 {
     uint32_t ret = MotorCtrl_PollRuntimePosition();
     int64_t zero_weight_limit;
@@ -412,12 +417,14 @@ static uint32_t FrequencyLevel_CheckMotionGuards(int dir, uint8_t check_lost_ste
     if (ret != NO_ERROR) {
         return ret;
     }
-    if (((dir == MOTOR_DIRECTION_DOWN) || (dir == OIL_LEVEL_DIRECTION_NONE)) &&
+    if (((guard_direction == MOTOR_DIRECTION_DOWN) ||
+         (guard_direction == OIL_LEVEL_DIRECTION_NONE)) &&
         ((int64_t)g_measurement.debug_data.sensor_position <=
          (int64_t)g_deviceParams.blindZone)) {
         return MEASUREMENT_OILLEVEL_LOW;
     }
-    if (((dir == MOTOR_DIRECTION_UP) || (dir == OIL_LEVEL_DIRECTION_NONE)) &&
+    if (((guard_direction == MOTOR_DIRECTION_UP) ||
+         (guard_direction == OIL_LEVEL_DIRECTION_NONE)) &&
         (g_deviceParams.tankHeight > 1000U) &&
         ((int64_t)g_measurement.debug_data.sensor_position >=
          ((int64_t)g_deviceParams.tankHeight - 1000LL))) {
@@ -431,15 +438,17 @@ static uint32_t FrequencyLevel_CheckMotionGuards(int dir, uint8_t check_lost_ste
     zero_weight_limit = ((int64_t)g_deviceParams.full_weight *
                          (100LL + (int64_t)g_deviceParams.zero_weight_threshold_ratio)) /
                         100LL;
-    if (((dir == MOTOR_DIRECTION_UP) || (dir == OIL_LEVEL_DIRECTION_NONE)) &&
+    if (((guard_direction == MOTOR_DIRECTION_UP) ||
+         (guard_direction == OIL_LEVEL_DIRECTION_NONE)) &&
         ((int64_t)current_weight >= zero_weight_limit)) {
         return WEIGHT_COLLISION_DETECTED;
     }
-    if (((dir == MOTOR_DIRECTION_DOWN) || (dir == OIL_LEVEL_DIRECTION_NONE)) &&
+    if (((guard_direction == MOTOR_DIRECTION_DOWN) ||
+         (guard_direction == OIL_LEVEL_DIRECTION_NONE)) &&
         (current_weight <= (int32_t)g_deviceParams.bottom_weight_threshold)) {
         return WEIGHT_COLLISION_DETECTED;
     }
-    if (dir == OIL_LEVEL_DIRECTION_NONE) {
+    if (guard_direction == OIL_LEVEL_DIRECTION_NONE) {
         return NO_ERROR;
     }
 
@@ -447,22 +456,31 @@ static uint32_t FrequencyLevel_CheckMotionGuards(int dir, uint8_t check_lost_ste
     if ((ret != NO_ERROR) || (check_lost_step == 0U)) {
         return ret;
     }
-    return MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.sensor_position);
+    return MotorCtrl_CheckLostStepAutoTimingWithSpeed(
+            g_measurement.debug_data.sensor_position,
+            command_direction,
+            effective_command_speed_m_min);
 }
 
 /**
  * @brief 在运动保护通过后读取一次液位频率。
  *
- * @param active_dir 当前实际运动方向。
- * @param check_lost_step 非0表示本轮执行常规丢步检测。
- * @return NO_ERROR 表示保护和频率读取均成功；其他值为安全保护或传感器错误。
+ * @param active_dir 当前已经下发的运动方向。
+ * @param check_lost_step 非0表示本轮执行丢步检测。
+ * @param effective_command_speed_m_min 当前运动阶段已下发的有效指令速度，单位m/min。
+ * @return NO_ERROR表示保护和频率读取均成功；其他值为安全保护或传感器错误。
  */
-static uint32_t FrequencyLevel_ReadCurrentWithGuards(int active_dir, uint8_t check_lost_step)
+static uint32_t FrequencyLevel_ReadCurrentWithGuards(int active_dir,
+                                                     uint8_t check_lost_step,
+                                                     float effective_command_speed_m_min)
 {
     uint32_t ret = NO_ERROR;
 
     if (active_dir != OIL_LEVEL_DIRECTION_NONE) {
-        ret = FrequencyLevel_CheckMotionGuards(active_dir, check_lost_step);
+        ret = FrequencyLevel_CheckMotionGuards(active_dir,
+                                               check_lost_step,
+                                               active_dir,
+                                               effective_command_speed_m_min);
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -555,6 +573,7 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
     uint32_t active_speed_x100 = 0U;
     float active_fine_speed_m_min = 0.0f;
     uint8_t fine_motion_active = 0U;
+    uint8_t lost_step_check_active = 0U;
     int initial_dir = OIL_LEVEL_DIRECTION_NONE;
     uint8_t slow_speed_latched = (follow_mode != 0U) ? 1U : 0U;
     float deadband;
@@ -605,7 +624,7 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
         float frequency_error;
         uint32_t speed_x100;
         int dir;
-
+        uint8_t previous_motion_active;
         if (HasEffectiveCommandSwitchRequest()) {
             return FrequencyLevel_StopAndReturn(STATE_SWITCH, "命令切换");
         }
@@ -613,9 +632,9 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
         if (fixed_target_mode != 0U) {
             ret = FrequencyLevel_ReadCurrentWithGuards(
                     active_dir,
-                    ((fine_motion_active == 0U) ||
-                     (active_fine_speed_m_min >= FREQUENCY_LEVEL_FINE_LOST_STEP_MIN_SPEED_M_MIN)) ?
-                    1U : 0U);
+                    lost_step_check_active,
+                    (fine_motion_active != 0U) ?
+                    active_fine_speed_m_min : ((float)active_speed_x100 / 100.0f));
             if (ret == MEASUREMENT_OILLEVEL_LOW) {
                 ret = FrequencyLevel_HandleLowLimit(follow_mode,
                                                     &active_dir,
@@ -647,6 +666,7 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
             }
             fine_motion_active = 0U;
             active_fine_speed_m_min = 0.0f;
+            lost_step_check_active = 0U;
             stable_count = 0U;
             g_measurement.oil_measurement.probe_at_liquid_level = 0U;
             g_measurement.oil_measurement.liquid_stable = 0U;
@@ -675,6 +695,7 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
             }
             fine_motion_active = 0U;
             active_fine_speed_m_min = 0.0f;
+            lost_step_check_active = 0U;
             stable_count = 0U;
             g_measurement.oil_measurement.probe_at_liquid_level = 0U;
             g_measurement.oil_measurement.liquid_stable = 0U;
@@ -708,9 +729,11 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
         if (fixed_target_mode != 0U) {
             ret = FrequencyLevel_CheckMotionGuards(
                     dir,
-                    ((fine_motion_active == 0U) ||
-                     (active_fine_speed_m_min >= FREQUENCY_LEVEL_FINE_LOST_STEP_MIN_SPEED_M_MIN)) ?
-                    1U : 0U);
+                    ((active_dir != OIL_LEVEL_DIRECTION_NONE) &&
+                     (lost_step_check_active != 0U)) ? 1U : 0U,
+                    active_dir,
+                    (fine_motion_active != 0U) ?
+                    active_fine_speed_m_min : ((float)active_speed_x100 / 100.0f));
             if (ret == MEASUREMENT_OILLEVEL_LOW) {
                 ret = FrequencyLevel_HandleLowLimit(follow_mode,
                                                     &active_dir,
@@ -735,6 +758,7 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
             }
             fine_motion_active = 0U;
             active_fine_speed_m_min = 0.0f;
+            lost_step_check_active = 0U;
             stable_count++;
             printf("频率找液位\t进入死区\t稳定计数=%lu/%lu\r\n",
                    (unsigned long)stable_count,
@@ -764,6 +788,23 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
                 slow_speed_latched = 1U;
             }
         }
+
+        if ((fixed_target_mode != 0U) &&
+            (active_dir != OIL_LEVEL_DIRECTION_NONE) &&
+            (dir != active_dir) &&
+            (lost_step_check_active != 0U)) {
+            /* 换向慢停前结束旧速度区间，停机等待时间不按旧指令速度累计。 */
+            ret = MotorCtrl_CheckLostStepAutoTimingWithSpeed(
+                    g_measurement.debug_data.sensor_position,
+                    active_dir,
+                    0.0f);
+            if (ret != NO_ERROR) {
+                return FrequencyLevel_StopAndReturn(ret, "换向前丢步检测失败");
+            }
+        }
+
+        previous_motion_active =
+            (active_dir != OIL_LEVEL_DIRECTION_NONE) ? 1U : 0U;
 
         if ((fixed_target_mode != 0U) && (slow_speed_latched != 0U)) {
             float fine_speed_m_min = FrequencyLevel_ComputeFineSpeedMMin(frequency_error, deadband);
@@ -795,18 +836,42 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
                    MotorCtrl_DirectionText(dir),
                    (double)speed_x100 / 100.0);
 
-            ret = LevelVelocity_StartOrUpdateMotion(dir, speed_x100, &active_dir, &active_speed_x100);
+            ret = LevelVelocity_StartOrUpdateMotion(dir,
+                                                    speed_x100,
+                                                    &active_dir,
+                                                    &active_speed_x100);
             if (ret != NO_ERROR) {
                 return FrequencyLevel_StopAndReturn(ret, "启动速度模式失败");
             }
         }
 
         if (fixed_target_mode != 0U) {
+            uint8_t next_motion_active =
+                (active_dir != OIL_LEVEL_DIRECTION_NONE) ? 1U : 0U;
+            uint8_t next_lost_step_check_active =
+                ((fine_motion_active == 0U) ||
+                 (active_fine_speed_m_min >= FREQUENCY_LEVEL_FINE_LOST_STEP_MIN_SPEED_M_MIN)) ?
+                1U : 0U;
+
+            if ((next_motion_active != previous_motion_active) ||
+                (next_lost_step_check_active != lost_step_check_active)) {
+                /* 只在启停或检测启用状态变化时重建窗口；换向和速度变化由方式5检测器累计。 */
+                MotorCtrl_LostStepInit();
+                printf("频率找液位\t丢步检测新窗口\t方向=%s\t模式=%s\t检测=%s\r\n",
+                       MotorCtrl_DirectionText(active_dir),
+                       (fine_motion_active != 0U) ? "精细速度" : "常规速度",
+                       (next_lost_step_check_active != 0U) ? "启用" : "暂停");
+            }
+            lost_step_check_active = next_lost_step_check_active;
+        }
+
+        if (fixed_target_mode != 0U) {
             ret = FrequencyLevel_CheckMotionGuards(
                     active_dir,
-                    ((fine_motion_active == 0U) ||
-                     (active_fine_speed_m_min >= FREQUENCY_LEVEL_FINE_LOST_STEP_MIN_SPEED_M_MIN)) ?
-                    1U : 0U);
+                    lost_step_check_active,
+                    active_dir,
+                    (fine_motion_active != 0U) ?
+                    active_fine_speed_m_min : ((float)active_speed_x100 / 100.0f));
             if (ret == MEASUREMENT_OILLEVEL_LOW) {
                 ret = LevelVelocity_StartOrUpdateMotion(OIL_LEVEL_DIRECTION_NONE,
                                                         0U,

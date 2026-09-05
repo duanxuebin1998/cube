@@ -522,7 +522,12 @@ uint32_t MotorCtrl_CheckDriverGstat(void);
  */
 void MotorCtrl_SetBottomReference01mm(int32_t cable_length_01mm);
 
+/**
+ * @brief 初始化常规与方式5丢步检测窗口。
+ * @note 在新的独立运动阶段开始前由任务上下文调用；同时清空两套检测状态。
+ */
 void MotorCtrl_LostStepInit(void);
+
 /**
  * @brief 按固定周期执行丢步检测。
  *
@@ -534,6 +539,20 @@ void MotorCtrl_LostStepInit(void);
  * @return NO_ERROR 或疑似丢步错误码。
  */
 uint32_t MotorCtrl_CheckLostStepAutoTiming(int32_t currentPos);
+
+/**
+ * @brief 按方式5已下发的有效指令方向和速度执行丢步检测。
+ *
+ * @param currentPos 当前业务位置，单位0.1mm。
+ * @param command_dir 当前运动阶段已下发的有效方向，使用MOTOR_DIRECTION_UP/DOWN。
+ * @param effective_command_speed_m_min 当前运动阶段已下发的有效指令速度，单位m/min。
+ * @return NO_ERROR或疑似丢步错误码；方向无效，或速度为负数、非数、超上限时返回PARAM_RANGE_ERROR。
+ * @note 传入0.0表示当前没有运动指令，command_dir仍传停止前的有效方向，用于换向慢停前结束上一速度区间。
+ * @note 指令变化前先结算旧指令，变化后立即传入新方向和速度；检测器按方向段最远前沿累计有效进度。
+ */
+uint32_t MotorCtrl_CheckLostStepAutoTimingWithSpeed(int32_t currentPos,
+                                                   int command_dir,
+                                                   float effective_command_speed_m_min);
 
 /**
  * @brief 获取当前传感器位置快照。
