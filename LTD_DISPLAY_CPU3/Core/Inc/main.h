@@ -61,6 +61,8 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define WLED2_Pin GPIO_PIN_0
+#define WLED2_GPIO_Port GPIOF
 #define KEY_DOWN_Pin GPIO_PIN_1
 #define KEY_DOWN_GPIO_Port GPIOF
 #define KEY_DOWN_EXTI_IRQn EXTI1_IRQn
@@ -75,6 +77,8 @@ void Error_Handler(void);
 #define KEY_UP_EXTI_IRQn EXTI4_IRQn
 #define OLED_NREST_Pin GPIO_PIN_5
 #define OLED_NREST_GPIO_Port GPIOF
+#define WLED1_Pin GPIO_PIN_10
+#define WLED1_GPIO_Port GPIOF
 #define OLED_D_C_Pin GPIO_PIN_2
 #define OLED_D_C_GPIO_Port GPIOA
 #define ADDRESS0_Pin GPIO_PIN_3
