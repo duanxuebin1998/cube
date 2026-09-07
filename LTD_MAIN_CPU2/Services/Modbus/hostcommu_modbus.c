@@ -402,7 +402,11 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
                 HoldingRegisterArray[HOLDREGISTER_DEVICEPARAM_LEVEL_REFERENCE_REFRESH_ENABLE + 1U];
         uint32_t refresh_interval = ((uint32_t)HoldingRegisterArray[HOLDREGISTER_DEVICEPARAM_LEVEL_REFERENCE_REFRESH_INTERVAL_MIN] << 16) |
                 HoldingRegisterArray[HOLDREGISTER_DEVICEPARAM_LEVEL_REFERENCE_REFRESH_INTERVAL_MIN + 1U];
-        if ((refresh_enable > 1U) || (refresh_interval < 60U) || (refresh_interval > 10080U)) {
+        uint32_t bottom_drop = ((uint32_t)HoldingRegisterArray[HOLDREGISTER_DEVICEPARAM_BOTTOM_WEIGHT_THRESHOLD] << 16) |
+                HoldingRegisterArray[HOLDREGISTER_DEVICEPARAM_BOTTOM_WEIGHT_THRESHOLD + 1U];
+        /* 0只表示未配置；拒绝有符号称重差无法表示的值，保留原参数镜像。 */
+        if ((refresh_enable > 1U) || (refresh_interval < 60U) || (refresh_interval > 10080U) ||
+            (bottom_drop > INT32_MAX)) {
             WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
             sendframe[0] = (uint8_t)SlaveAddress;
             sendframe[1] = (uint8_t)(presetmultipleregisterfuncode | 0x80);

@@ -367,7 +367,7 @@ typedef enum
     /* ---------------- 罐底/罐高测量参数 ---------------- */
     COM_NUM_DEVICEPARAM_BOTTOM_DETECT_MODE,             /* 罐底检测模式 */
     COM_NUM_DEVICEPARAM_BOTTOM_ANGLE_THRESHOLD,         /* 探底角度阈值 */
-    COM_NUM_DEVICEPARAM_BOTTOM_WEIGHT_THRESHOLD,        /* 探底扭力阈值 */
+    COM_NUM_DEVICEPARAM_BOTTOM_WEIGHT_THRESHOLD,        /* 探底扭力阈值，按触底减重量解释 */
     COM_NUM_DEVICEPARAM_REFRESH_TANKHEIGHT_FLAG,        /* 刷新罐高标志 */
     COM_NUM_DEVICEPARAM_MAX_TANKHEIGHT_DEVIATION,       /* 罐高最大偏差 */
     COM_NUM_DEVICEPARAM_INITIAL_TANKHEIGHT,             /* 初始罐高 */

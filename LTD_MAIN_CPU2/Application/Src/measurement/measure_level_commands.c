@@ -253,7 +253,10 @@ void CMD_MeasureBottom(void) {
 
     /* 该兼容分支仅在参数值为 1 且未收到命令切换时，将探底结果修正为有效参考值时，使用标定罐高或当前罐高覆盖失败或偏差过大的结果。 */
     if ((g_deviceParams.error_stop_measurement == 1U) &&
-        (ret != STATE_SWITCH))
+        (ret != STATE_SWITCH) &&
+        /* 称重入口/释放及真实保护错误不得被参考值回退吞掉。 */
+        ((g_deviceParams.bottom_detect_mode != BOTTOM_DET_BY_WEIGHT) ||
+         (ret == NO_ERROR) || (ret == MEASUREMENT_WEIGHT_DOWN_FAIL)))
     {
         uint32_t reference_real_height =
                 (DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_CALIBRATE_TANK_HEIGHT) != 0U)
@@ -325,8 +328,8 @@ void CMD_MeasureBottom(void) {
                     fallback_real_height;
             g_measurement.device_status.error_code = NO_ERROR;
 
-            /* 探底成功后定位罐底参考有效，CPU3 可据此读取 SI Bottom Reference 位。 */
-            g_measurement.height_measurement.bottom_reference_valid = 1U;
+            /* 回退值不是本次真实称重探底结果，不能发布罐底参考有效。 */
+            g_measurement.height_measurement.bottom_reference_valid = 0U;
             g_measurement.device_status.device_state = STATE_FINDBOTTOM_OVER;
             return;
         }

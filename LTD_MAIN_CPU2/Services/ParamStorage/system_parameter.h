@@ -28,7 +28,7 @@
 #define UNVALID_GSW 0                      /* 质量无效值 */
 
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数。 */
-#define DEVICE_PROTOCOL_VERSION 36u /* CPU2/CPU3共享协议版本；协议36新增液位定时矫正参数和失败码。 */
+#define DEVICE_PROTOCOL_VERSION 37u /* 协议37将原探底阈值改为减重量，绝对下限固定500，不新增参数。 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u /* 故障自动恢复默认重试次数。 */
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u /* 故障自动恢复最大重试次数。 */
 
@@ -898,7 +898,7 @@ typedef struct {
     /* ===================== 罐高/罐底测量 ===================== */
     uint32_t bottom_detect_mode;          /* 罐底测量模式 */
     uint32_t bottom_angle_threshold;      /* 探底角度阈值（务必明确单位/倍率） */
-    uint32_t bottom_weight_threshold;     /* 探底扭力阈值 */
+    uint32_t bottom_weight_threshold;     /* 触底减重量，候选下限=入口基准-本值；探底时须为1..INT32_MAX。 */
     uint32_t refreshTankHeightFlag;       /* 是否更新液位罐高 */
     uint32_t maxTankHeightDeviation;      /* 实测罐高最大偏差 */
     uint32_t initialTankHeight;           /* 初始实高 */

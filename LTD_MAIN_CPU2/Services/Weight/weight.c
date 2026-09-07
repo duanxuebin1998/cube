@@ -38,6 +38,7 @@ int16_t g_weight; /* 最近一次通过称重通信校验的原始扭力/重量计数。 */
 /* 全局结构体，存储扭力相关参数（空载、稳定、当前扭力等） */
 Weight_ParamentTypeDef weight_parament = { 0 };
 static uint32_t s_weight_last_rx_tick = 0U; /* 最近一次收到有效称重数据的 HAL 毫秒节拍。 */
+static volatile uint32_t s_weight_frame_sequence = 0U; /* 有效帧由接收中断递增，供过程区分新旧称重；自然回绕。 */
 static uint8_t s_weight_timeout_reported = 0U; /* 当前称重通信超时已经上报、等待有效数据恢复的标志。 */
 
 /**
@@ -102,6 +103,8 @@ void Weight_RebaseStableWeight(void)
 void Weight_MarkFrameReceived(void) {
 	uint32_t now = HAL_GetTick();
 	s_weight_last_rx_tick = now;
+	/* 调用前当前重量已更新；只记录序号，不在此增加等待或打印。 */
+	s_weight_frame_sequence++;
 	s_weight_timeout_reported = 0U;
 	/* 收到新扭力帧后只清除扭力通信类故障并记录恢复，其他模块已经锁存的错误不得被覆盖。 */
 	if (Weight_IsCommErrorCode(g_measurement.device_status.error_code)) {
@@ -161,6 +164,12 @@ static uint32_t Weight_CheckCommunicationTimeoutInternal(uint8_t keep_global_err
 uint32_t Weight_CheckCommunicationTimeout(void)
 {
 	return Weight_CheckCommunicationTimeoutInternal(1U);
+}
+
+/* 返回最近有效称重帧序号；非阻塞，可用于确认动作结束后收到新帧。 */
+uint32_t Weight_GetFrameSequence(void)
+{
+	return s_weight_frame_sequence;
 }
 
 /**
@@ -275,19 +284,18 @@ Weight_StateTypeDef check_zero_point_status(void)
 /**
  * @brief 扭力统一碰撞/极限检测
  *        上行: 先判零点阈值，再判变重阈值
- *        下行: 先判罐底阈值，再判变轻阈值
+ *        下行: 当前重量小于等于固定500，或相对变轻超限，均返回碰撞错误
  *
  * 规则：
  *  1) 碰撞阈值（相对变化）：
  *     - 上行变重阈值 = full_weight * g_deviceParams.weight_upper_limit_ratio / 100
  *     - 下行变轻阈值 = full_weight * g_deviceParams.weight_lower_limit_ratio / 100
  *
- *  2) 零点/罐底阈值：
- *     - 零点：g_deviceParams.zero_weight_threshold_ratio（百分比，加在 full_weight 上）
- *     - 罐底：g_deviceParams.bottom_detect_mode==0 用扭力阈值 g_deviceParams.bottom_weight_threshold
- *            g_deviceParams.bottom_detect_mode!=0 用角度阈值 g_deviceParams.bottom_angle_threshold（不在此函数判定）
+ *  2) 零点阈值：g_deviceParams.zero_weight_threshold_ratio（百分比，加在 full_weight 上）
  *
- *  3) 保护：尺带长度 < g_deviceParams.max_zero_deviation_distance 时，不进行碰撞检测（直接 NO_ERROR）
+ *  3) 探底扭力阈值是专用流程的减重量，不参与本函数；专用探底须先判候选，再调用通用保护。
+ *
+ *  4) 尺带长度 < weight_ignore_zone 或非上下行时跳过重量判定；入口仍检查通信。
  *
  * @return WEIGHT_COLLISION_DETECTED 表示检测到碰撞/到达极限；NO_ERROR 表示正常
  */
@@ -363,8 +371,8 @@ uint32_t CheckWeightCollision(void)
 	int32_t zero_limit =
 		(int32_t)(((int64_t)full_weight * (int64_t)(100 + g_deviceParams.zero_weight_threshold_ratio)) / 100);
 
-	/* 罐底阈值：仅在“扭力找底(mode==0)”时判定 */
-	int32_t bottom_limit = (int32_t)g_deviceParams.bottom_weight_threshold;
+	/* 绝对低重量保护不随动态基准漂移，也不读取专用探底减重量参数。 */
+	int32_t bottom_limit = WEIGHT_ABSOLUTE_MIN;
 
 	/* ==========================
 	 *       上行检测
@@ -393,7 +401,7 @@ uint32_t CheckWeightCollision(void)
 			printf("传感器位置 : %.1f mm\r\n", sensor_mm);
 			printf("================================\r\n");
             snprintf(detail, sizeof(detail),
-                     "方向：%lu,当前：%ld,稳定：%ld,差值：%ld,零点：%ld,上限：%ld,触底：%ld,下限：%ld,尺带：%.1f,传感器：%.1f",
+                     "方向：%lu,当前：%ld,稳定：%ld,差值：%ld,零点：%ld,上限：%ld,绝对下限：%ld,下限：%ld,尺带：%.1f,传感器：%.1f",
                      (unsigned long)motor_dir,
                      (long)cur_weight,
                      (long)stable_weight,
@@ -429,7 +437,7 @@ uint32_t CheckWeightCollision(void)
 			printf("传感器位置 : %.1f mm\r\n", sensor_mm);
 			printf("================================\r\n");
             snprintf(detail, sizeof(detail),
-                     "方向：%lu,当前：%ld,稳定：%ld,差值：%ld,零点：%ld,上限：%ld,触底：%ld,下限：%ld,尺带：%.1f,传感器：%.1f",
+                     "方向：%lu,当前：%ld,稳定：%ld,差值：%ld,零点：%ld,上限：%ld,绝对下限：%ld,下限：%ld,尺带：%.1f,传感器：%.1f",
                      (unsigned long)motor_dir,
                      (long)cur_weight,
                      (long)stable_weight,
@@ -468,46 +476,12 @@ uint32_t CheckWeightCollision(void)
 	 *       下行检测
 	 * ========================== */
 	{
-		/* 1) 罐底阈值：仅扭力找底时有效 */
-		if (g_deviceParams.bottom_detect_mode == 0) {
-			if (cur_weight < bottom_limit) {
-				printf("\r\n====== 扭力碰撞报警(下行) ======\r\n");
-				printf("原因: 低于触底阈值(认为已到罐底)\r\n");
-				printf("当前扭力 : %ld\r\n", (long)cur_weight);
-				printf("触底阈值 : %ld\r\n", (long)bottom_limit);
-				printf("稳定扭力 : %ld\r\n", (long)stable_weight);
-				printf("差值     : %ld\r\n", (long)diff);
-				printf("下限阈值 : %ld (ratio:%ld%%)\r\n",
-						(long)lower_threshold,
-						(long)g_deviceParams.weight_lower_limit_ratio);
-				Weight_PrintCableRefs(cable_mm);
-				printf("传感器位置 : %.1f mm\r\n", sensor_mm);
-				printf("================================\r\n");
-            snprintf(detail, sizeof(detail),
-                     "方向：%lu,当前：%ld,稳定：%ld,差值：%ld,零点：%ld,上限：%ld,触底：%ld,下限：%ld,尺带：%.1f,传感器：%.1f",
-                     (unsigned long)motor_dir,
-                     (long)cur_weight,
-                     (long)stable_weight,
-                     (long)diff,
-                     (long)zero_limit,
-                     (long)upper_threshold,
-                     (long)bottom_limit,
-                     (long)lower_threshold,
-                     (double)cable_mm,
-                     (double)sensor_mm);
-            ErrorLog_WarnDetail(ERROR_LOG_MODULE_WEIGHT,
-                                ERROR_LOG_OP_WEIGHT_COLLISION,
-                                ERROR_LOG_REASON_COLLISION,
-                                ERROR_LOG_ACTION_STOP_MOTOR,
-                                detail);
-				return WEIGHT_COLLISION_DETECTED;
-			}
-		}
-
-		/* 2) 相对变轻阈值：diff 为负数，比较 -diff */
-		if (-diff > lower_threshold) {
+		/* 缓慢或持续卸载由绝对下限兜底；上行释放和专用触底候选优先级保持不变。 */
+		if ((cur_weight <= bottom_limit) || (-diff > lower_threshold)) {
 			printf("\r\n====== 扭力碰撞报警(下行) ======\r\n");
-			printf("原因: 扭力减少超过下限阈值\r\n");
+			printf("原因: %s\r\n", (cur_weight <= bottom_limit) ?
+                   "当前扭力低于或等于绝对下限" : "扭力减少超过相对下限阈值");
+			printf("绝对重量下限 : %ld\r\n", (long)bottom_limit);
 			printf("当前扭力 : %ld\r\n", (long)cur_weight);
 			printf("稳定扭力 : %ld\r\n", (long)stable_weight);
 			printf("扭力减少 : %ld (阈值:%ld)\r\n", (long)(-diff), (long)lower_threshold);
@@ -518,7 +492,7 @@ uint32_t CheckWeightCollision(void)
 			printf("传感器位置 : %.1f mm\r\n", sensor_mm);
 			printf("================================\r\n");
             snprintf(detail, sizeof(detail),
-                     "方向：%lu,当前：%ld,稳定：%ld,差值：%ld,零点：%ld,上限：%ld,触底：%ld,下限：%ld,尺带：%.1f,传感器：%.1f",
+                     "方向：%lu,当前：%ld,稳定：%ld,差值：%ld,零点：%ld,上限：%ld,绝对下限：%ld,下限：%ld,尺带：%.1f,传感器：%.1f",
                      (unsigned long)motor_dir,
                      (long)cur_weight,
                      (long)stable_weight,
@@ -538,7 +512,7 @@ uint32_t CheckWeightCollision(void)
 		}
 
 #ifdef WEIGHT_DEBUG
-		printf("扭力正常 | 方向:下行 | 当前:%ld | 稳定:%ld | 变化:%+ld | 触底阈值:%ld | 下限阈值:%ld | 满载:%ld | 尺带:%.1fmm",
+		printf("扭力正常 | 方向:下行 | 当前:%ld | 稳定:%ld | 变化:%+ld | 绝对下限:%ld | 下限阈值:%ld | 满载:%ld | 尺带:%.1fmm",
 				(long)cur_weight,
 				(long)stable_weight,
 				(long)diff,

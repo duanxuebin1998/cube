@@ -2126,7 +2126,7 @@ void RestoreFactoryParamsConfig(void)
     /* ---------------- 罐高/罐底测量 ---------------- */
     g_deviceParams.bottom_detect_mode      = 0;    /* 0=按项目定义 */
     g_deviceParams.bottom_angle_threshold  = 12;    /* 单位(度）/倍率*1 */
-    g_deviceParams.bottom_weight_threshold = 500;
+    g_deviceParams.bottom_weight_threshold = 500; /* 原参数改为触底减重量，保留出厂数值。 */
 
     g_deviceParams.refreshTankHeightFlag   = 0;  /* 不自动刷新 */
     g_deviceParams.maxTankHeightDeviation  = 1000; /* 0.1mm => 100mm */

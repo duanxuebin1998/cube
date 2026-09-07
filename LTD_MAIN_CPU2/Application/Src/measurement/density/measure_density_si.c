@@ -23,8 +23,6 @@
 
 /* SI 剖面默认首个后续测点绝对位置 100.0 mm，单位为 0.1 mm。 */
 #define SI_PROFILE_DEFAULT_FIRST_POINT_01MM 1000U
-/* SearchBottom 成功后已上提 100.0 mm；历史罐底参考按此偏移恢复 Point0。 */
-#define SI_PROFILE_BOTTOM_RELEASE_OFFSET_01MM 1000U
 /* SI 剖面默认相邻测点间隔 1000.0 mm，单位为 0.1 mm。 */
 #define SI_PROFILE_DEFAULT_INCREMENT_01MM 10000U
 /* SI 剖面到达每个测点后的默认停留时间 10 s。 */
@@ -355,13 +353,15 @@ static int32_t SiProfile_ResolveBottomPositionFromCable(int32_t bottom_cable_01m
  * @note 关键约束：偏移量必须与 SearchBottom 成功收尾的上提距离保持一致。
  *
  * @param bottom_cable_01mm 探底流程记录的罐底尺带长度，单位 0.1 mm。
- * @return 返回罐底坐标上方 100.0 mm 的 Point0 位置，单位 0.1 mm，并钳位到 INT32_MAX。
+ * @return 按探底模式返回罐底上方的释放位置，单位 0.1 mm，并钳位到 INT32_MAX。
  */
 static int32_t SiProfile_ResolveReleasedPoint0FromCable(int32_t bottom_cable_01mm)
 {
     int64_t point0_position =
             (int64_t)SiProfile_ResolveBottomPositionFromCable(bottom_cable_01mm) +
-            (int64_t)SI_PROFILE_BOTTOM_RELEASE_OFFSET_01MM;
+            ((g_deviceParams.bottom_detect_mode == BOTTOM_DET_BY_WEIGHT) ?
+             (int64_t)BOTTOM_WEIGHT_RELEASE_MARGIN_01MM :
+             (int64_t)BOTTOM_GYRO_RELEASE_MARGIN_01MM);
 
     if (point0_position > INT32_MAX) {
         point0_position = INT32_MAX;
@@ -412,7 +412,7 @@ static int32_t SiProfile_SelectPoint0Position(uint8_t bottom_search_done,
         int32_t resolved_bottom_position =
                 SiProfile_ResolveBottomPositionFromCable(TankHeight_GetBottomCableLength01mm());
 
-        /* SearchBottom 已完成 100 mm 上提，直接把实际停留位置作为 Point0。 */
+        /* SearchBottom 已按当前模式完成释放，直接采用实际停留位置。 */
         s_si_profile_point0_position_01mm = current_position;
         s_si_profile_bottom_ref_valid = 1U;
         s_si_profile_first_run = 0U;
@@ -463,14 +463,19 @@ static uint32_t SiProfile_BuildPoints(int32_t point0_position_01mm,
     if ((points01 == NULL) || (point_count == NULL)) {
         return SYSTEM_CALL_CONDITION_ERROR;
     }
+    *point_count = 0U;
     if ((increment_01mm == 0U) || (first_point_01mm == 0U)) {
         return MEASUREMENT_DENSITY_PLAN_INVALID;
     }
-    if (bottom < 0) {
-        bottom = 0;
-    }
-    if (tank_height <= 0) {
-        tank_height = bottom + ((int64_t)MAX_MEASUREMENT_POINTS * (int64_t)increment_01mm);
+    /* 40001 是绝对坐标。首点必须高于已释放 Point0，禁止反向下探或默默改写测点。 */
+    if ((bottom < 0) || (tank_height <= 0) || (tank_height > INT32_MAX) ||
+        ((int64_t)first_point_01mm <= bottom) ||
+        ((int64_t)first_point_01mm > tank_height)) {
+        printf("SI Profile 点位计划无效: Point0=%.1fmm 首点=%.1fmm 罐高=%.1fmm\r\n",
+               (double)bottom / 10.0,
+               (double)first_point_01mm / 10.0,
+               (double)tank_height / 10.0);
+        return MEASUREMENT_DENSITY_PLAN_INVALID;
     }
 
     points01[n++] = (int32_t)bottom;

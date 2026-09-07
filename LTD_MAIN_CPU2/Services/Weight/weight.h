@@ -14,6 +14,7 @@
 /* #include "motor_ctrl.h" */
 
 #define IMPACT_WEIGHT_THRESHOLD 4000.0 /* 扭力处理参数：冲击 扭力 阈值。 */
+#define WEIGHT_ABSOLUTE_MIN 500 /* 固定绝对重量下限，通用下行保护与探底入口/释放校验共用；非配置参数。 */
 typedef enum {
 	/* 称重采样经过阈值和状态机判定后的业务状态。 */
 	NORMAL, /* 称重处于正常稳定范围。 */ IMPACT, /* 检测到碰撞或瞬时冲击。 */ ZERO, /* 称重结果处于零点判定范围。 */ BOTTOM /* 称重变化满足探底判定条件。 */
@@ -76,19 +77,18 @@ Weight_StateTypeDef check_zero_point_status(void);
 /**
  * @brief 扭力统一碰撞/极限检测
  *        上行: 先判零点阈值，再判变重阈值
- *        下行: 先判罐底阈值，再判变轻阈值
+ *        下行: 当前重量小于等于固定500，或相对变轻超限，均返回碰撞错误
  *
  * 规则：
  *  1) 碰撞阈值（相对变化）：
  *     - 上行变重阈值 = full_weight * g_deviceParams.weight_upper_limit_ratio / 100
  *     - 下行变轻阈值 = full_weight * g_deviceParams.weight_lower_limit_ratio / 100
  *
- *  2) 零点/罐底阈值：
- *     - 零点：g_deviceParams.zero_weight_threshold_ratio（百分比，加在 full_weight 上）
- *     - 罐底：g_deviceParams.bottom_detect_mode==0 用扭力阈值 g_deviceParams.bottom_weight_threshold
- *            g_deviceParams.bottom_detect_mode!=0 用角度阈值 g_deviceParams.bottom_angle_threshold（不在此函数判定）
+ *  2) 零点阈值：g_deviceParams.zero_weight_threshold_ratio（百分比，加在 full_weight 上）
  *
- *  3) 保护：尺带长度 < g_deviceParams.max_zero_deviation_distance 时，不进行碰撞检测（直接 NO_ERROR）
+ *  3) 探底扭力阈值是专用流程的减重量，不参与本函数；专用探底须先判候选，再调用通用保护。
+ *
+ *  4) 尺带长度 < weight_ignore_zone 或非上下行时跳过重量判定；入口仍检查通信。
  *
  * @return WEIGHT_COLLISION_DETECTED 表示检测到碰撞/到达极限；NO_ERROR 表示正常
  */
@@ -106,6 +106,9 @@ void Weight_RebaseStableWeight(void);
  * @brief 接收扭力数据中的 Weight_MarkFrameReceived 逻辑。
  */
 void Weight_MarkFrameReceived(void);
+
+/* 读取有效帧序号；仅比较是否变化，不把序号当作时间或重量。 */
+uint32_t Weight_GetFrameSequence(void);
 /**
  * @brief 检查共享扭力通信是否超过允许静默时间。
  * @return 返回共享扭力通信超时检查结果；NO_ERROR 表示链路未超时，其他值为对应通信故障码。

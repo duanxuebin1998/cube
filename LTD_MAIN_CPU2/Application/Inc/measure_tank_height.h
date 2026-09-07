@@ -10,6 +10,11 @@
 
 #include <stdint.h>
 
+/* SearchBottom 与 SI 复用同一个称重探底释放余量，单位 0.1 mm。 */
+#define BOTTOM_WEIGHT_RELEASE_MARGIN_01MM 2000
+/* 角度探底成功后的历史上提距离；SI 按相同模式恢复释放位置。 */
+#define BOTTOM_GYRO_RELEASE_MARGIN_01MM 1000
+
 /** 设备参数 bottom_detect_mode 使用的罐底检测依据。 */
 typedef enum {
     BOTTOM_DET_BY_WEIGHT = 0, /* 使用扭力变化判定探头到达罐底。 */

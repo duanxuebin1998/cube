@@ -454,11 +454,7 @@ static uint32_t FrequencyLevel_CheckMotionGuards(int guard_direction,
         ((int64_t)current_weight >= zero_weight_limit)) {
         return WEIGHT_COLLISION_DETECTED;
     }
-    if (((guard_direction == MOTOR_DIRECTION_DOWN) ||
-         (guard_direction == OIL_LEVEL_DIRECTION_NONE)) &&
-        (current_weight <= (int32_t)g_deviceParams.bottom_weight_threshold)) {
-        return WEIGHT_COLLISION_DETECTED;
-    }
+    /* 普通液位运动只保留通用相对碰撞保护，罐底绝对阈值由专用探底流程消费。 */
     if (guard_direction == OIL_LEVEL_DIRECTION_NONE) {
         return NO_ERROR;
     }

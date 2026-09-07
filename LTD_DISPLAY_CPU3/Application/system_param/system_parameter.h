@@ -30,7 +30,7 @@
 /* 历史有线温度无效哨兵值 0；保留用于旧接口兼容，不能与无线温度无效值 UNVALID_TEMPERATURE_WIRELESS 混用。 */
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
-#define DEVICE_PROTOCOL_VERSION 36u /* CPU2/CPU3共享协议版本；协议36新增液位定时矫正参数和失败码。 */
+#define DEVICE_PROTOCOL_VERSION 37u /* 协议37将原探底阈值改为减重量，绝对下限固定500，不新增参数。 */
 /* 故障自动恢复的默认重试次数 3；仅在参数缺省、越界或旧版本迁移时作为归一化值。 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 /* 故障自动恢复重试次数的配置硬上限 10；CPU3 菜单和参数校验不得允许写入超过该值的重试次数。 */
@@ -912,7 +912,7 @@ typedef struct {
     /* ===================== 罐高/罐底测量 ===================== */
     uint32_t bottom_detect_mode;          /* 罐底测量模式 */
     uint32_t bottom_angle_threshold;      /* 罐底角度阈值（务必明确单位/倍率） */
-    uint32_t bottom_weight_threshold;     /* 罐底扭力阈值 */
+    uint32_t bottom_weight_threshold;     /* 触底减重量，候选下限=入口基准-本值；探底时须为1..INT32_MAX。 */
     uint32_t refreshTankHeightFlag;       /* 是否更新液位罐高 */
     uint32_t maxTankHeightDeviation;      /* 罐高最大变化范围 */
     uint32_t initialTankHeight;           /* 初始实高 */
