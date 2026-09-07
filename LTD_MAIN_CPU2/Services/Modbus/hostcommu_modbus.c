@@ -396,6 +396,20 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
     /* 先发布当前镜像，再叠加主站本次写入。 */
     WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
     length = Compose10Package(revframe, sendframe);
+    /* 在解析全局镜像前校验新增持久参数；ISR仅比较数据，不打印或移动电机。 */
+    {
+        uint32_t refresh_enable = ((uint32_t)HoldingRegisterArray[HOLDREGISTER_DEVICEPARAM_LEVEL_REFERENCE_REFRESH_ENABLE] << 16) |
+                HoldingRegisterArray[HOLDREGISTER_DEVICEPARAM_LEVEL_REFERENCE_REFRESH_ENABLE + 1U];
+        uint32_t refresh_interval = ((uint32_t)HoldingRegisterArray[HOLDREGISTER_DEVICEPARAM_LEVEL_REFERENCE_REFRESH_INTERVAL_MIN] << 16) |
+                HoldingRegisterArray[HOLDREGISTER_DEVICEPARAM_LEVEL_REFERENCE_REFRESH_INTERVAL_MIN + 1U];
+        if ((refresh_enable > 1U) || (refresh_interval < 60U) || (refresh_interval > 10080U)) {
+            WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
+            sendframe[0] = (uint8_t)SlaveAddress;
+            sendframe[1] = (uint8_t)(presetmultipleregisterfuncode | 0x80);
+            sendframe[2] = (uint8_t)illegaldatavalue;
+            return 3;
+        }
+    }
     if (!EncoderCircumferenceCandidateIsValid(HoldingRegisterArray)) {
         WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
         sendframe[0] = (uint8_t)SlaveAddress;

@@ -353,6 +353,8 @@ const char *ErrorLog_GetReasonByCode(uint32_t code)
         return "密度闭环找液位超时";
     case MEASUREMENT_FREQUENCY_LEVEL_TIMEOUT:
         return "频率闭环找液位超时";
+    case MEASUREMENT_LEVEL_REFERENCE_REFRESH_FAILED:
+        return "液位定时矫正失败或无法恢复有效液位";
     case MEASUREMENT_BOTTOM_RELEASE_FAIL:
         return "粗找罐底前上行后仍处于触底状态";
     case MEASUREMENT_TANK_HEIGHT_NOT_CONFIGURED:
@@ -664,6 +666,8 @@ const char *ErrorLog_GetCodeName(uint32_t code)
         return "密度找液位超时";
     case MEASUREMENT_FREQUENCY_LEVEL_TIMEOUT:
         return "频率找液位超时";
+    case MEASUREMENT_LEVEL_REFERENCE_REFRESH_FAILED:
+        return "液位定时矫正失败";
     case MEASUREMENT_BOTTOM_RELEASE_FAIL:
         return "探底前未能离开罐底";
     case MEASUREMENT_TANK_HEIGHT_NOT_CONFIGURED:

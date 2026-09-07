@@ -30,7 +30,7 @@
 /* 历史有线温度无效哨兵值 0；保留用于旧接口兼容，不能与无线温度无效值 UNVALID_TEMPERATURE_WIRELESS 混用。 */
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
-#define DEVICE_PROTOCOL_VERSION 35u /* CPU2/CPU3共享协议版本；协议35统一DM4物理类型为14，Safe仅作为运行模式保留。 */
+#define DEVICE_PROTOCOL_VERSION 36u /* CPU2/CPU3共享协议版本；协议36新增液位定时矫正参数和失败码。 */
 /* 故障自动恢复的默认重试次数 3；仅在参数缺省、越界或旧版本迁移时作为归一化值。 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 /* 故障自动恢复重试次数的配置硬上限 10；CPU3 菜单和参数校验不得允许写入超过该值的重试次数。 */
@@ -371,6 +371,7 @@ typedef enum {
     MEASUREMENT_DENSITY_PLAN_INVALID = 0x000F001D, /* 密度测点规划失败 */
     MEASUREMENT_TANK_HEIGHT_RESULT_INVALID = 0x000F001E, /* 罐高测量结果无效 */
     MEASUREMENT_WATER_CALC_OUT_OF_RANGE = 0x000F001F, /* 水位标定计算结果越界 */
+    MEASUREMENT_LEVEL_REFERENCE_REFRESH_FAILED = 0x000F0022, /* 液位定时矫正失败；15-32/33为历史冻结编号。 */
 
     /* ==================== 17 参数与存储故障 (0x00110000 - 0x0011FFFF) ==================== */
     PARAM_EEPROM_FAIL = 0x00110001,               /* 参数存储读写失败 */
@@ -882,8 +883,8 @@ typedef struct {
     uint32_t max_zero_deviation_distance;     /* 零点最大偏差距离(建议 0.1mm) */
     uint32_t findZeroDownDistance;            /* 找零点完成后下行距离(0.1mm) */
 
-    uint32_t reserved10;                  /* 预留 */
-    uint32_t reserved11;                  /* 预留（新增） */
+    uint32_t liquidLevelReferenceRefreshEnable; /* 液位定时矫正开关，0关闭/1启用，原reserved10。 */
+    uint32_t liquidLevelReferenceRefreshIntervalMin; /* 刷新周期，60..10080分钟，默认1440，原reserved11。 */
 
     /* ===================== 液位测量 ===================== */
     uint32_t tankHeight;                     /* 液位罐高(0.1mm) */

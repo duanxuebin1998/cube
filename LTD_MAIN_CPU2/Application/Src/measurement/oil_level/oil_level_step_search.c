@@ -4,6 +4,7 @@
  * 结果发布和 AO 处理统一由 oil_level_runtime.c 提供，本文件不重复实现。
  */
 #include "oil_level_internal.h"
+#include "oil_level_reference_refresh.h"
 #include "abortable_delay.h"
 #include "fault_manager.h"
 #include "motor_ctrl.h"
@@ -236,6 +237,7 @@ uint32_t determine_level_status_motion(Level_StateTypeDef *state_out) {
  */
 static void OilLevel_ComputePreciseStep(float per_mm_frequency,
                                         float frequency_error,
+                                        const OilLevelRefreshCandidate *reference,
                                         int *over_time,
                                         int *lower_time,
                                         float *run_length,
@@ -246,7 +248,7 @@ static void OilLevel_ComputePreciseStep(float per_mm_frequency,
     }
 
     if ((frequency_error > 500.0f) ||
-        ((g_measurement.oil_measurement.air_frequency - g_measurement.oil_measurement.current_frequency) < 200U)) {
+        (((int32_t)reference->air_frequency - (int32_t)g_measurement.oil_measurement.current_frequency) < 200)) {
         (*over_time)++;
         *lower_time = 0;
         *run_length = 4.0f * (float)(*over_time) + frequency_error / per_mm_frequency - 4.0f;
@@ -257,7 +259,7 @@ static void OilLevel_ComputePreciseStep(float per_mm_frequency,
         *run_length = frequency_error / per_mm_frequency;
         *dir = MOTOR_DIRECTION_DOWN;
     } else if ((frequency_error < -500.0f) ||
-               ((g_measurement.oil_measurement.current_frequency - g_measurement.oil_measurement.oil_frequency) < 200U)) {
+               (((int32_t)g_measurement.oil_measurement.current_frequency - (int32_t)reference->oil_frequency) < 200)) {
         (*lower_time)++;
         *over_time = 0;
         *run_length = -(frequency_error / per_mm_frequency) + 4.0f * (float)(*lower_time) - 4.0f;
@@ -283,11 +285,11 @@ static void OilLevel_ComputePreciseStep(float per_mm_frequency,
  * @param frequency_error 频率故障。
  * @return 1 表示旧步进精找已处于可稳定计数区间；0 表示旧步进精找尚未处于可稳定计数区间。
  */
-static uint8_t OilLevel_IsPreciseStable(float frequency_error)
+static uint8_t OilLevel_IsPreciseStable(float frequency_error, const OilLevelRefreshCandidate *reference)
 {
     if ((fabsf(frequency_error) <= (float)FrequencyLevel_GetCompatThresholdHz(g_deviceParams.oilLevelThreshold)) &&
-        ((g_measurement.oil_measurement.air_frequency - g_measurement.oil_measurement.current_frequency) > 200U) &&
-        ((g_measurement.oil_measurement.current_frequency - g_measurement.oil_measurement.oil_frequency) > 200U)) {
+        (((int32_t)reference->air_frequency - (int32_t)g_measurement.oil_measurement.current_frequency) > 200) &&
+        (((int32_t)g_measurement.oil_measurement.current_frequency - (int32_t)reference->oil_frequency) > 200)) {
         return 1U;
     }
     return 0U;
@@ -303,7 +305,7 @@ static uint8_t OilLevel_IsPreciseStable(float frequency_error)
  * @param dir 电机或扫描方向编码；使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN，决定本轮步进移动的正负方向。
  * @return 无需移动时返回 NO_ERROR；需要移动时返回 MotorCtrl_MoveAndWait 的结果，包括命令切换、参数、驱动、位置或到位错误。
  */
-static uint32_t OilLevel_RunPreciseMove(float run_length, uint32_t dir)
+static uint32_t OilLevel_RunPreciseMove(float run_length, uint32_t dir, const OilLevelRefreshSearch *search)
 {
     if (run_length == 0.0f) {
         return NO_ERROR;
@@ -317,7 +319,8 @@ static uint32_t OilLevel_RunPreciseMove(float run_length, uint32_t dir)
     }
     printf("频率跟随\t电机移动\t距离%f\t方向%s\r\n", run_length, (dir == MOTOR_DIRECTION_UP) ? "上" : "下");
 
-    return MotorCtrl_MoveAndWait(run_length, dir, MotorCtrl_GetDefaultSpeedX100());
+    return MotorCtrl_MoveAndWaitUntil(run_length, dir, MotorCtrl_GetDefaultSpeedX100(),
+                                     (search != NULL) ? &search->deadline : NULL);
 }
 
 /**
@@ -351,7 +354,7 @@ static int OilLevel_HandlePrecisePositionUpdate(void)
  * @param per_mm_Frequency 每毫米对应的频率变化量（频率-位置换算系数）。
  * @return 执行状态码。
  */
-int SearchOilPrecise(float per_mm_Frequency)
+static int OilLevel_SearchPreciseConfigured(float per_mm_Frequency, OilLevelRefreshSearch *search)
 {
     int ret;
     uint32_t dir = MOTOR_DIRECTION_DOWN;
@@ -360,37 +363,43 @@ int SearchOilPrecise(float per_mm_Frequency)
     int overTime = 0;
     int lowerTime = 0;
     int loopTime = 0;
+    const OilLevelRefreshCandidate reference = (search != NULL) ? search->reference :
+        (OilLevelRefreshCandidate){g_measurement.oil_measurement.air_frequency,
+                                  g_measurement.oil_measurement.oil_frequency,
+                                  g_measurement.oil_measurement.follow_frequency};
 
     printf("进入频率跟随区间\r\n");
 
     while (followTime < 10) {
         float frequency_error;
 
-        ret = (int)AbortableDelay_CommandSwitch(2000U, 100U);
-        if (ret == STATE_SWITCH) {
-            /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
-            return STATE_SWITCH;
+        ret = (int)OilLevelReferenceRefresh_Delay(search, 2000U);
+        if (ret != NO_ERROR) {
+            /* 正常切换与预算截止均由上层消费，不在此处误报采样失败。 */
+            return ret;
         }
 
-        ret = OilLevel_ReadValidatedFrequency(&g_measurement.oil_measurement.current_frequency);
+        ret = (int)OilLevelReferenceRefresh_Read(search, &g_measurement.oil_measurement.current_frequency);
         if (ret != NO_ERROR) {
             return OilLevel_StopBeforeReturn((uint32_t)ret, "液位流程故障");
         }
 
         if (loopTime++ > 100) {
+            /* 候选搜索不能把原保护性跳出当成已经稳定。 */
+            if (search != NULL) { return (int)OIL_LEVEL_REFRESH_STAGE_EXPIRED; }
             printf("频率跟随可能陷入循环，跳出频率跟随\r\n");
             break;
         }
 
-        frequency_error = OilLevel_GetFrequencyDifference();
+        frequency_error = (float)g_measurement.oil_measurement.current_frequency - (float)reference.target_frequency;
         printf("当前频率%ld\t频率阈值%ld\t阈值差%f\r\n",
                g_measurement.oil_measurement.current_frequency,
-               g_measurement.oil_measurement.follow_frequency,
+               reference.target_frequency,
                (double)frequency_error);
 
-        OilLevel_ComputePreciseStep(per_mm_Frequency, frequency_error, &overTime, &lowerTime, &runlenth, &dir);
+        OilLevel_ComputePreciseStep(per_mm_Frequency, frequency_error, &reference, &overTime, &lowerTime, &runlenth, &dir);
 
-        if (OilLevel_IsPreciseStable(frequency_error) != 0U) {
+        if (OilLevel_IsPreciseStable(frequency_error, &reference) != 0U) {
             followTime++;
             runlenth = 0.0f;
             printf("频率跟随\t电机不动作\t等待频率稳定\t频率稳定次数%d\r\n", followTime);
@@ -398,7 +407,7 @@ int SearchOilPrecise(float per_mm_Frequency)
             followTime = 0;
         }
 
-        ret = (int)OilLevel_RunPreciseMove(runlenth, dir);
+        ret = (int)OilLevel_RunPreciseMove(runlenth, dir, search);
         if (ret != NO_ERROR) {
             return OilLevel_StopBeforeReturn((uint32_t)ret, "液位流程故障");
         }
@@ -407,7 +416,8 @@ int SearchOilPrecise(float per_mm_Frequency)
             return OilLevel_StopBeforeReturn(MEASUREMENT_OVERSPEED, "探头频率异常");
         }
 
-        ret = OilLevel_HandlePrecisePositionUpdate();
+        /* 刷新有独立截止，遇到边界不能进入普通跟随的无限盲区等待。 */
+        ret = (search != NULL) ? (int)OilLevel_UpdatePositionAndCheckBounds() : OilLevel_HandlePrecisePositionUpdate();
         if (ret == STATE_SWITCH) {
             return STATE_SWITCH;
         }
@@ -417,6 +427,18 @@ int SearchOilPrecise(float per_mm_Frequency)
     }
 
     return NO_ERROR;
+}
+/* 普通步进搜索保持原入口，基准来自当前正式结果。 */
+int SearchOilPrecise(float per_mm_Frequency)
+{
+    return OilLevel_SearchPreciseConfigured(per_mm_Frequency, NULL);
+}
+
+/* 刷新使用局部候选和单轮预算，稳定计数从零开始，不写正式端点。 */
+uint32_t OilLevel_SearchPreciseReference(OilLevelRefreshSearch *search)
+{
+    if (search == NULL) { return SYSTEM_CALL_CONDITION_ERROR; }
+    return (uint32_t)OilLevel_SearchPreciseConfigured(100.0f, search);
 }
 /**
  * @brief 用当前尺带长度和液位标定值修正罐高，刷新位置并持久化设备参数。

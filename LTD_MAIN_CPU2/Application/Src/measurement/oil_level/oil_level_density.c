@@ -4,6 +4,7 @@
  * 结果发布和 AO 处理统一由 oil_level_runtime.c 提供，本文件不重复实现。
  */
 #include "oil_level_internal.h"
+#include "oil_level_reference_refresh.h"
 #include "abortable_delay.h"
 #include "motor_ctrl.h"
 #include "sensor_service.h"
@@ -208,6 +209,10 @@ uint32_t DensityLevel_RunClosedLoop(uint32_t follow_mode)
 
         ret = DensityLevel_ReadCurrent(&density, &frequency, &temperature);
         if (ret == DENSITY_INVALID) {
+            if (follow_mode != 0U) {
+                uint32_t refresh_ret = OilLevelReferenceRefresh_DensitySample(false, density, frequency, temperature);
+                if (refresh_ret != NO_ERROR) { return DensityLevel_StopAndReturn(refresh_ret, "密度周期复核退出"); }
+            }
             invalid_density_count++;
             if (invalid_density_count >= DENSITY_LEVEL_INVALID_DENSITY_LIMIT) {
                 return DensityLevel_StopAndReturn(DENSITY_INVALID, "连续密度无效");
@@ -256,6 +261,11 @@ uint32_t DensityLevel_RunClosedLoop(uint32_t follow_mode)
                 }
                 stable_count = DENSITY_LEVEL_STABLE_COUNT;
             }
+            if (follow_mode != 0U) {
+                ret = OilLevelReferenceRefresh_DensitySample(stable_count >= DENSITY_LEVEL_STABLE_COUNT,
+                                                             density, frequency, temperature);
+                if (ret != NO_ERROR) { return DensityLevel_StopAndReturn(ret, "密度周期复核退出"); }
+            }
             ret = AbortableDelay_CommandSwitch(DensityLevel_GetStableDelayMs(), 100U);
             if (ret != NO_ERROR) {
                 return DensityLevel_StopAndReturn(ret, "命令切换");
@@ -264,6 +274,10 @@ uint32_t DensityLevel_RunClosedLoop(uint32_t follow_mode)
         }
 
         stable_count = 0U;
+        if (follow_mode != 0U) {
+            ret = OilLevelReferenceRefresh_DensitySample(false, density, frequency, temperature);
+            if (ret != NO_ERROR) { return DensityLevel_StopAndReturn(ret, "密度周期复核退出"); }
+        }
         g_measurement.oil_measurement.probe_at_liquid_level = 0U;
         g_measurement.oil_measurement.liquid_stable = 0U;
         speed_x100 = DensityLevel_ComputeSpeedX100(density_error, deadband, MotorCtrl_GetDefaultSpeedX100());

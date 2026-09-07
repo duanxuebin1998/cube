@@ -386,6 +386,17 @@ uint32_t MotorCtrl_MoveNoWait(float mm, int dir, uint32_t speed_x100);
  */
 uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100);
 
+/* 业务预算截止是可恢复控制结果，不属于电机故障；调用方必须消费，不能直接置错。 */
+#define MOTOR_MOVE_DEADLINE_REACHED (UINT32_MAX)
+typedef struct {
+    uint32_t start_tick;
+    uint32_t timeout_ms;
+} MotorMoveDeadline;
+
+/* 在线程态复用距离运动全部保护；截止后先停稳，真实停机或速度恢复错误优先返回。 */
+uint32_t MotorCtrl_MoveAndWaitUntil(float mm, int dir, uint32_t speed_x100,
+                                  const MotorMoveDeadline *deadline);
+
 /**
  * @brief 按相对 ticks 移动并等待停止。
  *

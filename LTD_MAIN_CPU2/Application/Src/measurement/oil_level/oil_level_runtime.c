@@ -5,6 +5,7 @@
  * 目标值或闭环停止条件。
  */
 #include "oil_level_runtime.h"
+#include "oil_level_reference_refresh.h"
 #include "AoOutput/ao_output.h"
 #include "fault_manager.h"
 #include "motor_ctrl.h"
@@ -42,14 +43,27 @@ uint32_t OilLevelRuntime_StopAndInvalidate(uint32_t error_code,
         return NO_ERROR;
     }
 
+    /* 预算截止仅通知刷新编排回退，真实停机失败仍必须使旧样本失效。 */
+    if (error_code == OIL_LEVEL_REFRESH_STAGE_EXPIRED) {
+        uint32_t stop_ret = MotorCtrl_SlowStop();
+        if (stop_ret == NO_ERROR) { return error_code; }
+        error_code = stop_ret;
+    }
+
     AoOutput_InvalidateProcessSample(AO_PROCESS_SOURCE_TANK_LEVEL);
+    /* 取消不能掩盖真实停机失败；已有具体故障仍保留最初原因。 */
+    {
+        uint32_t stop_ret = MotorCtrl_SlowStop();
+        if ((error_code == STATE_SWITCH) && (stop_ret != NO_ERROR) && (stop_ret != STATE_SWITCH)) {
+            error_code = stop_ret;
+        }
+    }
     if ((domain != OIL_LEVEL_RUNTIME_DOMAIN_GENERIC) && (error_code != STATE_SWITCH)) {
         printf("%s\t%s\t停止并返回\t错误码=0x%08lX\r\n",
                OilLevelRuntime_GetDomainText(domain),
                (reason != NULL) ? reason : "闭环退出",
                (unsigned long)error_code);
     }
-    (void)MotorCtrl_SlowStop();
     return error_code;
 }
 
@@ -69,6 +83,7 @@ void OilLevelRuntime_InvalidateLevelSample(void)
  */
 void OilLevelRuntime_ClearStableState(void)
 {
+    if (OilLevelReferenceRefresh_IsHolding()) { return; }
     g_measurement.oil_measurement.probe_at_liquid_level = 0U;
     g_measurement.oil_measurement.liquid_stable = 0U;
 }
@@ -78,10 +93,15 @@ void OilLevelRuntime_ClearStableState(void)
  * SI 标志、密度缓存、AO 样本和 AO 故障处理
  * 在找液位、跟随和校准流程中保持一致。
  */
-void OilLevelRuntime_CommitLevel(int32_t oil_level, const char *reason)
+static void OilLevelRuntime_CommitConfigured(int32_t oil_level, const char *reason,
+                                             const OilLevelRefreshCandidate *reference)
 {
     const char *commit_reason = (reason != NULL) ? reason : "记录"; /* 负位置诊断来源。 */
     uint32_t ao_ret; /* AO 刷新结果，仅在整机尚无故障时升级。 */
+    uint32_t primask;
+
+    /* 刷新离面位置仅用于安全检查，不能成为液位、密度液位缓存或AO的新过程样本。 */
+    if (OilLevelReferenceRefresh_IsHolding()) { return; }
 
     if (oil_level < 0) {
         printf("液位结果\t%s位置为负%ld(0.1mm)，按0上报\r\n",
@@ -90,6 +110,14 @@ void OilLevelRuntime_CommitLevel(int32_t oil_level, const char *reason)
         oil_level = 0;
     }
 
+    /* 板间中断不能读到新端点配旧液位的半提交快照；外设操作不进入临界区。 */
+    primask = __get_PRIMASK();
+    __disable_irq();
+    if (reference != NULL) {
+        g_measurement.oil_measurement.air_frequency = reference->air_frequency;
+        g_measurement.oil_measurement.oil_frequency = reference->oil_frequency;
+        g_measurement.oil_measurement.follow_frequency = reference->target_frequency;
+    }
     g_measurement.oil_measurement.oil_level = (uint32_t)oil_level;
     g_measurement.density_distribution.Density_oil_level =
             g_measurement.oil_measurement.oil_level;
@@ -104,6 +132,7 @@ void OilLevelRuntime_CommitLevel(int32_t oil_level, const char *reason)
                                       1U);
     }
 
+    __set_PRIMASK(primask);
     ao_ret = AoOutput_Update();
     if ((ao_ret != NO_ERROR) && (ao_ret != STATE_SWITCH) &&
         (g_measurement.device_status.error_code == NO_ERROR)) {
@@ -113,6 +142,18 @@ void OilLevelRuntime_CommitLevel(int32_t oil_level, const char *reason)
                                     __LINE__,
                                     __func__);
     }
+}
+
+/* 普通液位结果继续通过统一提交入口发布，不改变端点。 */
+void OilLevelRuntime_CommitLevel(int32_t oil_level, const char *reason)
+{
+    OilLevelRuntime_CommitConfigured(oil_level, reason, NULL);
+}
+
+/* 刷新候选必须已通过稳定和运动保护，由刷新编排解除保持后调用。 */
+void OilLevelRuntime_CommitReference(int32_t oil_level, const OilLevelRefreshCandidate *reference)
+{
+    OilLevelRuntime_CommitConfigured(oil_level, "液位定时矫正", reference);
 }
 
 /*

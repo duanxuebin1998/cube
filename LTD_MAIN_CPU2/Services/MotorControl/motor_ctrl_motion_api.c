@@ -91,7 +91,8 @@ static uint32_t MotorMotion_WaitMoveStartObservation(uint32_t command_display_st
                                                      const MotorMotionSpeedScope *speed_scope,
                                                      const char *file,
                                                      uint32_t line,
-                                                     const char *func);
+                                                     const char *func,
+                                                     const MotorMoveDeadline *deadline);
 static uint32_t MotorMotion_CheckAbortRefreshAndHealth(TMC5130TypeDef *tmc5130,
                                                        uint32_t *last_vel_refresh_tick);
 static uint32_t MotorMotion_CheckStoppedAndRefresh(TMC5130TypeDef *tmc5130);
@@ -100,7 +101,8 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
                                                 float target_mm,
                                                 float eps_mm,
                                                 int dir,
-                                                uint32_t max_wait_ms);
+                                                uint32_t max_wait_ms,
+                                                const MotorMoveDeadline *deadline);
 static uint32_t MotorMotion_WaitStoppedAfterStopCommand(uint32_t timeout_ms);
 static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
                                                          int dir,
@@ -436,6 +438,33 @@ uint32_t MotorCtrl_CalibrateFirstLoopCircumferenceAtZero(void)
  */
 uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
 {
+    return MotorCtrl_MoveAndWaitUntil(mm, dir, speed_x100, NULL);
+}
+
+/* 业务截止仅限本次调用，不修改默认运动超时；检查前保留命令切换及真实故障优先级。 */
+static uint32_t MotorMotion_CheckDeadline(const MotorMoveDeadline *deadline)
+{
+    uint32_t ret;
+    if ((deadline == NULL) || ((HAL_GetTick() - deadline->start_tick) < deadline->timeout_ms)) {
+        return NO_ERROR;
+    }
+    ret = MotorCtrl_SlowStop();
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+    if (HasEffectiveCommandSwitchRequest()) {
+        return STATE_SWITCH;
+    }
+    if (g_measurement.device_status.error_code != NO_ERROR) {
+        return g_measurement.device_status.error_code;
+    }
+    return MOTOR_MOVE_DEADLINE_REACHED;
+}
+
+/* 带业务截止的距离运动入口，沿用原目标规划、到位、碰撞和驱动保护，只增加提前停机边界。 */
+uint32_t MotorCtrl_MoveAndWaitUntil(float mm, int dir, uint32_t speed_x100,
+                                  const MotorMoveDeadline *deadline)
+{
     uint32_t ret = NO_ERROR;
     uint32_t restore_ret = NO_ERROR;
     MotorMotionSpeedScope speed_scope = { false, 0U };
@@ -451,6 +480,10 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
     uint32_t max_wait_ms;
     MotorDrumState drum;
 
+    ret = MotorMotion_CheckDeadline(deadline);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
     if (mm <= 0.0f) {
         return NO_ERROR;
     }
@@ -505,6 +538,11 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
         return ret;
     }
 
+    /* 启动前准备也消耗刷新预算，禁止截止后再下发新的运动。 */
+    ret = MotorMotion_CheckDeadline(deadline);
+    if (ret != NO_ERROR) {
+        return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
+    }
     ret = MotorCtrl_MoveNoWait(total_cmd_mm, dir, 0U);
     ret = MotorMotion_CheckErrorWithSpeedScope(ret,
                                              &speed_scope,
@@ -520,7 +558,7 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
                                                &speed_scope,
                                                GetShortFilename(__FILE__),
                                                __LINE__,
-                                               __func__);
+                                               __func__, deadline);
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -529,7 +567,7 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
                                               targetPos_mm,
                                               EPS_MM,
                                               dir,
-                                              max_wait_ms);
+                                              max_wait_ms, deadline);
     if (ret != NO_ERROR) {
         /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
         return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
@@ -1396,6 +1434,11 @@ static uint32_t MotorMotion_ReturnWithSpeedScope(uint32_t ret,
         return (ret != NO_ERROR) ? ret : SYSTEM_CALL_CONDITION_ERROR;
     }
 
+    /* 预算截止不是原始硬件错误，速度恢复失败不能被它覆盖。 */
+    if (ret == MOTOR_MOVE_DEADLINE_REACHED) {
+        uint32_t restore_ret = MotorMotion_EndSpeedScope(scope);
+        return (restore_ret == NO_ERROR) ? ret : restore_ret;
+    }
     return MotorDriver_ReturnAfterTemporarySpeed(ret,
                                                  scope->restore_needed,
                                                  scope->restore_speed_x100);
@@ -1512,7 +1555,8 @@ static uint32_t MotorMotion_WaitMoveStartObservation(uint32_t command_display_st
                                                      const MotorMotionSpeedScope *speed_scope,
                                                      const char *file,
                                                      uint32_t line,
-                                                     const char *func)
+                                                     const char *func,
+                                                     const MotorMoveDeadline *deadline)
 {
     uint32_t ret;
     uint32_t prewait_vel_refresh_tick;
@@ -1522,6 +1566,11 @@ static uint32_t MotorMotion_WaitMoveStartObservation(uint32_t command_display_st
         ret = MotorMotion_CheckCommandAbortWithSpeedScope(speed_scope);
         if (ret != NO_ERROR) {
             return ret;
+        }
+
+        ret = MotorMotion_CheckDeadline(deadline);
+        if (ret != NO_ERROR) {
+            return MotorMotion_ReturnWithSpeedScope(ret, speed_scope);
         }
 
         MotorDriver_RefreshVelocityDuringRun(&stepper, &prewait_vel_refresh_tick);
@@ -2536,7 +2585,8 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
                                                 float target_mm,
                                                 float eps_mm,
                                                 int dir,
-                                                uint32_t max_wait_ms)
+                                                uint32_t max_wait_ms,
+                                                const MotorMoveDeadline *deadline)
 {
     uint32_t ret = NO_ERROR;
     uint32_t startTick = HAL_GetTick();
@@ -2557,6 +2607,10 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
 
         MotorMotion_SetActiveState(command_display_state, true);
         CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
+        ret = MotorMotion_CheckDeadline(deadline);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
         MotorDriver_RefreshVelocityDuringRun(tmc5130, &last_vel_refresh_tick);
         /* 每轮等待都刷新位置并检查驱动健康，覆盖运行中 24V 断电。 */
         ret = MotorDriver_SyncPositionOrCheckHealth(tmc5130);

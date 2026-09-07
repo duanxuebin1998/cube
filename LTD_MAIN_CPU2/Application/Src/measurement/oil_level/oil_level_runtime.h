@@ -7,6 +7,7 @@
 #define INC_OIL_LEVEL_RUNTIME_H_
 
 #include <stdint.h>
+#include "oil_level_refresh_policy.h"
 
 /* 标识液位结果来自哪一类算法，用于统一发布和诊断日志，不改变测量策略。 */
 typedef enum {
@@ -36,6 +37,8 @@ void OilLevelRuntime_ClearStableState(void);
  * @param reason 负位置日志使用的可选诊断原因文本。
  */
 void OilLevelRuntime_CommitLevel(int32_t oil_level, const char *reason);
+/* 主线程候选成功后一次性提交端点、目标和液位；临界区只写快照，AO通信在区外执行。 */
+void OilLevelRuntime_CommitReference(int32_t oil_level, const OilLevelRefreshCandidate *reference);
 /**
  * @brief 读取当前有效位置、提交结果并输出对应算法族的日志。
  * @param tag 诊断日志使用的可选操作标签。

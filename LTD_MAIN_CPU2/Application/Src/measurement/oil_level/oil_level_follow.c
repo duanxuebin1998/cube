@@ -4,6 +4,7 @@
  * 结果发布和 AO 处理统一由 oil_level_runtime.c 提供，本文件不重复实现。
  */
 #include "oil_level_internal.h"
+#include "oil_level_reference_refresh.h"
 #include "abortable_delay.h"
 #include "fault_manager.h"
 #include "system_parameter.h"
@@ -25,7 +26,7 @@
  * @note 液位稳定判断基于频率波动阈值（oilLevelHysteresisThreshold）
  * @note 当液位过低进入盲区时，会调用 OilLevel_WaitForBlindZone 等待液位恢复
  */
-uint32_t FollowOilLevel(void) {
+static uint32_t FollowOilLevelConfigured(void) {
 	uint32_t ret;
 	/* 切换到跟随状态 */
 	g_measurement.device_status.device_state = STATE_FLOWOIL;
@@ -52,12 +53,16 @@ uint32_t FollowOilLevel(void) {
 
 	while (1) {
 		printf("液位跟随\t");
+		ret = OilLevelReferenceRefresh_Poll(false);
+		if (ret != NO_ERROR) { return ret; }
 
 		/* 获取当前频率 */
 		ret = OilLevel_ReadValidatedFrequency(&g_measurement.oil_measurement.current_frequency);
 		CHECK_ERROR(ret);  /* 检查开启液位模式是否成功 */
 		/* 稳定性判断（频率波动在阈值内） */
 		if (fabs(OilLevel_GetFrequencyDifference()) < FrequencyLevel_GetCompatThresholdHz(g_deviceParams.oilLevelHysteresisThreshold)) {
+			ret = OilLevelReferenceRefresh_Poll(g_measurement.oil_measurement.liquid_stable != 0U);
+			if (ret != NO_ERROR) { return ret; }
 			/* 液位稳定时电机不动作，直接打印寄存器中保存的液位值 */
 			printf("液位稳定,电机不动作\t");
 			printf("液位跟随\t液位值为%ld (0.1mm)", g_measurement.oil_measurement.oil_level);
@@ -88,4 +93,13 @@ uint32_t FollowOilLevel(void) {
 			}
 		}
 	}
+}
+
+/* 所有方法共用刷新生命周期；任何返回都解除保持并丢弃本轮候选，取消不累计失败。 */
+uint32_t FollowOilLevel(void)
+{
+    uint32_t ret;
+    OilLevelReferenceRefresh_EnterFollow();
+    ret = FollowOilLevelConfigured();
+    return OilLevelReferenceRefresh_LeaveFollow(ret);
 }

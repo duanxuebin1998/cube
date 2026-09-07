@@ -338,8 +338,8 @@ typedef enum
     COM_NUM_DEVICEPARAM_MAX_ZERO_DEVIATION_DISTANCE,    /* 零点最大偏差距离 */
     COM_NUM_DEVICEPARAM_FINDZERO_DOWN_DISTANCE,         /* 找零点下行距离 */
 
-    COM_NUM_DEVICEPARAM_RESERVED10,                     /* 保留 10 */
-    COM_NUM_DEVICEPARAM_RESERVED11,                     /* 保留 11 */
+    COM_NUM_DEVICEPARAM_LEVEL_REFERENCE_REFRESH_ENABLE, /* 液位定时矫正开关，复用原保留10。 */
+    COM_NUM_DEVICEPARAM_LEVEL_REFERENCE_REFRESH_INTERVAL_MIN, /* 刷新周期分钟数，复用原保留11。 */
 
     /* ---------------- 液位测量参数 ---------------- */
     COM_NUM_DEVICEPARAM_TANKHEIGHT,                     /* 罐高 */

@@ -112,6 +112,10 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
         return &g_deviceParams.fault_auto_recovery_retry_limit;
     case COM_NUM_DEVICEPARAM_WATER_LEVEL_HYSTERESIS_TIME:
         return &g_deviceParams.water_level_hysteresis_time_s;
+    case COM_NUM_DEVICEPARAM_LEVEL_REFERENCE_REFRESH_ENABLE:
+        return &g_deviceParams.liquidLevelReferenceRefreshEnable;
+    case COM_NUM_DEVICEPARAM_LEVEL_REFERENCE_REFRESH_INTERVAL_MIN:
+        return &g_deviceParams.liquidLevelReferenceRefreshIntervalMin;
     case COM_NUM_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH:
         return &g_deviceParams.position_source_auto_switch;
 

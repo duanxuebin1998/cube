@@ -62,6 +62,8 @@ set(APP_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/oil_level/oil_level_density.c
     ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/oil_level/oil_level_follow.c
     ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/oil_level/oil_level_frequency.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/oil_level/oil_level_refresh_policy.c
+    ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/oil_level/oil_level_reference_refresh.c
     ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/oil_level/oil_level_position.c
     ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/oil_level/oil_level_runtime.c
     ${CMAKE_CURRENT_LIST_DIR}/Application/Src/measurement/oil_level/oil_level_search.c

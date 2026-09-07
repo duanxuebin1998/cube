@@ -4,6 +4,7 @@
  * 结果发布和 AO 处理统一由 oil_level_runtime.c 提供，本文件不重复实现。
  */
 #include "oil_level_internal.h"
+#include "oil_level_reference_refresh.h"
 #include "abortable_delay.h"
 #include "motor_ctrl.h"
 #include "sensor_service.h"
@@ -18,7 +19,8 @@
 static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
                                                        uint32_t target_frequency_hz,
                                                        float deadband_override_hz,
-                                                       uint8_t fixed_target_mode);
+                                                       uint8_t fixed_target_mode,
+                                                       OilLevelRefreshSearch *search);
 
 /**
  * @brief 使液位 AO 样本失效、慢停电机并返回原频率闭环错误码。
@@ -108,7 +110,7 @@ uint32_t FrequencyLevel_RunFixedClosedLoop(uint32_t follow_mode)
     return FrequencyLevel_RunClosedLoopConfigured(follow_mode,
                                                   g_deviceParams.oilLevelFrequency,
                                                   0.0f,
-                                                  1U);
+                                                  1U, NULL);
 }
 
 /**
@@ -139,7 +141,7 @@ uint32_t OilLevel_RunFixedFrequencySearch(uint32_t target_frequency_hz,
     ret = FrequencyLevel_RunClosedLoopConfigured(OIL_LEVEL_CLOSED_LOOP_SEARCH,
                                                  target_frequency_hz,
                                                  (float)deadband_hz,
-                                                 1U);
+                                                 1U, NULL);
     g_measurement.oil_measurement.follow_frequency = saved_follow_frequency;
     return ret;
 }
@@ -318,15 +320,16 @@ static uint32_t FrequencyLevel_StartOrUpdateFineMotion(int dir,
  * @param deadband 目标判定使用的死区宽度，与函数处理的频率或密度值采用相同单位。
  * @return 1 表示频率已进入稳定区，相对频率法额外避开空气/油中端点；0 表示频率尚未进入稳定区，相对频率法额外避开空气/油中端点。
  */
-static uint8_t FrequencyLevel_IsStableInsideBand(float frequency_error, float deadband)
+static uint8_t FrequencyLevel_IsStableInsideBand(float frequency_error, float deadband,
+                                               const OilLevelRefreshSearch *search)
 {
     if (fabsf(frequency_error) > deadband) {
         return 0U;
     }
 
     if (g_deviceParams.liquidLevelMeasurementMethod == OIL_LEVEL_METHOD_CONTINUOUS_RELATIVE_FREQ) {
-        float air_frequency = (float)g_measurement.oil_measurement.air_frequency;
-        float oil_frequency = (float)g_measurement.oil_measurement.oil_frequency;
+        float air_frequency = (float)((search != NULL) ? search->reference.air_frequency : g_measurement.oil_measurement.air_frequency);
+        float oil_frequency = (float)((search != NULL) ? search->reference.oil_frequency : g_measurement.oil_measurement.oil_frequency);
         float current_frequency = (float)g_measurement.oil_measurement.current_frequency;
 
         if ((air_frequency > oil_frequency) &&
@@ -347,12 +350,12 @@ static uint8_t FrequencyLevel_IsStableInsideBand(float frequency_error, float de
  * @param dir 前级频率比较得到的运动方向；OIL_LEVEL_DIRECTION_NONE 表示已经落入目标死区。
  * @return 通常原样返回 dir；仅在连续相对频率法已进入死区且当前频率靠近空气端或油端时，分别修正为下行或上行方向。
  */
-static int FrequencyLevel_CorrectRelativeEndpointDirection(int dir)
+static int FrequencyLevel_CorrectRelativeEndpointDirection(int dir, const OilLevelRefreshSearch *search)
 {
     if ((dir == OIL_LEVEL_DIRECTION_NONE) &&
         (g_deviceParams.liquidLevelMeasurementMethod == OIL_LEVEL_METHOD_CONTINUOUS_RELATIVE_FREQ)) {
-        float air_frequency = (float)g_measurement.oil_measurement.air_frequency;
-        float oil_frequency = (float)g_measurement.oil_measurement.oil_frequency;
+        float air_frequency = (float)((search != NULL) ? search->reference.air_frequency : g_measurement.oil_measurement.air_frequency);
+        float oil_frequency = (float)((search != NULL) ? search->reference.oil_frequency : g_measurement.oil_measurement.oil_frequency);
         float current_frequency = (float)g_measurement.oil_measurement.current_frequency;
 
         if ((air_frequency > oil_frequency) &&
@@ -392,7 +395,15 @@ uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode)
             follow_mode,
             g_measurement.oil_measurement.follow_frequency,
             0.0f,
-            0U);
+            0U, NULL);
+}
+
+/* 候选定位复用生产连续闭环；不改正式目标、不发布中途结果，预算由调用方统一提供。 */
+uint32_t FrequencyLevel_SearchReference(OilLevelRefreshSearch *search, bool fixed)
+{
+    if (search == NULL) { return SYSTEM_CALL_CONDITION_ERROR; }
+    return FrequencyLevel_RunClosedLoopConfigured(OIL_LEVEL_CLOSED_LOOP_SEARCH,
+            search->reference.target_frequency, 0.0f, fixed ? 1U : 0U, search);
 }
 
 /**
@@ -564,7 +575,8 @@ static uint32_t FrequencyLevel_HandleLowLimit(uint32_t follow_mode,
 static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
                                                        uint32_t target_frequency_hz,
                                                        float deadband_override_hz,
-                                                       uint8_t fixed_target_mode)
+                                                       uint8_t fixed_target_mode,
+                                                       OilLevelRefreshSearch *search)
 {
     uint32_t ret;
     uint32_t start_tick;
@@ -587,7 +599,9 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
         printf("频率找液位\t目标频率未配置\r\n");
         return PARAM_CONFIG_MISSING;
     }
-    g_measurement.oil_measurement.follow_frequency = target_frequency_hz;
+    if (search == NULL) {
+        g_measurement.oil_measurement.follow_frequency = target_frequency_hz;
+    }
 
     if (method == OIL_LEVEL_METHOD_CONTINUOUS_RELATIVE_FREQ) {
         method_text = "连续相对频率";
@@ -604,10 +618,10 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
         deadband = deadband_override_hz;
     }
 
-    g_measurement.oil_measurement.probe_at_liquid_level = 0U;
-    g_measurement.oil_measurement.liquid_stable = 0U;
+    OilLevelRuntime_ClearStableState();
 
-    ret = SensorService_EnableLevelMode();
+    /* 刷新始终处于液位模式，不重复切模式及附带无预算的模式等待。 */
+    ret = (search != NULL) ? NO_ERROR : SensorService_EnableLevelMode();
     if (ret != NO_ERROR) {
         return FrequencyLevel_StopAndReturn(ret, "切换液位模式失败");
     }
@@ -625,6 +639,15 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
         uint32_t speed_x100;
         int dir;
         uint8_t previous_motion_active;
+        ret = OilLevelReferenceRefresh_Check(search);
+        if (ret != NO_ERROR) {
+            return FrequencyLevel_StopAndReturn(ret, "刷新预算或运行状态退出");
+        }
+        if (follow_mode != 0U) {
+            ret = OilLevelReferenceRefresh_Poll(stable_count >= FREQUENCY_LEVEL_STABLE_COUNT);
+            if (ret != NO_ERROR) { return FrequencyLevel_StopAndReturn(ret, "液位定时矫正退出"); }
+            target_frequency_hz = g_measurement.oil_measurement.follow_frequency;
+        }
         if (HasEffectiveCommandSwitchRequest()) {
             return FrequencyLevel_StopAndReturn(STATE_SWITCH, "命令切换");
         }
@@ -668,8 +691,7 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
             active_fine_speed_m_min = 0.0f;
             lost_step_check_active = 0U;
             stable_count = 0U;
-            g_measurement.oil_measurement.probe_at_liquid_level = 0U;
-            g_measurement.oil_measurement.liquid_stable = 0U;
+            OilLevelRuntime_ClearStableState();
             printf("频率找液位\t频率未稳定，停机等待下一样本\r\n");
 
             if ((follow_mode == 0U) &&
@@ -678,7 +700,7 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
                         MEASUREMENT_FREQUENCY_LEVEL_TIMEOUT,
                         "频率闭环超时");
             }
-            ret = AbortableDelay_CommandSwitch(FREQUENCY_LEVEL_SAMPLE_DELAY_MS, 50U);
+            ret = OilLevelReferenceRefresh_Delay(search, FREQUENCY_LEVEL_SAMPLE_DELAY_MS);
             if (ret != NO_ERROR) {
                 return FrequencyLevel_StopAndReturn(ret, "命令切换");
             }
@@ -697,8 +719,10 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
             active_fine_speed_m_min = 0.0f;
             lost_step_check_active = 0U;
             stable_count = 0U;
-            g_measurement.oil_measurement.probe_at_liquid_level = 0U;
-            g_measurement.oil_measurement.liquid_stable = 0U;
+            OilLevelRuntime_ClearStableState();
+            if (search != NULL) {
+                return FrequencyLevel_StopAndReturn(SONIC_FREQ_ABNORMAL, "刷新频率越界");
+            }
             ret = OilLevel_ReadValidatedFrequencyWithDeadline(
                     &g_measurement.oil_measurement.current_frequency,
                     start_tick,
@@ -709,7 +733,9 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
         }
 
         frequency_error = (float)g_measurement.oil_measurement.current_frequency -
-                          (float)g_measurement.oil_measurement.follow_frequency;
+                          (float)target_frequency_hz;
+        ret = OilLevelReferenceRefresh_Check(search);
+        if (ret != NO_ERROR) { return FrequencyLevel_StopAndReturn(ret, "刷新采样后截止"); }
         printf("频率找液位\t当前频率=%lu Hz\t目标=%lu Hz\t偏差=%.1f Hz\r\n",
                (unsigned long)g_measurement.oil_measurement.current_frequency,
                (unsigned long)target_frequency_hz,
@@ -723,7 +749,7 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
             dir = OIL_LEVEL_DIRECTION_NONE;
         }
         if (fixed_target_mode == 0U) {
-            dir = FrequencyLevel_CorrectRelativeEndpointDirection(dir);
+            dir = FrequencyLevel_CorrectRelativeEndpointDirection(dir, search);
         }
 
         if (fixed_target_mode != 0U) {
@@ -751,7 +777,7 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
 
         if (((fixed_target_mode != 0U) && (fabsf(frequency_error) <= deadband)) ||
             ((fixed_target_mode == 0U) &&
-             (FrequencyLevel_IsStableInsideBand(frequency_error, deadband) != 0U))) {
+             (FrequencyLevel_IsStableInsideBand(frequency_error, deadband, search) != 0U))) {
             ret = LevelVelocity_StartOrUpdateMotion(OIL_LEVEL_DIRECTION_NONE, 0U, &active_dir, &active_speed_x100);
             if (ret != NO_ERROR) {
                 return FrequencyLevel_StopAndReturn(ret, "停止确认失败");
@@ -770,7 +796,7 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
                 }
                 stable_count = FREQUENCY_LEVEL_STABLE_COUNT;
             }
-            ret = AbortableDelay_CommandSwitch(DensityLevel_GetStableDelayMs(), 100U);
+            ret = OilLevelReferenceRefresh_Delay(search, DensityLevel_GetStableDelayMs());
             if (ret != NO_ERROR) {
                 return FrequencyLevel_StopAndReturn(ret, "命令切换");
             }
@@ -778,8 +804,7 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
         }
 
         stable_count = 0U;
-        g_measurement.oil_measurement.probe_at_liquid_level = 0U;
-        g_measurement.oil_measurement.liquid_stable = 0U;
+        OilLevelRuntime_ClearStableState();
         /* 固定频率搜索首次跨越目标后进入精细比例调速；换向后速度仍随频差减小。 */
         if (fixed_target_mode != 0U) {
             if (initial_dir == OIL_LEVEL_DIRECTION_NONE) {
@@ -898,7 +923,7 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
             }
         } else {
             ret = OilLevel_UpdatePositionAndCheckBounds();
-            if (ret == MEASUREMENT_OILLEVEL_LOW) {
+            if ((ret == MEASUREMENT_OILLEVEL_LOW) && (search == NULL)) {
                 active_dir = OIL_LEVEL_DIRECTION_NONE;
                 active_speed_x100 = 0U;
                 ret = OilLevel_WaitForBlindZone();
@@ -925,7 +950,7 @@ static uint32_t FrequencyLevel_RunClosedLoopConfigured(uint32_t follow_mode,
             return FrequencyLevel_StopAndReturn(MEASUREMENT_FREQUENCY_LEVEL_TIMEOUT, "频率闭环超时");
         }
 
-        ret = AbortableDelay_CommandSwitch(FREQUENCY_LEVEL_SAMPLE_DELAY_MS, 50U);
+        ret = OilLevelReferenceRefresh_Delay(search, FREQUENCY_LEVEL_SAMPLE_DELAY_MS);
         if (ret != NO_ERROR) {
             return FrequencyLevel_StopAndReturn(ret, "命令切换");
         }

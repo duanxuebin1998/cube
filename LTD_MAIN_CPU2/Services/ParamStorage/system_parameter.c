@@ -816,6 +816,11 @@ static int apply_protocol_version_runtime(void)
         /* 协议25首次赋予reserved3水位滞后时间语义，旧槽位不得直接作为有效秒数。 */
         g_deviceParams.water_level_hysteresis_time_s = 0U;
     }
+    /* 协议36复用两个保留槽；历史值不能解释为已启用刷新，升级不清除其它现场参数。 */
+    if ((old_protocol < 36U) || (old_protocol > DEVICE_PROTOCOL_VERSION)) {
+        g_deviceParams.liquidLevelReferenceRefreshEnable = 0U;
+        g_deviceParams.liquidLevelReferenceRefreshIntervalMin = 1440U;
+    }
     g_deviceParams.protocolVersion = DEVICE_PROTOCOL_VERSION;
     return 1;
 }
@@ -1115,8 +1120,8 @@ static int migrate_ao_current_correction_scale_runtime(void)
     if (old_protocol == DEVICE_PROTOCOL_VERSION) {
         return 0;
     }
-    if (old_protocol == 33U) {
-        /* 协议33已经使用x1000，升级到协议34只扩展故障语义，保持原修正值。 */
+    if ((old_protocol >= 33U) && (old_protocol <= DEVICE_PROTOCOL_VERSION)) {
+        /* 协议33起均使用x1000；升级到36必须保留34/35的现场电流修正值。 */
         return 0;
     }
     if ((old_protocol >= 26U) && (old_protocol <= 32U) &&
@@ -1296,6 +1301,15 @@ static int normalize_device_params_runtime(void)
     int changed = 0;
     uint32_t relay_changed_mask;
     uint32_t relay_invalid_mask;
+
+    /* 当前协议的损坏值保守恢复为关闭和默认周期，不允许短周期反复离面。 */
+    if ((g_deviceParams.liquidLevelReferenceRefreshEnable > 1U) ||
+        (g_deviceParams.liquidLevelReferenceRefreshIntervalMin < 60U) ||
+        (g_deviceParams.liquidLevelReferenceRefreshIntervalMin > 10080U)) {
+        g_deviceParams.liquidLevelReferenceRefreshEnable = 0U;
+        g_deviceParams.liquidLevelReferenceRefreshIntervalMin = 1440U;
+        changed = 1;
+    }
 
     if ((g_deviceParams.position_count_mode != POSITION_COUNT_MODE_ENCODER) &&
         (g_deviceParams.position_count_mode != POSITION_COUNT_MODE_MOTOR)) {
@@ -2094,6 +2108,8 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.oilLevelHysteresisThreshold = 200;     /* 项目自定义倍率/单位 */
     g_deviceParams.liquidLevelMeasurementMethod= 0;		/* 0 空气+液体频率/2 1：按设置频率步进跟随 2 密度连续跟随 3.根据振动管跟随 4 连续相对频率 5 连续定频 */
     g_deviceParams.oilLevelFrequency                = 5200;      /* oilLevelFrequency */
+    g_deviceParams.liquidLevelReferenceRefreshEnable = 0U;
+    g_deviceParams.liquidLevelReferenceRefreshIntervalMin = 1440U;
     g_deviceParams.oilLevelDensity                = 0;      /* oilLevelDensity */
 
     /* ---------------- 水位测量参数 ---------------- */
@@ -2302,6 +2318,8 @@ static const ParamPrintItem g_device_param_print_table[] = {
     DEVICE_PARAM_ITEM("液位参数", "液位滞后阈值", oilLevelHysteresisThreshold, PARAM_PRINT_TYPE_U32_OIL_LEVEL_THRESHOLD, NULL),
     DEVICE_PARAM_ITEM("液位参数", "液位测量方式", liquidLevelMeasurementMethod, PARAM_PRINT_TYPE_U32, NULL),
     DEVICE_PARAM_ITEM("液位参数", "液位跟随频率", oilLevelFrequency, PARAM_PRINT_TYPE_U32_UNIT, "Hz"),
+    DEVICE_PARAM_ITEM("液位参数", "液位定时矫正开关", liquidLevelReferenceRefreshEnable, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("液位参数", "液位定时矫正周期", liquidLevelReferenceRefreshIntervalMin, PARAM_PRINT_TYPE_U32_UNIT, "min"),
     DEVICE_PARAM_ITEM("液位参数", "液位跟随密度", oilLevelDensity, PARAM_PRINT_TYPE_U32_DENSITY, "0.01kg/m3"),
     DEVICE_PARAM_ITEM("液位参数", "液位滞后时间", oilLevelHysteresisTime, PARAM_PRINT_TYPE_U32_UNIT, "s"),
     DEVICE_PARAM_ITEM("水位参数", "水位罐高", water_tank_height, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
