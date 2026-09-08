@@ -13,8 +13,7 @@
 
 ## 文档与资料边界
 
-- `docs/` 是唯一正式业务文档源；不要新增或恢复 `LTD_MAIN_CPU2/docs/`、`LTD_DISPLAY_CPU3/docs/`。
-- `docs/00_程序流程导航/`、`tools/`、`docs-site/`、`outputs/`、临时渲染和中间产物不进入 Git。
+- 正式目录和本机专用目录以根 `AGENTS.md` 及 `docs/00_构建与版本/文档库治理清单.md` 为准。
 - 清理上述本机专用或淘汰路径中的历史跟踪文件时，允许暂存删除；仍禁止新增、修改或用 `git add -f` 恢复这些路径。
 - `.agents/skills/cube-development/` 是 CUBE 项目 skill 的正式仓库源，允许跟踪；不要把其中规则反向复制到全局 `engineering-workflow`。
 - 文档整理默认不升级 CPU2/CPU3 固件版本；只有固件输出或行为变化才按版本规则处理。
@@ -37,11 +36,13 @@
 1. 仓库根 `AGENTS.md`。
 2. `.agents/skills/cube-development/SKILL.md`。
 3. 本文件。
-4. `version-build-release.md`。
+4. [构建、版本与发布规则](version-build-release.md)。
 
 不得使用旧会话摘要、其它代理结论或“此前已读取”替代。
 
 提交前先运行 `py .agents/skills/cube-development/scripts/bootstrap_cube_hooks.py --check --repo-root D:\CUBE`。该检查同时确认本机 hooks 与仓库级模板一致、`core.hooksPath=tools/git-hooks`；失败时不得用 `--no-verify` 绕过。
+
+新克隆先从本机同步源恢复 `tools/` 再配置 hooksPath。只有需要恢复本机 hooks 时才使用 `--apply`，已有不同内容不得静默覆盖。
 
 ## 提交范围模式
 
@@ -67,11 +68,13 @@
 
 1. 取得两次稳定状态快照，确认没有未知并发写入。
 2. 根据用户原话确定 `all` 或 `scoped`，不得自行降级。
-3. 按最终 diff 判断版本、协议、参数存储、CHANGELOG、版本方案和流程资料影响。
+3. 按最终 diff 判断版本、协议、参数存储、CHANGELOG、版本方案和流程资料影响；发生真实升版时同步更新售后版 Excel。
 4. 暂存后检查 `git diff --cached --name-status`、关键 diff、`git diff --cached --check` 和敏感信息。
 5. 运行 `scripts/check_commit_scope.py --mode <all|scoped>`。
 6. 使用完整消息文件创建提交，并显式设置 `CUBE_COMMIT_SCOPE`；`scoped` 同时设置 `CUBE_COMMIT_SCOPE_FILE=<任务JSON>`。
 7. 提交后检查完整正文、文件范围、剩余状态和版本标题门禁。
+
+提交显式设置 `CUBE_COMMIT_SCOPE=all` 或 `CUBE_COMMIT_SCOPE=scoped`；本地 `pre-commit` 核对范围，`commit-msg` 核对版本标题和四段式正文。`scoped` 的范围文件使用 `task.writePaths` 或 `task.allowedPaths`。
 
 ## 提交信息强制格式
 
@@ -108,7 +111,7 @@ py .agents/skills/cube-development/scripts/check_commit_message_format.py --mess
 
 ## CUBE 发布一致性
 
-- 固件相关提交执行 `check_version_bumped.py`，并将版本头、CHANGELOG 和版本方案纳入同一提交。
+- 固件相关提交执行 `check_version_bumped.py`，并将版本头、CHANGELOG、版本方案和本次升版更新的售后版 Excel 纳入同一提交；Excel 的维护与检查要求见 [售后版 Excel 同步](version-build-release.md#售后版-excel-同步)。
 - CHANGELOG 和版本方案必须覆盖暂存区全部行为变化、兼容影响、验证和未验证风险。
 - 共享协议变化同步协议变更记录，并保证 CPU2/CPU3 版本组合一致。
 - 提交后、推送前运行 `py tools/check_commit_subject_versions.py --range origin/MAIN..HEAD`。
@@ -116,6 +119,6 @@ py .agents/skills/cube-development/scripts/check_commit_message_format.py --mess
 
 ## 验证边界
 
-- 文档改动至少运行文档结构、Markdown 链接、编码和 `git diff --check`；不因源文档变化自动生成或刷新 PDF。人工维护且纳入当前交付范围的 PDF，按任务需要执行内容和版式检查。
-- 源码改动运行相关静态契约与 clean-first 构建；最终代码晚于构建时必须重建。
+- 文档改动检查相关链接、编码和 `git diff --check`；目录结构、文档路由或治理规则变化时运行文档结构检查。正式格式交付保留必要视觉检查，不因源文档变化自动生成 PDF。
+- 普通开发按 `validation-evidence.md` 选择验证；固件相关提交/发布运行相关静态契约与 clean-first 构建，输入变化仅重跑受影响链路。工具和规则文档改动不触发固件构建。
 - 真实目标板、传感器、RS485、FRAM、OLED、电机、故障注入和现场验证未执行时必须明确列出，不得用静态或构建证据替代。

@@ -1,6 +1,6 @@
 # 协议与寄存器文档索引
 
-更新日期：2026-08-24
+更新日期：2026-09-07
 
 本目录用于保存 CPU2/CPU3 共享协议、外部 Modbus/DSM/SI协议适配、寄存器表、协议版本和兼容性记录。凡是会影响通信地址、字段语义、命令、状态、缩放、补码解释或协议兼容性的资料，优先归入本目录。
 
@@ -8,7 +8,7 @@
 
 | 分类 | 资料 | 用途 |
 | --- | --- | --- |
-| CPU2/CPU3 共享协议 | `CPU2_CPU3协议变更记录.md` | 记录`DEVICE_PROTOCOL_VERSION`、共享寄存器、参数语义、兼容影响和验证结果；最新正式协议为34 |
+| CPU2/CPU3 共享协议 | `CPU2_CPU3协议变更记录.md` | 记录`DEVICE_PROTOCOL_VERSION`、共享寄存器、参数语义、兼容影响和验证结果；最新正式协议为35 |
 | LTD 共享 Modbus | `LTD共享Modbus协议/` | CPU2/CPU3 共用的当前寄存器、命令、帧格式、CPU3 快照响应/CPU2 ACK 写入和联调帧 |
 | 系统参数默认值 | `系统参数出厂默认值.md` | 整理 CPU2 恢复出厂写入的 `DeviceParameters` 默认值、单位和小数位；当前 CPU2 参数存储版本为 `3` |
 | AO 电流输出 | `AO电流输出/` | 归档NMS81等外部4-20mA/AO参考资料，并记录CUBE当前5组17项菜单、2个隐藏预留、HART、迁移和台架验证边界 |
@@ -27,10 +27,10 @@
 
 | 主题 | 当前结论 | 依据 |
 | --- | --- | --- |
-| 共享协议版本 | 当前正式协议为35，组合为CPU2 V1.42.3.0 / CPU3 V1.40.1.0，双端必须严格相等。协议35统一DM4物理类型为14，V4为普通运行协议，Safe仅作预留运行模式；协议34及更早的类型15由CPU2启动时定向迁移并保存为14 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`、`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h`、`CPU2_CPU3协议变更记录.md` |
+| 共享协议版本 | 当前正式协议为35，组合为CPU2 V1.42.11.0 / CPU3 V1.41.0.0，双端必须严格相等。协议35统一DM4物理类型为14，V4为普通运行协议，Safe仅作预留运行模式；协议34及更早的类型15由CPU2启动时定向迁移并保存为14 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`、`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h`、`CPU2_CPU3协议变更记录.md` |
 | CPU3 外部 COM 快速发现 | 已完成 `0xF8/0x47` V3 简化方案设计，限定为三路外部 COM 只读发现；CPU3 固件、上位机和真实 RS485 台架均尚未实施，不改变当前版本及共享协议 | `CPU3外部COM安全快速设备发现协议设计.md` |
 | LTD 对外协议 | 只维护一套标准Modbus协议，沿用地址宏/枚举和`HoldingRegisterArray[]`、`InputRegisterArray[]`直映射格式；CPU3读已确认快照，FC10等待CPU2合法ACK，七个命令前置参数以ACK确认本次值并后台刷新完整快照；协议32增加多参数V4类型，协议33把AO修正及目标/实发值改为x1000，协议34增加编码器故障语义，协议35统一DM4类型解释，历史记录按CPU2程序版本选故障表 | `LTD共享Modbus协议/LTD共享Modbus协议卷.md` |
-| CPU2 参数存储 | `DEVICE_PARAM_VERSION = 3`，当前版本头为`V1.42.3.0`；协议35不改变`DeviceParameters`结构、CRC范围或参数FRAM A/B槽，只把协议32～34的旧`sensorType=15`定向迁移并保存为14，不清其它现场参数。协议33 AO迁移、协议34编码轮周长0归一化和既有迁移规则继续生效 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.c`、`../00_构建与版本/CPU2参数存储升级清单.md` |
+| CPU2 参数存储 | `DEVICE_PARAM_VERSION = 3`，当前正式版本头为`V1.42.11.0`；协议35不改变`DeviceParameters`结构、CRC范围或参数FRAM A/B槽，只把协议32～34的旧`sensorType=15`定向迁移并保存为14，不清其它现场参数。协议33 AO迁移、协议34编码轮周长0归一化和既有迁移规则继续生效 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.c`、`../00_构建与版本/CPU2参数存储升级清单.md` |
 | CPU3 本地显示/通信参数 | `CPU3_PARAM_VERSION = 0x0007`；V6到V7迁移保留SI自动调度、报警阈值和三路串口参数，并补充协议18兼容槽；协议20只改变CPU2/CPU3共享AO契约，不改变CPU3本机FRAM布局 | `LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.c`、`CPU2_CPU3协议变更记录.md` |
 | 读取部件参数与 DSM 调试区 | 共享协议为 9 起支持；`debug_data.water_capacitance_x10` 为水位电容快照，蓝牙 RSSI 通过 `WirelessPairingStatus` 尾部输入寄存器发布 | `../00_构建与版本/版本改动与测试/2026-06-13_CPU2_V1.15.0.0_CPU3_V1.14.0.0_读取部件参数蓝牙RSSI与CPU3菜单显示优化_改动与测试方案.md` |
 | DSM CPU1 传统传感器协议 | V5.4 正文、15 个版本/快照矩阵和20组golden frames已同步为静态复查基准；CPU2 V1.36.4.0已落地命令级定长事务和严格帧校验，V1.38.0.0已接入`Cv/CV` RAM版本上下文、CK和CM。模式ACK内部语义、多维护线实机和UART6时序仍未闭环 | `传感器通信协议/DSM传感器协议/README.md`、`../03_问题分析与整改/未处理/2026-07-18_DSM传感器协议适配复查.md` |

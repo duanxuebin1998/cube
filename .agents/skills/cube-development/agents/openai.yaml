@@ -1,4 +1,4 @@
 interface:
   display_name: "CUBE 整体工程开发"
   short_description: "CUBE全工程范围、证据、并行写入、版本与提交门禁。"
-  default_prompt: "Use $cube-development for any D:\\CUBE task; classify the stage, snapshot Git and decisions, claim the write scope when editing, load only matching references, preserve parallel work, and run the required evidence and release gates."
+  default_prompt: "Use $cube-development to complete the authorized CUBE task with relevant references, proportionate verification, and the applicable repository gates."

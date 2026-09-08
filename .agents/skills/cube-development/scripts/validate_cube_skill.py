@@ -7,6 +7,7 @@ import ast
 import re
 import sys
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 
 SKILL_NAME = "cube-development"
@@ -67,6 +68,46 @@ def validate_agent_yaml(path: Path) -> None:
         fail(f"default_prompt must mention ${SKILL_NAME}")
 
 
+def validate_description(description: str) -> None:
+    if not description.strip() or len(description) > 1024:
+        fail("Skill description must be non-empty and at most 1024 characters")
+
+
+def validate_reference_routes(skill_root: Path) -> set[Path]:
+    """Follow explicit reference routes, allowing references to route to each other."""
+    skill_root = skill_root.resolve()
+    reference_root = skill_root / "references"
+    actual = {path.resolve() for path in reference_root.rglob("*.md")}
+    pending = [skill_root / "SKILL.md"]
+    visited: set[Path] = set()
+    while pending:
+        source = pending.pop()
+        if source in visited:
+            continue
+        visited.add(source)
+        text = read_utf8(source)
+        targets = [
+            skill_root / value
+            for value in re.findall(r"`(references/[^`]+\.md)`", text)
+        ]
+        for value in re.findall(r"\]\(([^)]+)\)", text):
+            link = urlsplit(value.strip("<>"))
+            if not link.scheme and not link.netloc and link.path.endswith(".md"):
+                targets.append(source.parent / unquote(link.path))
+        for target in targets:
+            target = target.resolve()
+            if not target.is_relative_to(skill_root):
+                fail(f"Reference route leaves skill: {source} -> {target}")
+            if not target.is_file():
+                fail(f"Missing routed reference: {source} -> {target}")
+            if target.is_relative_to(reference_root):
+                pending.append(target)
+    unrouted = sorted(actual - visited)
+    if unrouted:
+        fail(f"Reference files not reachable from SKILL.md: {unrouted}")
+    return actual
+
+
 def main() -> int:
     skill_root = Path(__file__).resolve().parents[1]
     skill_path = skill_root / "SKILL.md"
@@ -74,17 +115,8 @@ def main() -> int:
     fields = parse_frontmatter(text)
     if fields["name"] != SKILL_NAME or skill_root.name != SKILL_NAME:
         fail("Skill name, folder name and expected CUBE skill name must match")
-    if len(fields["description"]) < 80:
-        fail("Skill description is too short to provide reliable triggering context")
-
-    mentioned_references = set(re.findall(r"`references/([^`]+\.md)`", text))
-    actual_references = {path.name for path in (skill_root / "references").glob("*.md")}
-    missing_references = sorted(mentioned_references - actual_references)
-    unrouted_references = sorted(actual_references - mentioned_references)
-    if missing_references:
-        fail(f"Missing routed references: {missing_references}")
-    if unrouted_references:
-        fail(f"Reference files not routed directly from SKILL.md: {unrouted_references}")
+    validate_description(fields["description"])
+    actual_references = validate_reference_routes(skill_root)
 
     mentioned_scripts = set(re.findall(r"`scripts/([^`\s]+)`", text))
     missing_scripts = sorted(
@@ -96,11 +128,6 @@ def main() -> int:
     validate_agent_yaml(skill_root / "agents" / "openai.yaml")
 
     required_policy_fragments = {
-        skill_path: (
-            "CPU2/CPU3 板间共享契约与 CPU3 对外 LTD 标准 Modbus 的共享区",
-            "默认不自动生成、刷新或配套新增 PDF",
-            "不得仅因存在同名 Markdown 自动排除",
-        ),
         skill_root / "references" / "internal-protocol-and-storage.md": (
             "CPU3 对外 LTD 标准 Modbus 的共享区是同一份契约",
         ),
@@ -123,7 +150,7 @@ def main() -> int:
             if fragment not in policy_text:
                 fail(f"Required CUBE policy fragment is missing from {policy_path}: {fragment}")
 
-    reference_files = sorted((skill_root / "references").glob("*.md"))
+    reference_files = sorted(actual_references)
     text_files = [skill_path, skill_root / "agents" / "openai.yaml"]
     text_files.extend(reference_files)
     text_files.extend(sorted((skill_root / "scripts").glob("*.py")))

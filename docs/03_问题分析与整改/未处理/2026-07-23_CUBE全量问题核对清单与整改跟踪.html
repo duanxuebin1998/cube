@@ -171,7 +171,7 @@
     .display.math{display: block; text-align: center; margin: 0.5rem auto;}
   </style>
   <meta name="artifact-source" content="2026-07-23_CUBE全量问题核对清单与整改跟踪.md" />
-  <meta name="artifact-source-sha256" content="717D811CCFC36EB845720CB89733C9D660899953ED8C0CE215F0991E4E51AD73" />
+  <meta name="artifact-source-sha256" content="EE917AC7F1DD62923BDAF1044825297863B59C1A9C4717DE77AF2FEF6FC67F44" />
   <style>
     :root { color-scheme: light; --bg:#eef3f7; --paper:#fff; --text:#1d2733; --muted:#667085; --line:#d9e0e8; --accent:#0f766e; --code:#eef2f6; }
     * { box-sizing: border-box; }
@@ -215,8 +215,29 @@
 <li><a href="#cube-全量问题核对清单与整改跟踪"
 id="toc-cube-全量问题核对清单与整改跟踪">CUBE
 全量问题核对清单与整改跟踪</a></li>
-<li><a href="#继续复核现行增量" id="toc-继续复核现行增量">2026-07-28
-继续复核（现行增量）</a>
+<li><a href="#整改状态复核现行增量"
+id="toc-整改状态复核现行增量">2026-09-07 整改状态复核（现行增量）</a>
+<ul>
+<li><a href="#基线范围与统计"
+id="toc-基线范围与统计">基线、范围与统计</a></li>
+<li><a href="#已修复的代码主因与部分整改"
+id="toc-已修复的代码主因与部分整改">已修复的代码主因与部分整改</a></li>
+<li><a href="#本轮仍确认存在的旧问题"
+id="toc-本轮仍确认存在的旧问题">本轮仍确认存在的旧问题</a></li>
+<li><a href="#c-25-新确认非有限温度穿过通用稳定判定"
+id="toc-c-25-新确认非有限温度穿过通用稳定判定">C-25
+新确认：非有限温度穿过通用稳定判定</a></li>
+<li><a href="#c-48c-49补录既有-dm4-专题问题"
+id="toc-c-48c-49补录既有-dm4-专题问题">C-48／C-49：补录既有 DM4
+专题问题</a></li>
+<li><a href="#本轮验证与下一步"
+id="toc-本轮验证与下一步">本轮验证与下一步</a></li>
+</ul></li>
+<li><a href="#dsm增量复核历史专项状态"
+id="toc-dsm增量复核历史专项状态">2026-08-10
+DSM增量复核（历史专项状态）</a></li>
+<li><a href="#继续复核历史全量基线"
+id="toc-继续复核历史全量基线">2026-07-28 继续复核（历史全量基线）</a>
 <ul>
 <li><a href="#当前统计" id="toc-当前统计">当前统计</a></li>
 <li><a href="#状态变化和新增项"
@@ -535,33 +556,528 @@ id="toc-p3-03-dsm-接受地址-0-并回包疑似不符合-modbus-广播习惯">P
 <section id="cube-全量问题核对清单与整改跟踪" class="hero">
 <h1>CUBE 全量问题核对清单与整改跟踪</h1>
 <p>本页以 2026-06-30
-首轮多智能体代码审查清单为基础，交叉核对后续全工程审查、专题问题文档、流程导航和协议增量。稳定编号用于追溯；2026-07-28
-继续复核是现行增量入口，2026-07-23
-矩阵及后附详细条目保留历史证据。当前固件版本以<a
+首轮多智能体代码审查清单为基础，交叉核对后续全工程审查、专题问题文档、流程导航和协议增量。稳定编号用于追溯；<strong>2026-09-07
+增量是本轮现行状态入口</strong>，此前各层保留历史证据。本轮重点复核 20
+个既有 C 主项及 DM4
+专题，不表示所有历史问题均已重新完成源码审查。当前固件版本以<a
 href="../../00_构建与版本/版本总览.md">版本总览</a>为准，不能把历史证据基线、未提交工作树或构建结果冒充当前发布和实机闭环。</p>
 <div class="meta-grid">
 <div class="meta-item">
-<p><strong>现行复核层</strong> <code>MAIN@82971308</code> / CPU2
-V1.34.0.0 / CPU3 V1.34.0.0 / 共享协议
-29；另单独核对当前已暂存、未暂存和未跟踪工作树</p>
+<p><strong>本轮源码基线</strong> <code>MAIN@b756b6b6d7e5</code> / CPU2
+V1.42.11.0 / CPU3 V1.41.0.0 / 共享协议
+35；称重探底另注明已暂存工作树</p>
 </div>
 <div class="meta-item">
 <p><strong>整理方式</strong>全来源去重；按统一编号、当前状态、责任端和证据层维护</p>
 </div>
 <div class="meta-item">
-<p><strong>本轮复核</strong>复核 C-01～C-45，新增 C-46～C-47；C-03 上调
-P0，C-39 转 F-22，并同步
-C-07、C-14、C-26、C-27、C-35、C-41、R-03、B-01、B-09</p>
+<p><strong>2026-09-07
+复核结果</strong>更新代码已整改及部分整改事实；C-25
+增加非有限温度消费链；补录 C-48／C-49，仍有 47 个未关闭主项</p>
 </div>
 <div class="meta-item">
-<p><strong>证据限制</strong>双端
-clean-first、文档门禁和静态契约已执行；未做 RS485、FRAM
-掉电、低压保持、电机、PLC、OLED 或其它实机闭环</p>
+<p><strong>证据限制</strong>本轮为源码审查、专项静态检查和文档校验；未运行固件构建或实机台架。历史
+clean-first 记录不作为本轮硬件闭环证据</p>
 </div>
 </div>
 </section>
+<section id="current-review-2026-09-07">
+<h2 id="整改状态复核现行增量">2026-09-07 整改状态复核（现行增量）</h2>
+<h3 id="基线范围与统计">基线、范围与统计</h3>
+<p>本轮源码提交基线为 <code>MAIN@b756b6b6d7e5</code>，CPU2
+<code>V1.42.11.0</code>、CPU3 <code>V1.41.0.0</code>、双端共享协议
+<code>35</code>，CPU2 参数存储版本 <code>3</code>、CPU3 本机参数版本
+<code>0x0007</code>。开始时有 26 个已暂存文件，包含 7 个 CPU2
+称重探底相关源码文件；本轮 C-11 的进展取自该已暂存工作树，不冒充 HEAD
+或已发布固件。恢复审查时另出现并行液位策略文件和规则文档改动，本轮不修改、不纳入整改完成结论。</p>
+<p>本轮仅维护总账、HTML
+阅读版和两个问题索引，不整改固件、不升版、不暂存、不提交、不生成
+PDF。重点复核
+C-03、C-07～C-11、C-14、C-22、C-23、C-25～C-27、C-32、C-35～C-38、C-41、C-46、C-47
+共 20 个既有主项，以及 2026-08-10 DM4
+专题三项。其余编号沿用历史状态，标识为待下一轮复核，而非本轮重新确认。</p>
+<table>
+<colgroup>
+<col style="width: 30%" />
+<col style="width: 40%" />
+<col style="width: 30%" />
+</colgroup>
+<thead>
+<tr>
+<th>统计项</th>
+<th style="text-align: right;">数量</th>
+<th>口径</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>C 主项总数</td>
+<td style="text-align: right;">49</td>
+<td>C-01～C-49；保留 C-21 产品行为和 C-39→F-22 的历史编号</td>
+</tr>
+<tr>
+<td>尚未关闭主问题</td>
+<td style="text-align: right;">47</td>
+<td>原 45 项，加本轮专题补录
+C-48、C-49；代码已整改但未满足关闭条件的仍计入</td>
+</tr>
+<tr>
+<td>CPU2／CPU3／工具主责</td>
+<td style="text-align: right;">31 / 15 / 1</td>
+<td>沿用既有主责归属；C-48、C-49 均归 CPU2</td>
+</tr>
+<tr>
+<td>P0 / P1 / P2 / P3</td>
+<td style="text-align: right;">11 / 25 / 10 / 1</td>
+<td>C-48 定为 P1；C-49 对应专题中等级，定为
+P2；其余不因局部改善自动降级</td>
+</tr>
+<tr>
+<td>本轮完整关闭 C 主项</td>
+<td style="text-align: right;">0</td>
+<td>不把代码主因消除、静态通过或历史构建等同于全部验收完成</td>
+</tr>
+<tr>
+<td>本轮新证据／专题补录</td>
+<td style="text-align: right;">1 / 2</td>
+<td>新证据为 C-25 非有限温度消费链；C-48／C-49 是 8 月已有专题问题，不是
+9 月新引入</td>
+</tr>
+<tr>
+<td>R／B／F 记录</td>
+<td style="text-align: right;">5 / 10 / 22</td>
+<td>R-01～R-05、B-01～B-10、F-01～F-22；F-11 关闭前提失效并入
+C-03，不能称 22 项全部已关闭</td>
+</tr>
+</tbody>
+</table>
+<h3 id="已修复的代码主因与部分整改">已修复的代码主因与部分整改</h3>
+<p>表中“代码主因已消除”仅指明确列出的原路径；现存残余和未完成验收分别列出。源码位置按本轮基线记录；CPU2
+路径相对 <code>LTD_MAIN_CPU2/</code>，表内应用层短路径
+<code>app/</code>、<code>measurement/</code>、<code>tank_height/</code>、<code>measure_density.c</code>
+对应 <code>Application/Src/</code>
+下相应模块，后续重构时优先按函数名定位。</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>编号</th>
+<th>本轮状态</th>
+<th>已核实的整改事实</th>
+<th>剩余关闭条件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>C-10 / P0</td>
+<td>代码已整改，待边界验证</td>
+<td><code>Application/Src/measurement/density/measure_density.c:612</code>
+的 <code>BuildPoints_Interval_Exact()</code> 使用
+<code>uint32_t i</code>，先检查点数上限与输出容量；原 128～200 点
+<code>int8_t</code> 回绕写栈路径已消除</td>
+<td>仍需 0、1、100、127、128、199、200、201
+点及容量不足的输出数量、数组哨兵、取消／失败不发布验证；本轮未执行该宿主矩阵</td>
+</tr>
+<tr>
+<td>C-47 / P1</td>
+<td>原两条代码主因已整改，待台架</td>
+<td><code>Services/power_monitor.c:301</code> 启动先进入安全态，失败锁存
+<code>POWER_MONITOR_INIT_FAILED</code>；<code>app/app_main.c:132</code>
+已消费启动返回。<code>power_monitor.c:457</code>
+在电压稳定且紧急持久化结束后才释放 FRAM
+预留；<code>Services/Encoder/encoder.c:595</code>
+等自行释放路径仅限测试来源</td>
+<td>低压保持、恢复抖动、ADC／DMA／OVR
+故障和随机相位掉电台架；记录供电波形、保持时间、普通写门禁和重启值。关联
+B-01，不再列“启动返回被丢弃／真实低压期间提前释放”作为当前代码缺陷</td>
+</tr>
+<tr>
+<td>C-07 / P1</td>
+<td>部分整改</td>
+<td>编码器已有启动稳定同步、动态增量上限、断档撤销位置可信度和锁存；<code>Services/Encoder/encoder.c:933</code>
+的 <code>Encoder_IsReady()</code>
+同时要求位置有效、角度同步且无锁存，不再仅靠历史单帧好值。<code>FaultManager_LatchAsyncError()</code>
+已硬件禁用驱动</td>
+<td>保留多故障覆盖／清错归属、连续故障及真实停机验证。新正式命令清锁存和
+LIN 仅统计是当前明确策略，不继续把旧“白名单过宽／LIN
+漏判”当作未确认产品需求</td>
+</tr>
+<tr>
+<td>C-14 / P1</td>
+<td>部分整改，待时延证据</td>
+<td>AS5145 硬件 ISR 最小投递、PendSV 有界消费已进入
+HEAD，不再写“仅未提交试改”</td>
+<td>PendSV 仍执行有界 FRAM
+提交／读回和延后协议任务；需最坏占用、积压、HART／板间通信／编码器竞争实测，不能仅凭移出硬件
+IRQ 关闭</td>
+</tr>
+<tr>
+<td>C-22 / P1</td>
+<td>维持部分整改</td>
+<td>命令定长、精确 ACK、严格字段校验、有界重试与 RAM-only
+版本识别仍在；本轮 DSM 帧与兼容契约通过</td>
+<td>CPU1 <code>CB/CD</code> ACK
+不等于内部业务模式成功；真实版本、坏帧、恢复后首帧及结果不陈旧矩阵留
+B-06</td>
+</tr>
+<tr>
+<td>C-23 / P2</td>
+<td>统一 owner 已实现，集成验证未闭环</td>
+<td><code>95142c6d</code> 后
+<code>Services/Sensor/sensor_uart6_owner.c:21</code>
+提供非抢占所有权、同 owner 嵌套和原子交接；DSM、V3、V4
+主动／交互、Safe、CH9141 AT 已接入，回调按 owner
+路由；本轮架构契约通过</td>
+<td>无线长稳、冷唤醒、协议切换、UART 错误恢复和 owner
+释放闭环仍需实物验证；不再保留“尚无 UART6 统一 owner”的旧结论。DM4
+不确定切换另按 C-49 跟踪，避免重复计数</td>
+</tr>
+<tr>
+<td>C-26 / P2</td>
+<td>部分整改，策略口径已纠正</td>
+<td><code>BSP/Peripherals/src/AS5145.c:24</code> 明确
+<code>SSI_LINEARITY_FAULT_ENABLED 0U</code>；LIN 仅计数、12-13
+保留是当前实现策略，不是遗漏条件的新增缺陷</td>
+<td>其它故障码边界、双端展示和故障注入仍待验收；未来启用 LIN
+故障需单独变更策略与验收，不以补判据作为当前必改项</td>
+</tr>
+<tr>
+<td>C-35 / P1</td>
+<td>部分整改</td>
+<td>电机位置存储已有统一 FRAM 调用与读回，安全身份平台
+<code>sensor_safe_identity_platform.c:33/55</code> 已通过
+<code>FRAM_Read/Write</code>；旧“身份绕锁／电机完全忽略写结果”不再适用</td>
+<td>旧 void
+包装仍需逐调用者审查；<code>BSP/Peripherals/src/TMC5130.c:376/463</code>
+仍使用 <code>HAL_MAX_DELAY</code>，超时、BUSY、掉线和共享 SPI4
+竞争未整体关闭</td>
+</tr>
+<tr>
+<td>C-41 / P0</td>
+<td>编码器异步硬停已整改，通用出口仍缺</td>
+<td><code>Application/Src/diagnostics/fault_manager.c:58</code>
+发布异步错误后直接
+<code>stpr_disableDriver()</code>，不是单纯等待主循环处理</td>
+<td>通用 <code>AbortableDelay_CommandSwitch()</code>
+及密度长循环仍主要检查命令切换，缺统一阻塞故障出口；硬停不等于停止结果发布、终态正确或机械停止时延已证</td>
+</tr>
+<tr>
+<td>C-11 / P0</td>
+<td>已暂存工作树部分整改，未发布</td>
+<td>称重探底增加预计窗口、两次触发一致性、按触发／刹停位置释放；<code>tank_height/measure_tank_height.c:758</code>
+在最终释放成功后才提交候选罐高，<code>770</code> 才发布罐底参考有效</td>
+<td>300／200／10 mm
+是内部暂定值；需不同载荷、噪声、惯性、取消和释放失败的目标板验证。不能由局部探底整改关闭全部探底／标定终态路径</td>
+</tr>
+<tr>
+<td>DM4-MSR-01（专题）</td>
+<td>测水使能未接入的代码主因已消除</td>
+<td><code>Services/Sensor/sensor_driver_registry.c:274</code> 读水前调用
+<code>SensorDriverV4_SetWaterEnabled(1U)</code>，成功后
+<code>SensorDriverV4_WaitForValue()</code>
+等新鲜值，支持取消／超时；统一入口为
+<code>sensor_service.c:213</code></td>
+<td>真实 DM4 测水、霍尔互斥、首个新鲜 R05 和状态切换验收留
+B-06；不另增开放 C 主项，也不把整套 DM4 测量流程写成已闭环</td>
+</tr>
+</tbody>
+</table>
+<p>对应实现资料：<a
+href="2026-08-14_CPU2编码器采集_连续性保护与持久化当前实现说明.md">编码器当前实现说明</a>、<a
+href="../已闭环/2026-08-18_传感器代码分层与DM4身份统一整改记录.md">传感器分层与
+DM4 身份统一整改记录</a>、<a
+href="2026-09-03_CPU2称重探底可靠判定方案.md">称重探底可靠判定方案</a>。历史专题中尚未刷新的状态，以本节逐项结论为准。</p>
+<h3 id="本轮仍确认存在的旧问题">本轮仍确认存在的旧问题</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>编号</th>
+<th>本轮代码证据</th>
+<th>结论与下一步</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>C-03 / P0</td>
+<td><code>Services/ParamStorage/system_parameter.c:1777</code> 分别写
+A/B，<code>1791</code> 仅双槽失败才返回失败，<code>1826</code>
+至少一槽成功即推进完成标志；<code>1932</code> 启动仍固定优先有效 A</td>
+<td>A 保留旧有效镜像、更新 A 失败而 B 成功时，保存完成后重启仍可读旧
+A；需参数提交代次与启动选新槽一致。<strong>编码器记录已有
+generation，不代表参数 A/B 已修复。</strong> 此前“工作树回归”现已存在于
+HEAD</td>
+</tr>
+<tr>
+<td>C-08 / P1</td>
+<td><code>Core/Src/stm32f4xx_it.c:538</code> 仍以 <code>RETTOBASE</code>
+作为 CPU2 喂狗门禁</td>
+<td>缺前台／关键任务健康票据，不能用 CPU3 已整改代替 CPU2 闭环</td>
+</tr>
+<tr>
+<td>C-09 / P0</td>
+<td><code>Services/Weight/weight.c:82</code> 的
+<code>weight_init()</code>
+刷新接收时间；<code>Application/Src/measurement/measure.c:337</code>
+测量启动仍调用</td>
+<td>称重探底优化不等于扭力新鲜度已修复；只有真实合格接收帧才能刷新该时间</td>
+</tr>
+<tr>
+<td>C-32 / P1</td>
+<td><code>measurement/density/measure_density_acquisition.c:124</code>
+超时兜底可返回 <code>NO_ERROR</code>；<code>measure_density.c:221</code>
+分布调用传 <code>stable_out=NULL</code>，随后累加并
+<code>valid++</code></td>
+<td>固定点消费者已有稳定标志检查，不代表分布路径已修；无效／未稳定数据应等待或跳过且不发布，不应被当作正常稳定样本或直接升级为通信错误</td>
+</tr>
+<tr>
+<td>C-36 / P1</td>
+<td>CPU3 <code>Application/system_param/mb85rs2m.c</code> 仍多处
+<code>HAL_MAX_DELAY</code></td>
+<td>CPU2 FRAM 超时整改不覆盖 CPU3；需其调用链有界等待与失败传播</td>
+</tr>
+<tr>
+<td>C-37 / P2</td>
+<td>CPU3 <code>Application/display/display_tankopera.c:2857/2865</code>
+仍 <code>HAL_Delay(100/500)</code></td>
+<td>前台交互阻塞仍在，需按键＋通信并行台架与非阻塞退出设计</td>
+</tr>
+<tr>
+<td>C-38 / P2</td>
+<td>CPU3 <code>Application/display/display.c:2435</code> 的周期判断到
+60000 ms 无条件成立</td>
+<td>8 月恢复重试和 GDDRAM
+清屏改善不等于取消健康周期复位；仍需长稳及屏幕波形证据</td>
+</tr>
+<tr>
+<td>C-27 / P3</td>
+<td><code>tools/check_parameter_measurement_fault_contract.py:77</code>
+对提交顺序使用固定 240／360／180／600 字符窗口，本轮报错</td>
+<td>源码最终释放、<code>CHECK_ERROR(ret)</code>、候选罐高提交顺序正确；新增释放分支超出文本窗口，归工具漂移，不伪报“安全抬升前提交”的固件缺陷</td>
+</tr>
+<tr>
+<td>C-46 / P2</td>
+<td>本轮 strict inventory 为 <code>diagnostics.status=error</code>、62
+个 <code>unresolvedCalls</code>，前置入口实际 5 个而工具仍要求 2
+个，继电器 END 地址双端 <code>None</code></td>
+<td>工具尚不能作为完整协议闭环证据；需适配当前分发／ACK
+链、嵌套宏和函数来源。7 月的 54 个未解析调用及 440
+项回归结果只保留历史用途</td>
+</tr>
+</tbody>
+</table>
+<h3 id="c-25-新确认非有限温度穿过通用稳定判定">C-25
+新确认：非有限温度穿过通用稳定判定</h3>
+<p>本项是既有“字段质量无统一契约”的新增可达证据，仍归 C-25 /
+P1，不另增主项；本轮没有据此认定缺陷最初引入日期。</p>
+<ol type="1">
+<li>DM4 交互密度读取在 R06 为非有限或越界值时返回 <code>NAN</code>
+温度；核心通信及后续刷新正常时仍可返回 <code>NO_ERROR</code>。见
+<code>Services/Sensor/Protocols/Dm4/V4/multiparam_v4_measurement.c:395</code>。驱动内部调试快照有
+<code>isfinite()</code> 保护，但不能保护服务层后续消费者。</li>
+<li><code>Services/Sensor/sensor_service.c:194</code>
+成功分支修正温度后，在 <code>202</code> 无条件执行
+<code>TEMP_TO_RAW(*temp)</code>；<code>Services/ParamStorage/system_parameter.h:221</code>
+宏直接转为 <code>uint32_t</code>。对 NaN
+不能依赖可移植的整数结果，本轮不臆测目标 MCU 的具体转换值。</li>
+<li><code>Application/Src/measurement/density/measure_density_acquisition.c:201</code>
+只跳过零密度；当密度非零且温度为 NaN 时，<code>234</code> 可把 NaN
+记作参考温度。<code>242</code> 的温差为 NaN，<code>245</code> 的
+<code>dt &gt; TEMP_EPS</code>
+不成立；若频率、密度满足窗口，<code>256</code>
+仍进入稳定分支，转换无效温度并在 <code>270</code> 标记稳定成功。</li>
+<li>SI 消费者的局部 <code>isfinite()</code> 检查不能撤销更早的服务层 NaN
+转整数，也不能覆盖通用单点稳定窗口。</li>
+</ol>
+<p>关闭条件：驱动、服务和消费者对“传输成功但当前未稳定／字段无效”保持一致；在任何原始值转换、稳定计时和结果发布之前处理非有限值；以正常密度配
+NaN、±Inf、越界温度、恢复为正常温度的序列验证不误发布。合法未稳定值按等待／跳过处理，真实通信／帧错误保持故障语义。是否允许单独发布不含有效温度的密度结果，应先明确结果质量契约，不能在本轮文档整理中擅自决定。</p>
+<h3 id="c-48c-49补录既有-dm4-专题问题">C-48／C-49：补录既有 DM4
+专题问题</h3>
+<p>来源为 <a
+href="2026-08-10_DM4传感器V4测量流程待处理问题记录.md">2026-08-10 DM4
+测量流程专题</a>。两项在 8 月已记录，9
+月仅复核仍可达并纳入统一编号，不应写成“本次新改坏”。专题 DM4-MSR-01
+的代码主因已修复，见上表。</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>编号／等级</th>
+<th>专题映射</th>
+<th>当前证据与影响</th>
+<th>关闭条件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>C-48 / P1</td>
+<td>DM4-MSR-02</td>
+<td><code>multiparam_v4_measurement.c:339</code> 的交互分支读取 R02
+后只查密度模式，随后读 R04／R07／R06，未检查 Bit8／Bit9 新数据；同文件
+<code>459</code> 主动分支已有双标志检查。交互路径可能把旧 R06／R07
+当作本轮新结果</td>
+<td>消费同次 R02
+的模式及新数据标志，缺任一标志不得发布；覆盖标志全零、单位置位、双位置位和读取
+R02 后标志清零的连续事务。通用质量传播归
+C-25，此项只计交互新数据准入</td>
+</tr>
+<tr>
+<td>C-49 / P2</td>
+<td>DM4-COM-01</td>
+<td><code>multiparam_v4_interactive.c:863</code> 主动转交互时，R65=1
+写入应答失败且 <code>932</code> 回读也失败，<code>941</code>
+仍启动主动接收；<code>multiparam_v4_active_stream.c:315</code> 在本地
+DMA
+启动成功后把本地模式设为主动，但传感器可能已经进入交互，形成状态失步</td>
+<td>对写成功但 ACK
+丢失、读回超时／坏帧等不确定态提供有界重同步；只在取得模式证据后恢复业务，失败可退出且不可发布旧值。UART6
+owner 已实现并不证明远端通信模式一致</td>
+</tr>
+</tbody>
+</table>
+<p>上述源码文件均位于
+<code>LTD_MAIN_CPU2/Services/Sensor/Protocols/Dm4/V4/</code>。本轮只记录问题和验收边界，不擅自实现新的
+DM4 专用状态机。</p>
+<h3 id="本轮验证与下一步">本轮验证与下一步</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>验证项</th>
+<th>本轮结果</th>
+<th>证据边界</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>11 项直接专项静态检查</td>
+<td>10 通过、1 失败</td>
+<td>通过项见下文；失败为 C-27
+的固定文本窗口漂移，不代表整套检查全绿</td>
+</tr>
+<tr>
+<td><code>protocol_fact_inventory.py --strict</code></td>
+<td>失败，退出码 1</td>
+<td>本机输出
+<code>tmp/2026-09-07-full-issue-audit/protocol-inventory.json</code>；62
+个未解析调用、双端继电器 END 地址 <code>None</code>，归 C-46</td>
+</tr>
+<tr>
+<td>文档结构／Markdown 链接</td>
+<td>通过</td>
+<td>本轮检查 887 个文档文件、429 份 Markdown，缺失链接
+0；版本人工索引漏收近期方案等提示不等于固件问题，不在本轮顺手扩改</td>
+</tr>
+<tr>
+<td>HTML／编码／差异</td>
+<td>通过</td>
+<td>保留原阅读样式；桌面 1440 px、手机 390 px 检查，无失效页内锚点或重复
+ID，表格列数一致；UTF-8／CRLF 与 Markdown
+源哈希同步，<code>git diff --check</code> 通过</td>
+</tr>
+<tr>
+<td>固件构建／宿主边界矩阵</td>
+<td>本轮未执行</td>
+<td>只读审查与文档维护不重跑固件构建；历史方案中的构建不提升为本轮测试结果</td>
+</tr>
+<tr>
+<td>实机／台架／现场／SIL</td>
+<td>本轮未执行</td>
+<td>不证明 FRAM 掉电、低压保持、机械硬停、无线长稳、RS485、PLC、OLED 或
+DM4 真实时序</td>
+</tr>
+</tbody>
+</table>
+<p>本轮通过脚本：<code>check_dsm_uart6_frame_contract.py</code>、<code>check_dsm_compat_contract.py</code>、<code>check_sensor_fault_contract.py</code>、<code>check_multiparam_v4_protocol.py</code>、<code>check_cpu3_uart5_interframe_gap_contract.py</code>、<code>check_read_part_params_refresh_contract.py</code>、<code>check_density_profile_publish_contract.py</code>、<code>check_relay_alarm_config_contract.py</code>、<code>check_cpu3_display_command_contract.py</code>、<code>check_sensor_service_architecture.py</code>。失败脚本为
+<code>check_parameter_measurement_fault_contract.py</code>。这些工具的静态通过不能推翻本轮识别的
+C-25／C-48／C-49 消费与恢复链缺口。</p>
+<p>后续优先级：先处理 C-03 参数持久化回退、C-09 扭力伪新鲜及 C-41
+统一故障出口；并行准备 C-10 点数边界与 C-47 供电台架。DM4 按
+C-25／C-48／C-49 分别验证字段有效性、新数据准入和模式恢复，C-27／C-46
+工具失败单独治理。未在本节重点复核的历史条目继续开放待核对，不据此声称“全工程无其它问题”。</p>
+</section>
+<section id="current-review-2026-08-10-dsm">
+<h2 id="dsm增量复核历史专项状态">2026-08-10
+DSM增量复核（历史专项状态）</h2>
+<p>本节保留当时的 DSM 证据；UART6 owner 等后续整改及现行状态以
+2026-09-07 增量为准。</p>
+<p>本增量形成时以<code>MAIN@c5fed025efc8</code>为发布基线：CPU2
+<code>V1.38.0.0</code>、CPU3
+<code>V1.37.0.0</code>、已发布共享协议32、CPU2参数存储3、CPU3本机参数<code>0x0007</code>。截至2026-08-17，当前正式组合已升至CPU2/CPU3
+V1.40.0.0、共享协议34；协议33的AO倍率和协议34的编码器故障语义均未改变本节DSM整改事实或剩余关闭条件。</p>
+<table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr>
+<th>编号</th>
+<th>等级</th>
+<th>2026-08-10 当前状态</th>
+<th>已落地事实</th>
+<th>剩余关闭条件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>C-22</td>
+<td>P1</td>
+<td>部分整改，残余仍在</td>
+<td><code>d3792fdf</code>随CPU2
+V1.36.4.0发布命令级定长接收、精确ACK、BCC／CRLF／固定字段严检和业务解析有界重试；<code>c5fed025</code>随CPU2
+V1.38.0.0把RAM-only <code>Cv/CV</code>版本上下文接入生产探测链</td>
+<td>DSM CPU1 <code>CB/CD</code>
+ACK仍不能证明内部模式切换成功；需真实V1／V2、V3及以上、歧义版本、golden
+frame、坏帧及UART错误注入，且失败不得发布旧／部分结果</td>
+</tr>
+<tr>
+<td>C-23</td>
+<td>P2</td>
+<td>部分整改，残余仍在</td>
+<td>CPU2 V1.36.4.0已加入100
+ms总时限的有界drain、命令切换／UART错误出口和CH9141K透明链路交接；V1.38.0.0只对大写<code>E</code>记录低电压</td>
+<td>仍需收口DSM／LTD／多参数V3／AT的UART6
+owner，验证恢复后首帧和长期无线透传，并处理V5.4
+<code>Ch</code>冷唤醒首轮日志噪声</td>
+</tr>
+<tr>
+<td>B-06</td>
+<td>—</td>
+<td>静态证据增加，实机缺口仍在</td>
+<td>DSM帧、兼容和CN低电压三项静态契约通过；CPU2
+V1.36.4.0与V1.38.0.0版本方案记录clean-first构建通过</td>
+<td>补V1／V2、V3、V4、V5.0／V5.3／V5.4／V6.x、CK／CM、控制字符BCC、冷唤醒、FE／NE／ORE和CH9141K恢复实物证据</td>
+</tr>
+</tbody>
+</table>
+<p>DSM CPU1
+<code>Cb</code>本次通信失败后返回旧值的新鲜度风险继续由C-25／B-06承接；CUBE严格帧校验不能证明传感器内部数据新鲜。本次不新增或关闭稳定编号，只把C-22／C-23从旧“未实现”口径更新为“部分整改”，全量统计数量不变。</p>
+<p>静态契约和构建只能证明代码形状与可编译性，不证明DSM、UART6、CH9141K、供电电压、密度分析参数或故障恢复的目标板行为。</p>
+</section>
 <section id="current-review-2026-07-28">
-<h2 id="继续复核现行增量">2026-07-28 继续复核（现行增量）</h2>
+<h2 id="继续复核历史全量基线">2026-07-28 继续复核（历史全量基线）</h2>
 <p>本轮以 <code>MAIN@8297130855cdc294211850dc8cb9deb7be3152a3</code>
 为提交基线，CPU2／CPU3 均为 <code>V1.34.0.0</code>，共享协议为
 <code>29</code>。开始扫描时工作树共有 72 个状态项：46 个已暂存文件、26
@@ -884,8 +1400,8 @@ C-46／C-27；当前验证体系不是全绿</td>
 <code>46f5d634</code>；当时继续核对 <code>db0b1322</code> 新增的 CPU3
 维护入口／退出、清锁存、维护与 AO 徽标、继电器运行态显示和 LH
 状态白名单投影。该增量改善了 C-12、C-19、C-25 和 B-10
-的消费端表达，但没有满足当时任何主问题的关闭条件。当前可达对象映射和现行状态以上方
-2026-07-28 增量为准。</p>
+的消费端表达，但没有满足当时任何主问题的关闭条件。可达历史对象映射见
+2026-07-28 增量，现行复核状态以 2026-09-07 增量为准。</p>
 <p>状态口径：</p>
 <ul>
 <li>“代码已整改，待验证”仍保留原 C
@@ -1661,8 +2177,9 @@ C-03、C-20、C-43、C-44、C-45。</td>
 软件语义→C-20，物理液面条件→B-07，最高点成功判据→R-05。</p>
 </section>
 <div class="historical-banner">
-<p><strong>以下“详细问题条目”来自此前统一总账基线，用于保留根因、路径和整改方案。</strong>其中出现的“当前”均指该条目原复核时点；若与上方状态冲突，先以
-2026-07-28 增量为准，再以 2026-07-23 历史矩阵追溯。</p>
+<p><strong>以下“详细问题条目”来自此前统一总账基线，用于保留根因、路径和整改方案。</strong>其中出现的“当前”均指该条目原复核时点；现行状态优先采用
+2026-09-07 增量，再按 2026-08-10、2026-07-28 和 2026-07-23
+各层追溯。未在新增量复核的条目属于历史待核对状态，不代表本轮已重新证实；历史路径和行号也不作为当前源码位置。</p>
 </div>
 <section id="current-ledger">
 <h2 id="既有详细问题条目总览追溯">既有详细问题条目总览（追溯）</h2>
