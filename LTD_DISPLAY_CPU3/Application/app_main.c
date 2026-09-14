@@ -80,7 +80,8 @@ static ComProtocolType g_protocol_switch_target[3] = {
     COM_PROTO_DSM
 };
 static uint32_t s_cpu3_boot_start_tick = 0U; /* CPU3进入应用初始化的时刻，用于启动阶段耗时日志。 */
-static uint32_t s_external_ports_ready_tick = 0U; /* 外部COM允许处理协议帧的启动保护截止时刻。 */
+static uint32_t s_external_ports_start_tick = 0U; /* 外部COM完成初始化并开始计时的时刻。 */
+static bool s_external_ports_ready = false; /* 外部COM启动保护是否已完成；一旦就绪不因tick回绕回退。 */
 static bool s_external_ports_ready_logged = false; /* 外部COM启动保护结束日志是否已输出。 */
 static bool s_cpu2_startup_ready_logged = false; /* CPU2首次完整启动快照日志是否已输出。 */
 
@@ -1351,11 +1352,16 @@ static uint32_t cpu3_port_process(uint8_t port_idx,
  * @details 调用场景：主循环处理 COM1、COM2、COM3 接收帧前调用。
  * @note 关键约束：仅限制外部协议帧处理，不阻塞屏幕任务、CPU2 板间轮询和调试日志服务。
  *
- * @return true 表示当前 HAL tick 已达到 s_external_ports_ready_tick，外部 COM 启动保护期结束；false 表示仍处于保护期，暂不初始化外部端口。
+ * @return true 表示外部 COM 启动保护期结束；false 表示仍处于保护期，暂不处理外部协议帧。
  */
 static bool cpu3_external_ports_startup_ready(void)
 {
-    return ((int32_t)(HAL_GetTick() - s_external_ports_ready_tick) >= 0);
+    if (!s_external_ports_ready &&
+        ((uint32_t)(HAL_GetTick() - s_external_ports_start_tick) >= CPU3_EXTERNAL_PORT_STARTUP_GUARD_MS)) {
+        s_external_ports_ready = true;
+    }
+
+    return s_external_ports_ready;
 }
 
 /**
@@ -1369,6 +1375,7 @@ void App_Init(void) {
     uint32_t phase_start_tick;
 
     s_cpu3_boot_start_tick = HAL_GetTick();
+    s_external_ports_ready = false;
     s_external_ports_ready_logged = false;
     s_cpu2_startup_ready_logged = false;
 	CPU3_WatchdogReportProgress();
@@ -1411,7 +1418,7 @@ void App_Init(void) {
      * 外部 COM 保留原有 1 秒硬件稳定窗口，但主循环立即运行屏幕和 CPU2 轮询，
      * 避免整机启动被固定延时阻塞。
      */
-    s_external_ports_ready_tick = HAL_GetTick() + CPU3_EXTERNAL_PORT_STARTUP_GUARD_MS;
+    s_external_ports_start_tick = HAL_GetTick();
     CPU3_LOG_INFO("启动",
                   "本机参数和外部COM初始化完成 阶段耗时=%lums 外部COM保护=%ums 总耗时=%lums",
                   (unsigned long)(HAL_GetTick() - phase_start_tick),
