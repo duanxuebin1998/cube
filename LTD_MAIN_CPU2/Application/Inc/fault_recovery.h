@@ -26,6 +26,9 @@ typedef struct {
  */
 void FaultRecovery_UpdateAfterCommand(CommandType command);
 
+/* Clear the active recovery command retry history after liquid follow starts. */
+void FaultRecovery_ResetRetryCountOnLiquidFollow(void);
+
 /**
  * @brief 因新命令或命令切换取消当前自动恢复。
  *

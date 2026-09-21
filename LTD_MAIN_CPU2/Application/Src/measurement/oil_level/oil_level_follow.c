@@ -7,6 +7,7 @@
 #include "oil_level_reference_refresh.h"
 #include "abortable_delay.h"
 #include "fault_manager.h"
+#include "fault_recovery.h"
 #include "system_parameter.h"
 #include <math.h>
 #include <stdint.h>
@@ -30,6 +31,7 @@ static uint32_t FollowOilLevelConfigured(void) {
 	uint32_t ret;
 	/* ÇÐ»»µ½¸úËæ×´Ì¬ */
 	g_measurement.device_status.device_state = STATE_FLOWOIL;
+	FaultRecovery_ResetRetryCountOnLiquidFollow();
 
 	    OilLevelStrategySelection selection;
 

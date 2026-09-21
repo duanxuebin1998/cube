@@ -214,6 +214,15 @@ bool FaultRecovery_IsActive(void)
     return s_fault_recovery.active != 0U;
 }
 
+void FaultRecovery_ResetRetryCountOnLiquidFollow(void)
+{
+    if (s_fault_recovery.active == 0U) {
+        return;
+    }
+
+    s_fault_recovery.command_retry_count = 0U;
+}
+
 /**
  * @brief 自动恢复等待期间恢复原错误状态。
  *
