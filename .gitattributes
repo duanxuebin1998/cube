@@ -4,3 +4,4 @@ tools/git-hooks/* text eol=lf
 docs/05_测试记录/协议台架验收/*.json text eol=lf
 docs/05_测试记录/协议台架验收/*.md text eol=lf
 docs/05_测试记录/协议台架验收/*.csv text eol=lf
+docs/06_SIL功能安全认证/06_模板/北德sil认证文件模板/FMEDA参考资料及模板/FMD2016-全文（失效模式）.pdf filter=lfs diff=lfs merge=lfs -text
