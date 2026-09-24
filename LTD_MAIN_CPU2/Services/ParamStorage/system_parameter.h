@@ -13,6 +13,7 @@
 #define _SYSTEM_PARAMETER_H
 
 #include <stdint.h>
+#include <stddef.h>
 #include <stdbool.h>
 /* 无效值 */
 #define UNVALID_LEVEL 999999u /* 液位无效值 */
@@ -195,6 +196,7 @@ typedef enum {
     RELAY_ALARM_CLEAR_YES = 1u /* 请求一次清除继电器锁存报警；CPU2 消费后复位。 */
 } RelayAlarmClearCommand;
 
+#pragma pack(push, 1) /* 继电器子结构必须按1字节对齐，避免父结构中的非对齐访问。 */
 typedef struct {
     uint32_t operating_mode;     /* 工作模式 */
     uint32_t digital_source;     /* 数字量源 */
@@ -210,6 +212,7 @@ typedef struct {
     uint32_t damping_factor;     /* 阻尼因子，预留给后续滤波 */
     uint32_t clear_alarm;        /* 清除锁存报警命令，CPU2 消费后清零 */
 } RelayAlarmConfig;
+#pragma pack(pop)
 
 /* 模式枚举 */
 typedef enum {
@@ -977,6 +980,13 @@ typedef struct {
     uint32_t crc;                        /* CRC32 */
 } DeviceParameters;
 #pragma pack(pop)
+
+_Static_assert(sizeof(RelayAlarmConfig) == 52U, "RelayAlarmConfig layout changed");
+_Static_assert(_Alignof(RelayAlarmConfig) == 1U, "RelayAlarmConfig alignment changed");
+#if defined(__arm__) || defined(__thumb__)
+_Static_assert(offsetof(DeviceParameters, relayAlarm) == 458U, "DeviceParameters relayAlarm offset changed");
+_Static_assert(sizeof(DeviceParameters) == 682U, "DeviceParameters size changed");
+#endif
 
 /* 设备参数打印场景。 */
 typedef enum {

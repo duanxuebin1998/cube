@@ -3631,3 +3631,23 @@ CPU3通信和界面：
 验证：
 - CPU2 Debug clean-first 构建、CP936 源码往返、目标静态断言、流程导航检查和提交门禁结果见本版本改动与测试方案。
 - 尚未执行目标板烧写、真实液位传感器/介质、电机、RS485、FRAM 掉电、长期现场或 SIL 验证；构建和静态检查不替代上述证据。
+
+## 2026-09-24 - 修复继电器报警参数非对齐访问风险
+
+版本：
+- CPU2：`V1.44.1.0 -> V1.44.2.0`（PATCH）。
+- CPU3：保持 `V1.43.1.0`。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 37，CPU2/CPU3 共享寄存器、命令、状态和字段语义不变。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3；ARM 目标 ABI 下 `RelayAlarmConfig` 仍为 52 字节，`DeviceParameters.relayAlarm` 偏移仍为 458，`DeviceParameters` 仍为 682 字节，CRC 范围和 FRAM 布局不变。升级不恢复出厂、不清除或迁移现场参数。
+
+本次修改：
+- 将 `RelayAlarmConfig` 明确声明为 1 字节对齐类型，避免 Release 优化下对非对齐浮点配置生成不安全的装载指令并触发 HardFault 重启。
+- 增加子结构大小、对齐要求、父结构偏移和总大小的编译期断言，布局意外变化会在 ARM 构建阶段直接失败。
+- 同步 CPU2 版本头、售后版本升级记录和改动与测试方案；本次不改变继电器判断、输出时序和报警配置值。
+
+验证：
+- CPU2 `V1.44.2.0` Debug clean-first 构建通过，134 个目标完成，无编译警告或错误；`text=370188`、`data=2360`、`bss=60672`。
+- 固定名和版本名 HEX SHA-256 均为 `7F4F8CD77551B5A90B9C1CAD66F448DFFCD65F5FFD521CFA239F7691E814A456`；继电器布局契约和 CP936 编码检查通过。
+- 尚未执行目标板烧写、物理继电器、FRAM 掉电、Release 反汇编和长期现场验证；Debug 构建不能替代这些证据。
