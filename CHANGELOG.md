@@ -3651,3 +3651,26 @@ CPU3通信和界面：
 - CPU2 `V1.44.2.0` Debug clean-first 构建通过，134 个目标完成，无编译警告或错误；`text=370188`、`data=2360`、`bss=60672`。
 - 固定名和版本名 HEX SHA-256 均为 `7F4F8CD77551B5A90B9C1CAD66F448DFFCD65F5FFD521CFA239F7691E814A456`；继电器布局契约和 CP936 编码检查通过。
 - 尚未执行目标板烧写、物理继电器、FRAM 掉电、Release 反汇编和长期现场验证；Debug 构建不能替代这些证据。
+
+## 2026-09-24 - 将继电器报警屏蔽收口为维护模式唯一控制
+
+版本：
+- CPU2：`V1.44.2.0 -> V1.45.0.0`（MINOR）。
+- CPU3：`V1.43.1.0 -> V1.44.0.0`（MINOR）。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 从 37 提升到 38；`manual_alarm_inhibit` 地址、宽度和结构位置保留，但固定发布 0，CPU3 继续读取该槽且不再将其作为业务门禁。
+- `relay_alarm_inhibit_effective` 和 K1 至 K4 最终逻辑动作只由 `maintenance_mode_active` 控制。协议 37 与 38 的字段语义不兼容，CPU2/CPU3 必须成套升级，混用时由严格相等门禁拦截。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，CPU3 `CPU3_PARAM_VERSION` 保持 `0x0007`；共享寄存器地址、字段宽度、结构大小、CRC 范围和 FRAM 布局不变，升级不恢复出厂、不清除现场参数。
+
+本次修改：
+- 普通上行、下行、强制上行和强制下行不再置位或清除 `manual_alarm_inhibit`；四类运动在非维护状态下继续按当前位置、报警源、阈值、滞回和锁存实时驱动继电器。
+- 继电器快照移除 `manual_alarm_inhibit` 消费，最终动作屏蔽仅检查 `maintenance_mode_active`；维护期间仍计算报警条件和锁存，命令 118 退出后由下一刷新周期恢复正常判定。
+- `manual_alarm_inhibit` 作为协议兼容字段固定为 0；`manual_level_update_inhibit` 保留原运动期间发布行为并明确为当前无业务消费者。AO 故障电流的维护模式门禁保持不变。
+- 同步双端共享定义、协议 38 变更记录、LTD 寄存器资料、CPU3 状态/参数菜单说明、问题专题、售后版本记录和本机流程导航。
+
+验证：
+- CPU2 `V1.45.0.0` Debug clean-first 构建通过，134 个目标完成；`text=370140`、`data=2360`、`bss=60672`。固定名和版本名 HEX SHA-256 均为 `0B6F5308677EFA5C0D3463D0B3C51B42A9DD2041FA209FCB613AE0B88C690044`。
+- CPU3 `V1.44.0.0` Debug clean-first 构建通过，62 个目标完成；`text=221224`、`data=20996`、`bss=100764`。固定名和版本名 HEX SHA-256 均为 `19C4AF14797C58364DF83A2F3C40111CD8D77E53A779E2F38EC3AEC9F3DAFFD3`。
+- SI 共享协议契约、继电器参数布局契约和流程文档 HTML 契约检查通过；售后工作簿重新导入及渲染检查通过。
+- 尚未执行目标板烧写、物理继电器、外部联锁、AO 回路、CPU2/CPU3 RS485 交叉版本、掉电和长期现场验证；构建与静态检查不能替代设备证据。

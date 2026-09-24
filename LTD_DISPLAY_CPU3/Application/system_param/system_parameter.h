@@ -30,7 +30,7 @@
 /* 历史有线温度无效哨兵值 0；保留用于旧接口兼容，不能与无线温度无效值 UNVALID_TEMPERATURE_WIRELESS 混用。 */
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
-#define DEVICE_PROTOCOL_VERSION 37u /* 协议37将原探底阈值改为减重量，绝对下限固定500，不新增参数。 */
+#define DEVICE_PROTOCOL_VERSION 38u /* 协议38将继电器最终动作屏蔽收口为仅由维护模式控制。 */
 /* 故障自动恢复的默认重试次数 3；仅在参数缺省、越界或旧版本迁移时作为归一化值。 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 /* 故障自动恢复重试次数的配置硬上限 10；CPU3 菜单和参数校验不得允许写入超过该值的重试次数。 */
@@ -654,9 +654,9 @@ typedef struct {
 	uint32_t zero_point_status; /* 零点状态（0-正常 1-需要回零） */
 	uint32_t parameter_update_flag; /* 参数持久化完成代次，FRAM A/B 确认一致后递增 */
     uint32_t loading_unloading_active;        /* /< 当前是否处于装卸液过程 */
-    uint32_t manual_alarm_inhibit;            /* /< 手动运行期间报警抑制 */
+    uint32_t manual_alarm_inhibit;            /* /< 协议兼容保留字段，固定为0，当前无业务消费者 */
     uint32_t maintenance_mode_active;         /* /< 非阻塞维护模式，非持久化且不覆盖主运行状态 */
-    uint32_t relay_alarm_inhibit_effective;   /* /< 维护或人工动作造成的继电器最终屏蔽状态 */
+    uint32_t relay_alarm_inhibit_effective;   /* /< 维护模式造成的继电器最终动作屏蔽状态 */
     uint32_t relay_alarm_action_mask;         /* /< bit0~bit3为K1~K4最终逻辑报警动作 */
 } DeviceStatus;
 
@@ -748,7 +748,7 @@ typedef struct {
 	uint32_t current_frequency;	/* 当前频率 */
     uint32_t probe_at_liquid_level;       /* /< 探头当前是否位于液位点 */
     uint32_t liquid_stable;               /* /< 液体是否稳定 */
-    uint32_t manual_level_update_inhibit; /* /< 手动运行期间液位更新抑制 */
+    uint32_t manual_level_update_inhibit; /* /< 人工/强制动作期间发布的兼容状态，当前无业务消费者 */
 } OilMeasurement;
 
 /**

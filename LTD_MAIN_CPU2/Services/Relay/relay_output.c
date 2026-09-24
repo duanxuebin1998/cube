@@ -22,7 +22,6 @@ typedef struct {
 
 typedef struct {
     /* 一次继电器判定使用的测量与抑制快照；整轮四通道计算必须复用同一份输入。 */
-    uint32_t manual_alarm_inhibit; /* 人工报警抑制在本轮继电器判定中的快照值。 */
     uint32_t maintenance_mode_active; /* 维护模式在本轮继电器判定中的快照值。 */
     uint32_t oil_level; /* 本轮继电器判定使用的油位过程量。 */
     uint32_t probe_at_liquid_level; /* 本轮继电器判定使用的探头已到液面标志。 */
@@ -188,7 +187,6 @@ static void RelayOutput_CopyMeasurementSnapshot(RelayOutputMeasurementSnapshot *
     }
 
     primask = RelayOutput_EnterCritical();
-    snapshot->manual_alarm_inhibit = g_measurement.device_status.manual_alarm_inhibit;
     snapshot->maintenance_mode_active = g_measurement.device_status.maintenance_mode_active;
     snapshot->oil_level = g_measurement.oil_measurement.oil_level;
     snapshot->probe_at_liquid_level = g_measurement.oil_measurement.probe_at_liquid_level;
@@ -681,8 +679,7 @@ static uint8_t RelayOutput_BuildStateMask(void)
     uint8_t alarm_inhibited;
 
     RelayOutput_CopyMeasurementSnapshot(&measurement);
-    alarm_inhibited = ((measurement.manual_alarm_inhibit != 0U) ||
-                       (measurement.maintenance_mode_active != 0U)) ? 1U : 0U;
+    alarm_inhibited = (measurement.maintenance_mode_active != 0U) ? 1U : 0U;
 
     for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
         logical_action_active = 0U;

@@ -79,7 +79,7 @@ void CMD_ClearAllRelayLatchedAlarms(void)
 }
 
 /**
- * @brief 按命令参数指定的距离和默认速度执行手动上行，并在动作期间抑制自动报警与液位更新。
+ * @brief 按命令参数指定的距离和默认速度执行手动上行，并在动作期间发布兼容液位更新抑制状态。
  *
  * @note 无论动作正常完成、发生命令切换还是返回错误，退出前都要清除手动报警和液位更新抑制标志。
  */
@@ -88,8 +88,7 @@ void CMD_MoveUp(void)
     uint32_t ret = 0;
 
     printf("电机上行操作\n");
-    /* 手动上行由外部协议触发时，不应被自动报警/液位跟随逻辑误判为自动测量动作。 */
-    g_measurement.device_status.manual_alarm_inhibit = 1U;
+    /* 仅发布当前未使用的液位更新抑制兼容状态；人工运动不改变继电器报警屏蔽。 */
     g_measurement.oil_measurement.manual_level_update_inhibit = 1U;
     g_measurement.device_status.device_state = STATE_RUNUPING;
 
@@ -99,24 +98,21 @@ void CMD_MoveUp(void)
             MotorCtrl_GetDefaultSpeedX100());
 
     if (ret == STATE_SWITCH) {
-        g_measurement.device_status.manual_alarm_inhibit = 0U;
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
         return;
     }
     if (ret != NO_ERROR) {
-        g_measurement.device_status.manual_alarm_inhibit = 0U;
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
         SET_ERROR(ret);
     }
 
-    g_measurement.device_status.manual_alarm_inhibit = 0U;
     g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
     g_measurement.device_status.device_state = STATE_RUNUPOVER;
     return;
 }
 
 /**
- * @brief 按命令参数指定的距离和默认速度执行手动下行，并在动作期间抑制自动报警与液位更新。
+ * @brief 按命令参数指定的距离和默认速度执行手动下行，并在动作期间发布兼容液位更新抑制状态。
  *
  * @note 无论动作正常完成、发生命令切换还是返回错误，退出前都要清除手动报警和液位更新抑制标志。
  */
@@ -125,8 +121,7 @@ void CMD_MoveDown(void)
     uint32_t ret = 0;
 
     printf("电机下行操作\n");
-    /* 手动下行同样设置抑制位，CPU3 据此把 SI 报警/液位更新状态与自动测量隔离。 */
-    g_measurement.device_status.manual_alarm_inhibit = 1U;
+    /* 仅发布当前未使用的液位更新抑制兼容状态；人工运动不改变继电器报警屏蔽。 */
     g_measurement.oil_measurement.manual_level_update_inhibit = 1U;
     g_measurement.device_status.device_state = STATE_RUNDOWNING;
 
@@ -136,17 +131,14 @@ void CMD_MoveDown(void)
             MotorCtrl_GetDefaultSpeedX100());
 
     if (ret == STATE_SWITCH) {
-        g_measurement.device_status.manual_alarm_inhibit = 0U;
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
         return;
     }
     if (ret != NO_ERROR) {
-        g_measurement.device_status.manual_alarm_inhibit = 0U;
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
         SET_ERROR(ret);
     }
 
-    g_measurement.device_status.manual_alarm_inhibit = 0U;
     g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
     g_measurement.device_status.device_state = STATE_RUNDOWNOVER;
     return;
@@ -160,8 +152,7 @@ void CMD_ForceMoveUp(void)
     uint32_t ret;
 
     printf("电机强制上行操作\r\n");
-    /* 强制运行无检测，必须显式告诉 CPU3 当前液位/报警状态不应作为自动流程结果。 */
-    g_measurement.device_status.manual_alarm_inhibit = 1U;
+    /* 仅发布当前未使用的液位更新抑制兼容状态；人工运动不改变继电器报警屏蔽。 */
     g_measurement.oil_measurement.manual_level_update_inhibit = 1U;
     g_measurement.device_status.device_state = STATE_FORCE_RUNUPING;
     printf("强制上行距离: %.1f mm\r\n", (float) DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_MOTOR_COMMAND_DISTANCE) / 10.0f);
@@ -171,17 +162,14 @@ void CMD_ForceMoveUp(void)
         MOTOR_DIRECTION_UP,
         MotorCtrl_GetDefaultSpeedX100());
     if (ret == STATE_SWITCH) {
-        g_measurement.device_status.manual_alarm_inhibit = 0U;
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
         return;
     }
     if (ret != NO_ERROR) {
-        g_measurement.device_status.manual_alarm_inhibit = 0U;
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
         SET_ERROR(ret);
     }
     printf("电机强制上行操作完成\r\n");
-    g_measurement.device_status.manual_alarm_inhibit = 0U;
     g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
 /* MotorCtrl_MoveAndWait( */
 /* (float)DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_MOTOR_COMMAND_DISTANCE) / 10.0f, */
@@ -198,8 +186,7 @@ void CMD_ForceMoveDown(void)
     uint32_t ret;
 
     printf("电机强制下行操作\r\n");
-    /* 强制下行属于手动动作，协议辅助状态只反映抑制语义，不改变原电机控制流程。 */
-    g_measurement.device_status.manual_alarm_inhibit = 1U;
+    /* 仅发布当前未使用的液位更新抑制兼容状态；人工运动不改变继电器报警屏蔽。 */
     g_measurement.oil_measurement.manual_level_update_inhibit = 1U;
     g_measurement.device_status.device_state = STATE_FORCE_RUNDOWNING;
 
@@ -209,17 +196,14 @@ void CMD_ForceMoveDown(void)
         MOTOR_DIRECTION_DOWN,
         MotorCtrl_GetDefaultSpeedX100());
     if (ret == STATE_SWITCH) {
-        g_measurement.device_status.manual_alarm_inhibit = 0U;
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
         return;
     }
     if (ret != NO_ERROR) {
-        g_measurement.device_status.manual_alarm_inhibit = 0U;
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
         SET_ERROR(ret);
     }
 
-    g_measurement.device_status.manual_alarm_inhibit = 0U;
     g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
     g_measurement.device_status.device_state = STATE_FORCE_RUNDOWN_OVER;
     return;
