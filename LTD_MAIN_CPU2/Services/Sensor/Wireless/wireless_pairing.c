@@ -8,6 +8,7 @@
 #include "main.h"
 
 #include "ch9141_at.h"
+#include "abortable_delay.h"
 #include "error_log.h"
 #include "sensor_transport_config.h"
 #include "system_parameter.h"
@@ -34,6 +35,8 @@
 #define WIRELESS_PAIRING_SLAVE_CONNECTED_STATE 0x05U /* 无线滑环从机已连接状态值。 */
 #define WIRELESS_PAIRING_RSSI_NEAR_THRESHOLD   (-55) /* 无线滑环近场 RSSI 判定阈值，单位 dBm。 */
 #define WIRELESS_PAIRING_RSSI_MIN_GAP_DB       8 /* 无线滑环 RSSI 最小领先差值，单位 dB。 */
+#define WIRELESS_STATUS_QUERY_MAX_ATTEMPTS     3U /* 只读连接状态格式异常时的完整事务总尝试次数。 */
+#define WIRELESS_STATUS_QUERY_RETRY_DELAY_MS   300U /* 两次完整状态查询之间的可中断等待时间，单位 ms。 */
 
 typedef struct {
     uint8_t index;                                  /* CH9141K 扫描结果序号，优先用于 AT+LINK。 */
@@ -1882,28 +1885,84 @@ finish:
 }
 
 /**
- * @brief 读取并发布一次 CH9141 无线连接状态快照。
+ * @brief 读取并发布 CH9141 无线连接状态快照，格式异常时重做完整只读事务。
  *
- * 函数在栈上建立完整 WirelessConnectionStatus，调用 WirelessPairing_ReadConnectionStatus
- * 填充；若执行失败但读取函数尚未写入业务错误码，则用执行返回码补齐 error_code。
- * 无论读取成功、链路未连接还是 AT 清理失败，都会通过 WirelessPairing_PublishConnectionStatus 整体发布本次快照，使 CPU3
- * 看见同一代际的有效标志、MAC、RSSI 和错误码。
+ * 每次尝试都由 WirelessPairing_ReadConnectionStatus 完整进入 AT、关闭 RSSI、退出 AT 并完成 UART6
+ * 透明交接。只有执行返回值或状态错误表明是 WIRELESS_RESP_FORMAT_ERROR 时才允许重试；清理、退出或
+ * 透明交接错误立即发布本次无效快照并原样返回。连续三次格式异常但每次收尾安全时，发布统一无效快照并
+ * 返回 NO_ERROR，使部件参数的其它诊断项继续刷新。
  *
- * @return 返回 WirelessPairing_ReadConnectionStatus 的执行码；NO_ERROR 不保证链路已连接，最终连接、MAC、RSSI
- *         和业务错误必须读取本次已发布快照。
- * @note 发布快照不等同于连接成功；调用方应依据快照有效标志和 error_code 判断链路状态。
+ * @return NO_ERROR 表示状态查询已发布，或连续格式异常已安全降级；STATE_SWITCH 表示重试被新命令取消；
+ *         其它值表示 AT/UART6 执行或透明交接失败，调用方必须停止后续 UART6 访问。
  */
 uint32_t WirelessPairing_UpdateConnectionStatusSnapshot(void)
 {
     WirelessConnectionStatus status;
-    uint32_t ret;
+    uint32_t ret = NO_ERROR;
+    uint32_t delay_ret;
+    uint32_t attempt;
+    uint8_t format_error;
 
-    ret = WirelessPairing_ReadConnectionStatus(&status);
-    if ((ret != NO_ERROR) && (status.error_code == NO_ERROR)) {
-        status.error_code = ret;
+    for (attempt = 1U; attempt <= WIRELESS_STATUS_QUERY_MAX_ATTEMPTS; attempt++) {
+        ret = WirelessPairing_ReadConnectionStatus(&status);
+        if ((ret != NO_ERROR) && (status.error_code == NO_ERROR)) {
+            status.error_code = ret;
+        }
+
+        if (ret == STATE_SWITCH) {
+            return STATE_SWITCH;
+        }
+
+        format_error = ((ret == WIRELESS_RESP_FORMAT_ERROR) ||
+                        ((ret == NO_ERROR) &&
+                         (status.error_code == WIRELESS_RESP_FORMAT_ERROR))) ? 1U : 0U;
+        if (format_error == 0U) {
+            WirelessPairing_PublishConnectionStatus(&status);
+            if (ret != NO_ERROR) {
+                return ret;
+            }
+            if ((status.error_code != NO_ERROR) &&
+                (status.error_code != WIRELESS_HOST_COMM_TIMEOUT) &&
+                (status.error_code != WIRELESS_SLAVE_COMM_TIMEOUT)) {
+                return status.error_code;
+            }
+            if (attempt > 1U) {
+                ErrorLog_Recover(ERROR_LOG_MODULE_SLIPRING_COMM,
+                                 ERROR_LOG_OP_WIRELESS_PROBE,
+                                 ERROR_LOG_REASON_RECOVER_OK,
+                                 attempt,
+                                 WIRELESS_STATUS_QUERY_MAX_ATTEMPTS);
+            }
+            return NO_ERROR;
+        }
+
+        if (attempt < WIRELESS_STATUS_QUERY_MAX_ATTEMPTS) {
+            ErrorLog_Retry(ERROR_LOG_MODULE_SLIPRING_COMM,
+                           ERROR_LOG_OP_WIRELESS_PROBE,
+                           ERROR_LOG_REASON_FORMAT_ERROR,
+                           attempt,
+                           WIRELESS_STATUS_QUERY_MAX_ATTEMPTS,
+                           WIRELESS_RESP_FORMAT_ERROR);
+            delay_ret = AbortableDelay_CommandSwitch(WIRELESS_STATUS_QUERY_RETRY_DELAY_MS, 50U);
+            if (delay_ret == STATE_SWITCH) {
+                return STATE_SWITCH;
+            }
+            if (delay_ret != NO_ERROR) {
+                status.error_code = delay_ret;
+                WirelessPairing_PublishConnectionStatus(&status);
+                return delay_ret;
+            }
+        }
     }
+
+    WirelessPairing_ResetConnectionStatus(&status);
+    status.error_code = WIRELESS_RESP_FORMAT_ERROR;
     WirelessPairing_PublishConnectionStatus(&status);
-    return ret;
+    ErrorLog_Warn(ERROR_LOG_MODULE_SLIPRING_COMM,
+                  ERROR_LOG_OP_WIRELESS_PROBE,
+                  ERROR_LOG_REASON_FORMAT_ERROR,
+                  "保留无线无效快照并继续部件参数刷新");
+    return NO_ERROR;
 }
 
 /**

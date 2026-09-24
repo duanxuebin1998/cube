@@ -292,7 +292,7 @@ static uint32_t PartDiagnostics_ReadAllInternal(uint8_t update_command_state)
         return STATE_SWITCH;
     }
     if (ret != NO_ERROR) {
-        printf("读取部件参数\t蓝牙状态刷新失败，UART6透明传输未确认，停止后续流程。错误码=0x%08lX\r\n",
+        printf("读取部件参数\t无线状态查询收尾失败，UART6透明传输未确认，停止后续访问。错误码=0x%08lX\r\n",
                (unsigned long)ret);
         return ret;
     }
