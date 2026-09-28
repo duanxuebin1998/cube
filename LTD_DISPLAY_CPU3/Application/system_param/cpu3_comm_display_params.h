@@ -21,7 +21,7 @@ typedef struct
 {
     /* ---------- 屏幕 / 基本信息 ---------- */
     uint32_t local_led_version;      /* CPU3程序版本 */
-    uint8_t  language;               /* 语言：0=中文 1=英文 */
+    uint8_t  language;               /* 语言：0=中文 1=英文 2=俄文 */
 
 
     /* ---------- 数据源选择 ---------- */

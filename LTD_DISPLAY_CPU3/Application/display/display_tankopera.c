@@ -94,6 +94,8 @@ static bool debug_weight_wait_ignore_initial_done = false; /* 扭力等待页是
 static Cpu3DateTime rtc_menu_dt = {0};
 /* RTC 设置页面当前选中的年、月、日、时、分或秒字段索引。 */
 static uint8_t rtc_menu_field = 0U;
+static bool language_save_failed = false; /* 语言保存失败页是否正在等待返回或重试。 */
+static LANGUAGE_TYPE language_save_retry = LANGUAGE_CHINESE; /* 保存失败后重试使用的目标语言。 */
 /* AO 仿真页面当前选择的启停操作项。 */
 static uint32_t ao_simulation_selection = 0U;
 /* CPU2 通信健康详情当前显示的分页索引。 */
@@ -246,6 +248,7 @@ static uint8_t *arr_Switch[][2] = {
 static uint8_t *arr_language[][2] = {
 	{ (uint8_t*)"中文", (uint8_t*)"Chinese" },
 	{ (uint8_t*)"英文", (uint8_t*)"English" },
+	{ (uint8_t*)"Russian", (uint8_t*)"Russian" },
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
 static uint8_t *arr_oled_brightness[][2] = {
@@ -571,6 +574,7 @@ static bool ParamAllowsSignedInput(int operaNum); /* 参数是否允许选择正
  */
 static uint8_t *dtm_operaname(int num);	/* 根据操作号返回名称(中/英) */
 static uint8_t oled_text_width(const uint8_t *name); /* 按 OLED 绘制列宽估算显示长度 */
+static uint8_t oled_text_footprint(const uint8_t *name); /* 计算末字形实际占用宽度 */
 static void display_right_aligned_action(uint8_t *chinese, uint8_t *english, uint8_t row, uint8_t shift); /* 底栏右侧操作按实际字宽右对齐 */
 static uint8_t *dtm_operaname_short(int num, uint8_t *fallback); /* 菜单列表短名 */
 static uint8_t *menu_display_name(const struct MenuData *item); /* 当前语言下的菜单列表显示名 */
@@ -608,8 +612,10 @@ static void confirm_cancel_measurement(void); /* 确认取消当前测量 */
  *	语言菜单与设置项
  */
 static void setlanguage(void);			/* 语言菜单入口 */
+static void set_display_language(LANGUAGE_TYPE language); /* 持久化并应用所选语言 */
 static void setchinese(void);			/* 设为中文 */
 static void setenglish(void);			/* 设为英文 */
+static void setrussian(void);			/* 设为俄文 */
 
 /* ---------- 10) 异常/兜底 ----------
  *	非法操作等统一错误提示
@@ -1193,7 +1199,7 @@ static void motor_run_monitor_back_to_status(void)
  */
 static void motor_run_monitor_draw_values(void)
 {
-	uint8_t value_line = (screen_parameter.language == LANGUAGE_ENGLISH)
+	uint8_t value_line = (DisplayLanguage_GetLegacyColumn(screen_parameter.language) == 1U)
 	                     ? OLED_LINE8_5
 	                     : MOTOR_RUN_MONITOR_VALUE_LINE;
 
@@ -1221,12 +1227,8 @@ static void motor_run_monitor_page(void)
 {
 	DeviceState state = g_measurement.device_status.device_state;
 	uint32_t now_tick = HAL_GetTick();
-	uint8_t lang = (uint8_t)screen_parameter.language;
+	uint8_t lang = DisplayLanguage_GetLegacyColumn(screen_parameter.language);
 	const char *state_text;
-
-	if (lang > LANGUAGE_ENGLISH) {
-		lang = LANGUAGE_ENGLISH;
-	}
 
 	if (motor_run_monitor_state_is_active(state)) {
 		motor_run_monitor_started = true;
@@ -1714,9 +1716,7 @@ static uint8_t *dtm_operaname(int num)
     if (num > COM_NUM_NOPARACMD_NORMAL_START && num < COM_NUM_NOPARACMD_NORMAL_STOP) {
         for (int i = 0; i < (int)(sizeof(normal_cmd_map)/sizeof(normal_cmd_map[0])); i++) {
             if (num == normal_cmd_map[i].opera) {
-                return (screen_parameter.language == LANGUAGE_CHINESE)
-                        ? normal_cmd_map[i].name_cn
-                        : normal_cmd_map[i].name_en;
+                return returnWordType(normal_cmd_map[i].name_cn, normal_cmd_map[i].name_en);
             }
         }
         return returnWordType((uint8_t*)"未知指令", (uint8_t*)"Unknown Command");
@@ -1726,9 +1726,7 @@ static uint8_t *dtm_operaname(int num)
     if (screen_operation_is_no_para_command(num)) {
         for (int i = 0; i < (int)(sizeof(debug_cmd_map)/sizeof(debug_cmd_map[0])); i++) {
             if (num == debug_cmd_map[i].opera) {
-                return (screen_parameter.language == LANGUAGE_CHINESE)
-                        ? debug_cmd_map[i].name_cn
-                        : debug_cmd_map[i].name_en;
+                return returnWordType(debug_cmd_map[i].name_cn, debug_cmd_map[i].name_en);
             }
         }
         return returnWordType((uint8_t*)"未知调试指令", (uint8_t*)"Unknown Debug Cmd");
@@ -1737,9 +1735,7 @@ static uint8_t *dtm_operaname(int num)
     if (num > COM_NUM_ONEPARACMD_START && num < COM_NUM_ONEPARACMD_END) {
         for (int i = 0; i < (int)(sizeof(one_para_cmd_map)/sizeof(one_para_cmd_map[0])); i++) {
             if (num == one_para_cmd_map[i].opera) {
-                return (screen_parameter.language == LANGUAGE_CHINESE)
-                        ? one_para_cmd_map[i].name_cn
-                        : one_para_cmd_map[i].name_en;
+                return returnWordType(one_para_cmd_map[i].name_cn, one_para_cmd_map[i].name_en);
             }
         }
         return returnWordType((uint8_t*)"未知带参指令", (uint8_t*)"Unknown Param Cmd");
@@ -1748,9 +1744,8 @@ static uint8_t *dtm_operaname(int num)
     if (num > COM_NUM_ONEPARA_DEBUGCMD_START && num < COM_NUM_NOPARA_DEBUGCMD_END) {
         for (int i = 0; i < (int)(sizeof(debug_one_para_cmd_map)/sizeof(debug_one_para_cmd_map[0])); i++) {
             if (num == debug_one_para_cmd_map[i].opera) {
-                return (screen_parameter.language == LANGUAGE_CHINESE)
-                        ? debug_one_para_cmd_map[i].name_cn
-                        : debug_one_para_cmd_map[i].name_en;
+                return returnWordType(debug_one_para_cmd_map[i].name_cn,
+                                      debug_one_para_cmd_map[i].name_en);
             }
         }
         return returnWordType((uint8_t*)"未知调试指令", (uint8_t*)"Unknown Debug Cmd");
@@ -1766,11 +1761,7 @@ static uint8_t *dtm_operaname(int num)
     {
         int index = getHoldValueNum(num);
         if (index >= 0) {
-            if (screen_parameter.language == LANGUAGE_CHINESE) {
-                return param_meta[index].name;
-            } else {
-                return param_meta[index].name_English;
-            }
+            return returnWordType(param_meta[index].name, param_meta[index].name_English);
         }
         return returnWordType((uint8_t*)"参数未定义", (uint8_t*)"Param Undefined");
     }
@@ -1784,9 +1775,7 @@ static uint8_t *dtm_operaname(int num)
     if (num > COM_NUM_PARA_LOCAL_START && num < COM_NUM_PARA_LOCAL_STOP) {
         for (int i = 0; i < (int)(sizeof(local_fixed_map)/sizeof(local_fixed_map[0])); i++) {
             if (num == local_fixed_map[i].opera) {
-                return (screen_parameter.language == LANGUAGE_CHINESE)
-                        ? local_fixed_map[i].name_cn
-                        : local_fixed_map[i].name_en;
+                return returnWordType(local_fixed_map[i].name_cn, local_fixed_map[i].name_en);
             }
         }
 
@@ -1794,9 +1783,7 @@ static uint8_t *dtm_operaname(int num)
         {
             int index = getHoldValueNum(num);
             if (index >= 0) {
-                return (screen_parameter.language == LANGUAGE_CHINESE)
-                        ? param_meta[index].name
-                        : param_meta[index].name_English;
+                return returnWordType(param_meta[index].name, param_meta[index].name_English);
             }
         }
 
@@ -1806,123 +1793,88 @@ static uint8_t *dtm_operaname(int num)
     return returnWordType((uint8_t*)"非法操作", (uint8_t*)"Invalid Operation");
 }
 
-/* / * 返回操作名称 * / */
-/* static uint8_t *dtm_operaname(int num) */
-/* { */
-/* / * 1) 普通无参测量指令 * / */
-/* static uint8_t *OperaNameArr_normal_cmd[][2] = { */
-/* { (uint8_t*)"回零点", (uint8_t*)"Return to Zero" }, */
-/* { (uint8_t*)"标定零点", (uint8_t*)"Zero Calibration" }, */
-/* { (uint8_t*)"分布测量", (uint8_t*)"Spread-M" }, */
-/* { (uint8_t*)"寻找液位", (uint8_t*)"Find Oil Level" }, */
-/* { (uint8_t*)"寻找水位", (uint8_t*)"Find Water Level" }, */
-/* { (uint8_t*)"寻找罐底", (uint8_t*)"Find Tank Bottom" }, */
-/* { (uint8_t*)"综合测量", (uint8_t*)"Comprehensive-M" }, */
-/* { (uint8_t*)"每米测量", (uint8_t*)"DT-PerMeter-M" }, */
-/* { (uint8_t*)"区间测量", (uint8_t*)"Interval-M" }, */
-/* { (uint8_t*)"瓦锡兰区间密度", (uint8_t*)"Wartsila Interval-M" }, */
-/* }; */
-/* */
-/* / * 2) 无参调试指令 * / */
-/* static uint8_t *OperaNameArr_debug_cmd[][2] = { */
-/* { (uint8_t*)"设置空载扭力", (uint8_t*)"Set Empty Torque" }, */
-/* { (uint8_t*)"设置满载扭力", (uint8_t*)"Set Full Torque" }, */
-/* { (uint8_t*)"恢复出厂设置", (uint8_t*)"Factory Reset" }, */
-/* { (uint8_t*)"维护模式", (uint8_t*)"Maintenance Mode" }, */
-/* }; */
-/* */
-/* / * 3) 本机参数名称 * / */
-/* static uint8_t *OperaNameArr_local[][2] = { */
-/* { (uint8_t*)"设备地址", (uint8_t*)"DeviceAddress" }, */
-/* { (uint8_t*)"屏幕程序版本", (uint8_t*)"Screen FW Ver" }, */
-/* }; */
-/* */
-/* int idx; */
-/* */
-/* / * A) 普通不带参指令 * / */
-/* if (num > COM_NUM_NOPARACMD_NORMAL_START && num < COM_NUM_NOPARACMD_NORMAL_STOP) { */
-/* idx = num - COM_NUM_NOPARACMD_NORMAL_START - 1; */
-/* if (idx >= 0 && idx < (int)(sizeof(OperaNameArr_normal_cmd) / sizeof(OperaNameArr_normal_cmd[0]))) { */
-/* return OperaNameArr_normal_cmd[idx][screen_parameter.language]; */
-/* } */
-/* } */
-/* / * B) 无参调试指令 * / */
-/* else if (num > COM_NUM_DEBUGCMD_START && num < COM_NUM_DEBUGCMD_STOP) { */
-/* idx = num - COM_NUM_DEBUGCMD_START - 1; */
-/* if (idx >= 0 && idx < (int)(sizeof(OperaNameArr_debug_cmd) / sizeof(OperaNameArr_debug_cmd[0]))) { */
-/* return OperaNameArr_debug_cmd[idx][screen_parameter.language]; */
-/* } */
-/* } */
-/* / * C) 参数类 & 带参指令: 使用 param_meta 表 * / */
-/* else if ((num > COM_NUM_PARA_DEBUG_START && num < COM_NUM_PARA_LOCAL_STOP) */
-/* || (num > COM_NUM_ONEPARACMD_START && num < COM_NUM_NOPARA_DEBUGCMD_END)) { */
-/* int index = getHoldValueNum(num); */
-/* if (index >= 0) { */
-/* if (screen_parameter.language == LANGUAGE_CHINESE) { */
-/* return param_meta[index].name; */
-/* } else if (screen_parameter.language == LANGUAGE_ENGLISH) { */
-/* return param_meta[index].name_English; */
-/* } */
-/* } */
-/* } */
-/* / * D) 密码类 * / */
-/* else if (num > COM_NUM_PASSWORD_START && num < COM_NUM_PASSWORD_END) { */
-/* return returnWordType((uint8_t*)"密码", (uint8_t*)"Password"); */
-/* } */
-/* / * E) 本机参数类 * / */
-/* else if (num > COM_NUM_PARA_LOCAL_START && num < COM_NUM_PARA_LOCAL_STOP) { */
-/* idx = num - COM_NUM_PARA_LOCAL_START - 1; */
-/* if (idx >= 0 && idx < (int)(sizeof(OperaNameArr_local) / sizeof(OperaNameArr_local[0]))) { */
-/* return OperaNameArr_local[idx][screen_parameter.language]; */
-/* } */
-/* } */
-/* */
-/* return returnWordType((uint8_t*)"非法操作", (uint8_t*)"Invalid Operation"); */
-/* } */
-
 /**
- * @brief 按当前语言返回参数输入类型文本；非法语言值会递归调用本函数，调用方必须保证语言枚举有效。
+ * @brief 按普通页面语言策略返回中英文文本，俄文及后续语言回退英文。
  *
  * @param chinese 中文显示文字指针。
  * @param english 英文显示文字指针。
- * @return 返回选中的按当前语言返回参数输入类型文本；非法语言值会递归调用本函数，调用方必须保证语言枚举有效首地址；结果可能直接别名引用调用方输入，调用方继续持有其存储并负责保证生命周期。
+ * @return 返回按当前普通页面语言策略选中的文本首地址；结果直接别名引用调用方输入。
  */
 static uint8_t *returnWordType(uint8_t *chinese, uint8_t *english)
 {
-	if (screen_parameter.language == LANGUAGE_CHINESE) {
-		return chinese;
-	} else if (screen_parameter.language == LANGUAGE_ENGLISH) {
-		return english;
-	} else {
-		return returnWordType((uint8_t*)"语言错误", (uint8_t*)"LANGUAGE ERROR");
-	}
+	return (uint8_t *)DisplayLanguage_SelectLegacyText(screen_parameter.language,
+	                                                   (const char *)chinese,
+	                                                   (const char *)english);
 }
 
 /**
  * @brief 计算中英文混排文本的 OLED 像素宽度。
  *
- * @param name 待测量、裁剪、分行或匹配的 OLED 菜单文字字节串；中文按双字节字库字符处理，ASCII 按单字节处理。
+ * @param name 待测量、裁剪、分行或匹配的 UTF-8 菜单文字字节串；按统一字形解码结果计算显示宽度。
  * @return 返回文字占用的 OLED 像素宽度。
  */
 static uint8_t oled_text_width(const uint8_t *name)
 {
-	uint8_t width = 0;
+	uint16_t width = 0U;
+	size_t remaining;
 
 	if (name == NULL) {
 		return 0;
 	}
 
-	while (*name != 0U) {
-		if (*name < 128U) {
-			width += 4U;
-			name++;
-		} else {
-			width += 7U;
-			name += 3U;
+	remaining = strlen((const char *)name);
+	while (remaining > 0U) {
+		DisplayGlyphInfo glyph = Display_DecodeGlyph(
+			name,
+			(remaining > UINT8_MAX) ? UINT8_MAX : (uint8_t)remaining);
+
+		if (glyph.byte_count == 0U) {
+			break;
 		}
+		width += glyph.advance;
+		name += glyph.byte_count;
+		remaining -= glyph.byte_count;
 	}
 
-	return width;
+	return (width > UINT8_MAX) ? UINT8_MAX : (uint8_t)width;
+}
+
+/**
+ * @brief 计算菜单文字用于右对齐时的实际 OLED 像素占用宽度。
+ *
+ * @details 调用场景：底栏操作文字靠右定位。
+ * @note 关键约束：三字节点阵字形末尾额外占 1 列，结果饱和到 uint8_t。
+ *
+ * @param name 待测量的 NUL 结尾 UTF-8 文字。
+ * @return 返回实际占用列数；空输入返回 0。
+ */
+static uint8_t oled_text_footprint(const uint8_t *name)
+{
+	uint16_t width = 0U;
+	uint8_t final_extra = 0U;
+	size_t remaining;
+
+	if (name == NULL) {
+		return 0U;
+	}
+
+	remaining = strlen((const char *)name);
+	while (remaining > 0U) {
+		DisplayGlyphInfo glyph = Display_DecodeGlyph(
+			name,
+			(remaining > UINT8_MAX) ? UINT8_MAX : (uint8_t)remaining);
+
+		if (glyph.byte_count == 0U) {
+			break;
+		}
+		width += glyph.advance;
+		final_extra = (glyph.valid && (glyph.byte_count == 3U)) ? 1U : 0U;
+		name += glyph.byte_count;
+		remaining -= glyph.byte_count;
+	}
+
+	width += final_extra;
+	return (width > UINT8_MAX) ? UINT8_MAX : (uint8_t)width;
 }
 
 /**
@@ -1942,13 +1894,15 @@ static void display_right_aligned_action(uint8_t *chinese, uint8_t *english, uin
 	uint8_t width;
 	uint8_t line;
 
-	text = (screen_parameter.language == LANGUAGE_ENGLISH && english != NULL) ? english : chinese;
+	text = returnWordType(chinese, english);
 	if (text == NULL) {
 		return;
 	}
 
-	width = oled_text_width(text);
-	line = (width < OLED_LINE8_END) ? (uint8_t)(OLED_LINE8_END - width) : OLED_LINE8_1;
+	width = oled_text_footprint(text);
+	line = (width <= (OLED_LINE8_END + 1U))
+	       ? (uint8_t)((OLED_LINE8_END + 1U) - width)
+	       : OLED_LINE8_1;
 	OledDisplayLineWords(text, line, row, shift);
 }
 
@@ -2134,8 +2088,7 @@ static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 
 	for (int i = 0; i < (int)(sizeof(short_map) / sizeof(short_map[0])); i++) {
 		if (num == short_map[i].opera) {
-			return (screen_parameter.language == LANGUAGE_CHINESE) ?
-				short_map[i].name_cn : short_map[i].name_en;
+			return returnWordType(short_map[i].name_cn, short_map[i].name_en);
 		}
 	}
 
@@ -2156,8 +2109,7 @@ static uint8_t *menu_display_name(const struct MenuData *item)
 		return (uint8_t*)"";
 	}
 
-	name = (screen_parameter.language == LANGUAGE_CHINESE || item->operaName2 == NULL) ?
-		item->operaName : item->operaName2;
+	name = returnWordType(item->operaName, item->operaName2);
 
 	return dtm_operaname_short(item->operaNum, name);
 }
@@ -2165,7 +2117,7 @@ static uint8_t *menu_display_name(const struct MenuData *item)
 /**
  * @brief 按 OLED 实际列宽裁剪字符串，避免长英文或长中文名称越过单行右边界。
  *
- * @param name 待测量、裁剪、分行或匹配的 OLED 菜单文字字节串；中文按双字节字库字符处理，ASCII 按单字节处理。
+ * @param name 待测量、裁剪、分行或匹配的 UTF-8 菜单文字字节串；裁剪时保持完整字形字节序列。
  * @param max_width 允许文字或百分比占用的最大 OLED 像素宽度。
  * @return 返回存放按 OLED 实际列宽裁剪字符串，避免长英文或长中文名称越过单行右边界的模块静态缓冲区首地址；后续调用可能覆盖其内容，调用方不得释放。
  */
@@ -2175,6 +2127,7 @@ static uint8_t *oled_fit_text(uint8_t *name, uint8_t max_width)
 	uint8_t width = 0;
 	uint8_t len = 0;
 	uint8_t *p = name;
+	size_t remaining;
 
 	if (name == NULL) {
 		fit[0] = 0U;
@@ -2182,18 +2135,25 @@ static uint8_t *oled_fit_text(uint8_t *name, uint8_t max_width)
 	}
 
 	memset(fit, 0, sizeof(fit));
-	while (*p != 0U) {
-		uint8_t step = (*p < 128U) ? 1U : 3U;
-		uint8_t char_width = (*p < 128U) ? 4U : 7U;
+	remaining = strlen((const char *)name);
+	while (remaining > 0U) {
+		DisplayGlyphInfo glyph = Display_DecodeGlyph(
+			p,
+			(remaining > UINT8_MAX) ? UINT8_MAX : (uint8_t)remaining);
 
-		if ((uint8_t)(width + char_width) > max_width || (uint8_t)(len + step) >= sizeof(fit)) {
+		if (glyph.byte_count == 0U) {
+			break;
+		}
+		if (((uint16_t)width + glyph.advance) > max_width ||
+		    ((uint16_t)len + glyph.byte_count) >= sizeof(fit)) {
 			break;
 		}
 
-		memcpy(&fit[len], p, step);
-		len += step;
-		width += char_width;
-		p += step;
+		memcpy(&fit[len], p, glyph.byte_count);
+		len += glyph.byte_count;
+		width += glyph.advance;
+		p += glyph.byte_count;
+		remaining -= glyph.byte_count;
 	}
 
 	return fit;
@@ -2425,7 +2385,9 @@ static void display_menu_item_with_value(const struct MenuData *item, uint8_t li
 	                 ((opera > COM_NUM_PARA_LOCAL_START) && (opera < COM_NUM_PARA_LOCAL_STOP)));
 	name = oled_fit_text(menu_display_name(item), is_param_item ? OLED_LINE8_6 : OLED_LINE8_END);
 	line = OledDisplayLineWords(name, line, row, shift);
-	if ((item->sureopera == setchinese) || (item->sureopera == setenglish)) {
+	if ((item->sureopera == setchinese) ||
+	    (item->sureopera == setenglish) ||
+	    (item->sureopera == setrussian)) {
 		return;
 	}
 
@@ -2434,7 +2396,10 @@ static void display_menu_item_with_value(const struct MenuData *item, uint8_t li
 		if (opera == COM_NUM_AO_SIMULATION_ENABLE) {
 			uint32_t enabled = (g_measurement.ao_output_runtime.simulation_enabled == 0U) ? 0U : 1U;
 			line = OledDisplayLineWords(":", line, row, shift);
-			OledDisplayLineWords(arr_ao_simulation_enable[enabled][screen_parameter.language], line, row, shift);
+			OledDisplayLineWords(arr_ao_simulation_enable[enabled][DisplayLanguage_GetLegacyColumn(screen_parameter.language)],
+			                     line,
+			                     row,
+			                     shift);
 		}
 		return;
 	}
@@ -2484,7 +2449,7 @@ static void display_menu_item_with_value(const struct MenuData *item, uint8_t li
 /**
  * @brief 按 OLED 宽度把标题拆成最多两行，并返回下一可用行。
  *
- * @param name 待测量、裁剪、分行或匹配的 OLED 菜单文字字节串；中文按双字节字库字符处理，ASCII 按单字节处理。
+ * @param name 待测量、裁剪、分行或匹配的 UTF-8 菜单文字字节串；分行时保持完整字形字节序列。
  * @param row1 用于返回标题第一显示行文字的定长缓存。
  * @param row2 用于返回标题第二显示行文字的定长缓存。
  * @return 返回标题绘制完成后的下一可用 OLED 行坐标；单行和双行标题分别按实际占用行数推进。
@@ -2497,6 +2462,7 @@ static uint8_t display_split_title(uint8_t *name, uint8_t row1, uint8_t row2)
 	uint8_t len1 = 0;
 	uint8_t len2 = 0;
 	uint8_t *p = name;
+	size_t remaining;
 
 	if (name == NULL) {
 		return (uint8_t)(row1 + OLED_ROW4_2);
@@ -2509,32 +2475,45 @@ static uint8_t display_split_title(uint8_t *name, uint8_t row1, uint8_t row2)
 
 	memset(part1, 0, sizeof(part1));
 	memset(part2, 0, sizeof(part2));
+	remaining = strlen((const char *)name);
 
-	while (*p != 0U) {
-		uint8_t step = (*p < 128U) ? 1U : 3U;
-		uint8_t w = (*p < 128U) ? 4U : 7U;
+	while (remaining > 0U) {
+		DisplayGlyphInfo glyph = Display_DecodeGlyph(
+			p,
+			(remaining > UINT8_MAX) ? UINT8_MAX : (uint8_t)remaining);
 
-		if ((width + w) > OLED_LINE8_END || (len1 + step) >= sizeof(part1)) {
+		if (glyph.byte_count == 0U) {
 			break;
 		}
-		memcpy(&part1[len1], p, step);
-		len1 += step;
-		width += w;
-		p += step;
+		if (((uint16_t)width + glyph.advance) > OLED_LINE8_END ||
+		    ((uint16_t)len1 + glyph.byte_count) >= sizeof(part1)) {
+			break;
+		}
+		memcpy(&part1[len1], p, glyph.byte_count);
+		len1 += glyph.byte_count;
+		width += glyph.advance;
+		p += glyph.byte_count;
+		remaining -= glyph.byte_count;
 	}
 
 	width = 0;
-	while (*p != 0U) {
-		uint8_t step = (*p < 128U) ? 1U : 3U;
-		uint8_t w = (*p < 128U) ? 4U : 7U;
+	while (remaining > 0U) {
+		DisplayGlyphInfo glyph = Display_DecodeGlyph(
+			p,
+			(remaining > UINT8_MAX) ? UINT8_MAX : (uint8_t)remaining);
 
-		if ((width + w) > OLED_LINE8_END || (len2 + step) >= sizeof(part2)) {
+		if (glyph.byte_count == 0U) {
 			break;
 		}
-		memcpy(&part2[len2], p, step);
-		len2 += step;
-		width += w;
-		p += step;
+		if (((uint16_t)width + glyph.advance) > OLED_LINE8_END ||
+		    ((uint16_t)len2 + glyph.byte_count) >= sizeof(part2)) {
+			break;
+		}
+		memcpy(&part2[len2], p, glyph.byte_count);
+		len2 += glyph.byte_count;
+		width += glyph.advance;
+		p += glyph.byte_count;
+		remaining -= glyph.byte_count;
 	}
 
 	OledDisplayLineWords(part1, OLED_LINE8_1, row1, 0);
@@ -4465,11 +4444,27 @@ static void cmd_configpara_process(void)
 		if ((param_meta[index].data_type != TYPE_FLOAT) && (param_meta[index].data_type != TYPE_DOUBLE)) {
 			local_value -= param_meta[index].offset;
 		}
-	    /* CPU3 本机参数：本地写 + 保存FRAM */
-	    Cpu3Local_WriteValue((OperatingNumber)now_Opera_Num, local_value);
+	    /* CPU3 本机参数只有在FRAM写后校验成功时才允许进入成功反馈。 */
+	    if (!Cpu3Local_WriteValueChecked((OperatingNumber)now_Opera_Num, local_value)) {
+	        param_meta[index].val = Cpu3Local_ReadValue((OperatingNumber)now_Opera_Num);
+	        oled_clear();
+	        DisplayLangaugeLineWords((uint8_t*)"保存失败",
+	                                  OLED_LINE8_2,
+	                                  OLED_ROW4_2,
+	                                  0,
+	                                  (uint8_t*)"Save Failed");
+	        DisplayLangaugeLineWords((uint8_t*)"参数未更改",
+	                                  OLED_LINE8_2,
+	                                  OLED_ROW4_3,
+	                                  0,
+	                                  (uint8_t*)"Value kept");
+	        HAL_Delay(800);
+	        displaypara();
+	        return;
+	    }
 
 	    if (Cpu3Local_IsUartParam((OperatingNumber)now_Opera_Num)) {
-	        /* 不在 UI 线程里直接重配，避免与通信收发并发；交给主循环安全点处理 */
+	        /* 只在持久化成功后交给主循环安全点重配，避免应用未保存或已回滚的值。 */
 	        g_cpu3_uart_reinit_pending = 1;
 	    }
 
@@ -4841,7 +4836,11 @@ static void tape_thickness_select(void)
 	selected_index = (menu_cnt - 1) % menulen;
 	for (i = 0; i < menulen; i++) {
 		shift = (i == selected_index) ? 1 : 0;
-		OledDisplayLineWords(oled_fit_text(arr_tape_thickness[i][screen_parameter.language], OLED_LINE8_END), line, row, shift);
+		OledDisplayLineWords(oled_fit_text(arr_tape_thickness[i][DisplayLanguage_GetLegacyColumn(screen_parameter.language)],
+		                                   OLED_LINE8_END),
+		                     line,
+		                     row,
+		                     shift);
 		row += OLED_ROW4_2;
 	}
 }
@@ -4859,7 +4858,7 @@ uint8_t *ret_arr_word(void)
 
 	p = dtm_disarr(&index, &len);
 	if (p != NULL && index >= 0 && index < len) {
-		return p[index][screen_parameter.language];
+		return p[index][DisplayLanguage_GetLegacyColumn(screen_parameter.language)];
 	} else {
 		return (uint8_t*)"非法配置";
 	}
@@ -5223,7 +5222,11 @@ static void operationselect(uint8_t *(*menu)[2], int menulen, int selected_index
 		} else {
 			shift = 0;
 		}
-		OledDisplayLineWords(oled_fit_text(menu[i][screen_parameter.language], OLED_LINE8_END), line, row, shift);
+		OledDisplayLineWords(oled_fit_text(menu[i][DisplayLanguage_GetLegacyColumn(screen_parameter.language)],
+		                                   OLED_LINE8_END),
+		                     line,
+		                     row,
+		                     shift);
 		row += OLED_ROW4_2;
 	}
 }
@@ -5473,17 +5476,45 @@ static void menu_debug_system(void)
 
 
 /**
- * @brief 构建并显示中文、英文及退出三项语言选择菜单。
+ * @brief 构建并显示中文、英文、俄文及退出四项语言选择菜单。
+ *
+ * @details 调用场景：用户从显示设置进入语言选择，或保存失败后返回重试页。
+ * @note 关键约束：保存失败态只允许返回或重试，不得提前改变当前运行语言。
  */
 static void setlanguage(void)
 {
 	static struct MenuData menu[] = {
 		{ (uint8_t*)"中文", COM_NUM_PARA_LANG, setchinese, COMMANE_NORW, (uint8_t*)"CHINESE" },
 		{ (uint8_t*)"英文", COM_NUM_PARA_LANG, setenglish, COMMANE_NORW, (uint8_t*)"ENGLISH" },
+		{ (uint8_t*)"Russian", COM_NUM_PARA_LANG, setrussian, COMMANE_NORW, (uint8_t*)"RUSSIAN" },
 		{ (uint8_t*)"退出", COM_NUM_NOOPERA, mainmenu, COMMANE_NORW, (uint8_t*)"Exit" },
 	};
 
 	int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
+
+	if (language_save_failed) {
+		if (NowKeyPress == USE_KEY_SURE) {
+			language_save_failed = false;
+			set_display_language(language_save_retry);
+			return;
+		}
+		if (NowKeyPress == USE_KEY_BACK) {
+			language_save_failed = false;
+			NowKeyPress = 0;
+			timesure = 0;
+			timeback = 0;
+			mainmenu();
+			return;
+		}
+
+		oled_clear();
+		func_index = KEYNUM_MENU_LANGUAGE;
+		DisplayLangaugeLineWords((uint8_t*)"保存失败", OLED_LINE8_2, OLED_ROW4_2, 0, (uint8_t*)"Save Failed");
+		DisplayLangaugeLineWords((uint8_t*)"语言未更改", OLED_LINE8_2, OLED_ROW4_3, 0, (uint8_t*)"Language kept");
+		DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
+		display_right_aligned_action((uint8_t*)"重试", (uint8_t*)"Retry", OLED_ROW4_4, 0);
+		return;
+	}
 
 	oled_clear();
 	func_index = KEYNUM_MENU_LANGUAGE;
@@ -5491,12 +5522,39 @@ static void setlanguage(void)
 }
 
 /**
+ * @brief 持久化所选语言；成功后返回主菜单，失败时保留原语言并提供返回或重试。
+ *
+ * @details 调用场景：中文、英文和俄文三个语言菜单回调共用此入口。
+ * @note 关键约束：仅 FRAM 写入并回读校验成功后切换语言；失败时底层回滚运行态。
+ *
+ * @param language 待写入 CPU3 本机参数的语言编号。
+ */
+static void set_display_language(LANGUAGE_TYPE language)
+{
+	if (Cpu3Local_WriteValueChecked(COM_NUM_PARA_LANG, (int32_t)language)) {
+		language_save_failed = false;
+		NowKeyPress = 0;
+		timesure = 0;
+		timeback = 0;
+		mainmenu();
+		return;
+	}
+
+	/* 底层已回滚运行态；失败页只记录目标值，禁止显示或进入成功路径。 */
+	language_save_retry = language;
+	language_save_failed = true;
+	NowKeyPress = 0;
+	timesure = 0;
+	timeback = 0;
+	setlanguage();
+}
+
+/**
  * @brief 把 CPU3 菜单语言切换为中文并刷新当前页面。
  */
 static void setchinese(void)
 {
-	screen_parameter.language = LANGUAGE_CHINESE;
-	mainmenu();
+	set_display_language(LANGUAGE_CHINESE);
 }
 
 /**
@@ -5504,8 +5562,18 @@ static void setchinese(void)
  */
 static void setenglish(void)
 {
-	screen_parameter.language = LANGUAGE_ENGLISH;
-	mainmenu();
+	set_display_language(LANGUAGE_ENGLISH);
+}
+
+/**
+ * @brief 把 CPU3 设备状态页语言切换为俄文，普通页面按策略显示英文。
+ *
+ * @details 调用场景：语言菜单选择 Russian 后调用统一持久化入口。
+ * @note 关键约束：此回调不直接改运行态，保存失败时必须继续保留原语言。
+ */
+static void setrussian(void)
+{
+	set_display_language(LANGUAGE_RUSSIAN);
 }
 
 
@@ -5517,6 +5585,9 @@ void exitTankOpera(void)
 {
 	FlagofTankOpera = false;
 	HAL_TIM_Base_Stop_IT(&htim1);
+	/* 退出即结束语言保存失败会话，避免下次进入菜单继承旧重试目标。 */
+	language_save_failed = false;
+	language_save_retry = LANGUAGE_CHINESE;
 
 	oled_clear();
 	ClearPageNum();
@@ -5754,14 +5825,14 @@ static const RelayStatusFieldName relay_status_field_name[] = {
 static uint8_t *relay_alarm_state_word(uint32_t state)
 {
     if (state == RELAY_ALARM_STATE_ACTIVE) {
-        return (screen_parameter.language == LANGUAGE_CHINESE) ? (uint8_t*)"报警" : (uint8_t*)"ALM";
+        return returnWordType((uint8_t*)"报警", (uint8_t*)"ALM");
     }
 
     if (state == RELAY_ALARM_STATE_INACTIVE) {
-        return (screen_parameter.language == LANGUAGE_CHINESE) ? (uint8_t*)"正常" : (uint8_t*)"OK";
+        return returnWordType((uint8_t*)"正常", (uint8_t*)"OK");
     }
 
-    return (screen_parameter.language == LANGUAGE_CHINESE) ? (uint8_t*)"非法" : (uint8_t*)"Invalid";
+    return returnWordType((uint8_t*)"非法", (uint8_t*)"Invalid");
 }
 
 /**
@@ -5773,14 +5844,14 @@ static uint8_t *relay_alarm_state_word(uint32_t state)
 static uint8_t *relay_clear_state_word(uint32_t state)
 {
     if (state == RELAY_ALARM_CLEAR_YES) {
-        return (screen_parameter.language == LANGUAGE_CHINESE) ? (uint8_t*)"是" : (uint8_t*)"YES";
+        return returnWordType((uint8_t*)"是", (uint8_t*)"YES");
     }
 
     if (state == RELAY_ALARM_CLEAR_NO) {
-        return (screen_parameter.language == LANGUAGE_CHINESE) ? (uint8_t*)"否" : (uint8_t*)"NO";
+        return returnWordType((uint8_t*)"否", (uint8_t*)"NO");
     }
 
-    return (screen_parameter.language == LANGUAGE_CHINESE) ? (uint8_t*)"非法" : (uint8_t*)"Invalid";
+    return returnWordType((uint8_t*)"非法", (uint8_t*)"Invalid");
 }
 
 /**
@@ -5825,10 +5896,10 @@ static uint32_t relay_status_state_of(const volatile RelayAlarmRuntimeState *sta
 static uint8_t *relay_final_action_word(bool active)
 {
     if (active) {
-        return (screen_parameter.language == LANGUAGE_CHINESE) ? (uint8_t*)"动作" : (uint8_t*)"ON";
+        return returnWordType((uint8_t*)"动作", (uint8_t*)"ON");
     }
 
-    return (screen_parameter.language == LANGUAGE_CHINESE) ? (uint8_t*)"不动作" : (uint8_t*)"OFF";
+    return returnWordType((uint8_t*)"不动作", (uint8_t*)"OFF");
 }
 
 /**
@@ -5868,8 +5939,8 @@ static void display_relay_status_row(const volatile RelayAlarmRuntimeState *stat
         return;
     }
 
-    name = (screen_parameter.language == LANGUAGE_CHINESE) ?
-        relay_status_field_name[field].name_cn : relay_status_field_name[field].name_en;
+    name = returnWordType(relay_status_field_name[field].name_cn,
+                          relay_status_field_name[field].name_en);
     line = OledDisplayLineWords(name, OLED_LINE8_1, row, shift);
     line = OledDisplayLineWords(":", line, row, shift);
 
@@ -5951,7 +6022,7 @@ static void menu_relay_status(uint32_t channel, keymenuNumber keynum, pFunc_void
 
     snprintf(title, sizeof(title), "K%lu%s",
              (unsigned long)(channel + 1U),
-             (screen_parameter.language == LANGUAGE_CHINESE) ? "报警状态" : " Alarm");
+             (const char *)returnWordType((uint8_t*)"报警状态", (uint8_t*)" Alarm"));
     OledDisplayLineWords(title, OLED_LINE8_1, OLED_ROW4_1, 0);
 
     snapshot_valid = CPU2_CommHasRuntimeSnapshot();
@@ -6709,7 +6780,7 @@ static void menu_cpu2_comm_health(void)
 	uint64_t total_count;
 	uint64_t response_failure_count;
 	uint32_t failure_rate_thousandths = 0U;
-	bool chinese = (screen_parameter.language == LANGUAGE_CHINESE);
+	bool chinese = (DisplayLanguage_GetLegacyColumn(screen_parameter.language) == 0U);
 	char line1[32];
 	char line2[32];
 	char line3[32];
@@ -7508,7 +7579,7 @@ static void menu_ao_runtime(void)
 
 	oled_clear();
 	func_index = KEYNUM_MENU_AO_RUNTIME;
-	OledDisplayLineWords(arr_ao_runtime_source[source_index][screen_parameter.language],
+	OledDisplayLineWords(arr_ao_runtime_source[source_index][DisplayLanguage_GetLegacyColumn(screen_parameter.language)],
 	                     OLED_LINE8_1,
 	                     OLED_ROW4_1,
 	                     0);
@@ -7615,9 +7686,15 @@ static void ao_simulation_switch_page(void)
 
 	DisplayLangaugeLineWords((uint8_t*)"输出模拟", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Simulation");
 	line = DisplayLangaugeLineWords((uint8_t*)"当前值:", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Value:");
-	OledDisplayLineWords(arr_ao_simulation_enable[current][screen_parameter.language], line, OLED_ROW4_2, 0);
+	OledDisplayLineWords(arr_ao_simulation_enable[current][DisplayLanguage_GetLegacyColumn(screen_parameter.language)],
+	                     line,
+	                     OLED_ROW4_2,
+	                     0);
 	line = DisplayLangaugeLineWords((uint8_t*)"设置:", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Select:");
-	OledDisplayLineWords(arr_ao_simulation_enable[ao_simulation_selection][screen_parameter.language], line, OLED_ROW4_3, editable ? 1U : 0U);
+	OledDisplayLineWords(arr_ao_simulation_enable[ao_simulation_selection][DisplayLanguage_GetLegacyColumn(screen_parameter.language)],
+	                     line,
+	                     OLED_ROW4_3,
+	                     editable ? 1U : 0U);
 	if (editable) {
 		DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
 		display_right_aligned_action((uint8_t*)"确认", (uint8_t*)"Ok", OLED_ROW4_4, (timesure != 0));

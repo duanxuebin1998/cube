@@ -1367,8 +1367,8 @@ static bool cpu3_external_ports_startup_ready(void)
 /**
  * @brief 初始化 CPU3 参数、显示、板间通信和三路外部串口调度。
  *
- * 先初始化异步日志并把 UART5 板间 RS485 收发器切回接收方向，然后初始化 OLED、立即绘制启动页并建立 RTC 时钟。
- * 随后从 FRAM 加载 CPU3 通信与显示参数，按当前配置重建三路外部串口并初始化 DSM 通信模块。
+ * 先初始化异步日志并把 UART5 板间 RS485 收发器切回接收方向，然后初始化 OLED 并建立 RTC 时钟。
+ * 随后从 FRAM 加载 CPU3 通信与显示参数，以已保存语言绘制首个启动页，再按当前配置重建三路外部串口并初始化 DSM 通信模块。
  * 外部串口保留一秒硬件稳定窗口，但只记录非阻塞就绪时刻，使屏幕任务和 CPU2 板间轮询可以立即进入主循环；各阶段持续上报看门狗健康进度。
  */
 void App_Init(void) {
@@ -1392,9 +1392,8 @@ void App_Init(void) {
     phase_start_tick = HAL_GetTick();
 	DisplayInit(); /* Initialize the OLED display */
 	CPU3_WatchdogReportProgress();
-	DisplayAubonLogo(); /* OLED 初始化完成后立即显示启动页。 */
     CPU3_LOG_INFO("启动",
-                  "OLED首屏完成 阶段耗时=%lums 总耗时=%lums",
+                  "OLED初始化完成 阶段耗时=%lums 总耗时=%lums",
                   (unsigned long)(HAL_GetTick() - phase_start_tick),
                   (unsigned long)(HAL_GetTick() - s_cpu3_boot_start_tick));
 	CPU3_WatchdogReportProgress();
@@ -1408,6 +1407,7 @@ void App_Init(void) {
                   (unsigned int)Cpu3Clock_GetState());
     phase_start_tick = HAL_GetTick();
     Cpu3_Params_LoadFromFRAM(); /* 从 FRAM 载入 Cpu3 通讯+显示参数（里面会自动回退默认并保存） */
+	DisplayAubonLogo(); /* 参数加载后按已保存语言绘制首个状态或通信页面。 */
 	CPU3_WatchdogReportProgress();
     (void)cpu3_reinit_all_external_ports();
 	CPU3_WatchdogReportProgress();

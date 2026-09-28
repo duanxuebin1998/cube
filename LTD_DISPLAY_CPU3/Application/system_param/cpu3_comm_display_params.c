@@ -15,6 +15,7 @@
 #include "display_tankopera.h"
 #include "app_version.h"
 #include "display.h"
+#include "display_language.h"
 #include "hgs.h"
 #include "system_parameter.h"
 /* 这些在 usart.c 里定义 */
@@ -57,6 +58,27 @@ static bool Cpu3_ApplyFirmwareVersionRuntime(void)
     }
 
     g_cpu3_comm_display_params.local_led_version = CPU3_APP_VERSION_U32;
+    return true;
+}
+
+/**
+ * @brief 把CPU3本机语言参数归一化到当前固件支持范围。
+ *
+ * @details 调用场景：旧版FRAM迁移、当前版FRAM加载以及显示运行态同步前。
+ * @note 关键约束：非法编号统一回退英文，禁止原始值直接进入显示数组下标。
+ *
+ * @return true 表示语言值已被修正；false 表示原值已经合法。
+ */
+static bool Cpu3_SanitizeLanguage(void)
+{
+    LANGUAGE_TYPE normalized = DisplayLanguage_Normalize(
+        (int32_t)g_cpu3_comm_display_params.language);
+
+    if (g_cpu3_comm_display_params.language == (uint8_t)normalized) {
+        return false;
+    }
+
+    g_cpu3_comm_display_params.language = (uint8_t)normalized;
     return true;
 }
 
@@ -383,7 +405,7 @@ static uint8_t Cpu3_SanitizeAllPortConfigs(void)
 /**
  * @brief 恢复SI 40004～40009原始兼容槽的现场默认值。
  *
- * @details 调用场景：恢复出厂、旧FRAM迁移和V6到V7升级。
+ * @details 调用场景：恢复出厂、旧FRAM迁移和V6迁移到当前V8。
  * @note 关键约束：这些值没有业务含义，只允许原样读写和持久化。
  */
 static void Cpu3_InitSiCompatHolding(void)
@@ -628,7 +650,7 @@ bool Cpu3Local_WriteSiCompatHoldingChecked(uint8_t index, uint16_t value)
  * @brief 事务式写入 CPU3 本机参数并返回 FRAM 持久化校验结果。
  *
  * @details 调用场景：屏幕菜单、本机参数写入、远程协议切换和 SI FC06 共用本事务内核。
- * @note 关键约束：FRAM 写后读回失败时恢复整份旧运行态，不允许伪成功或保留未持久化的新值。
+ * @note 关键约束：FRAM 写后读回失败时恢复整份旧运行态，并尽力把旧镜像重新写回 FRAM。
  *
  * @param opera 菜单操作号或当前操作索引。
  * @param v 待写入 CPU3 本机参数的 32 位原始值。
@@ -646,6 +668,9 @@ static bool Cpu3Local_WriteValueCheckedInternal(OperatingNumber opera,
     {
     /* 界面显示类 */
     case COM_NUM_PARA_LANG:
+        if (!DisplayLanguage_IsValid(v)) {
+            return false;
+        }
         g_cpu3_comm_display_params.language = (uint8_t)v;
         display_runtime_changed = true;
         break;
@@ -804,7 +829,7 @@ static bool Cpu3Local_WriteValueCheckedInternal(OperatingNumber opera,
         break;
 
     default:
-        break;
+        return false;
     }
 
     if (apply_protocol_serial_profile && Cpu3Local_IsUartParam(opera)) {
@@ -822,7 +847,9 @@ static bool Cpu3Local_WriteValueCheckedInternal(OperatingNumber opera,
             Cpu3Local_ApplyDisplayRuntimeParams();
         }
         /* 首次校验失败时 FRAM 可能已部分改变，尽力恢复完整旧镜像。 */
-        (void)Cpu3_Params_SaveToFRAM();
+        if (!Cpu3_Params_SaveToFRAM()) {
+            printf("CPU3参数旧镜像恢复校验失败，运行态已回滚但FRAM状态不确定。\r\n");
+        }
         return false;
     }
 
@@ -897,6 +924,7 @@ bool Cpu3Local_IsUartParam(OperatingNumber opera)
  */
 void Cpu3Local_ApplyDisplayRuntimeParams(void)
 {
+    (void)Cpu3_SanitizeLanguage();
     screen_parameter.decimalplaces = g_cpu3_comm_display_params.screen_decimal;
     screen_parameter.passward = g_cpu3_comm_display_params.screen_password;
     screen_parameter.language = g_cpu3_comm_display_params.language;
@@ -964,7 +992,7 @@ void Cpu3_Params_InitDefaults(void)
 
     /* 屏幕基本信息 */
     g_cpu3_comm_display_params.local_led_version = CPU3_APP_VERSION_U32;
-    g_cpu3_comm_display_params.language          = 0;
+    g_cpu3_comm_display_params.language          = (uint8_t)LANGUAGE_CHINESE;
 
     /* 数据源默认 */
     g_cpu3_comm_display_params.screen_source_oil   = 0;
@@ -1089,8 +1117,10 @@ bool Cpu3_ReinitPortUart(uint8_t port_idx)
 #define CPU3_PARAM_VERSION_V5 0x0005U
 /* CPU3 参数存储格式历史版本 6，用于识别并迁移对应旧结构。 */
 #define CPU3_PARAM_VERSION_V6 0x0006U
-/* CPU3 当前参数存储格式版本 7；持久化结构或兼容语义变化时必须递增并提供迁移处理。 */
-#define CPU3_PARAM_VERSION 0x0007U
+/* CPU3 参数存储格式历史版本 7，用于保留完整显示、SI和三路串口参数并迁移。 */
+#define CPU3_PARAM_VERSION_V7 0x0007U
+/* CPU3 当前参数存储格式版本 8；语言枚举扩展时隔离旧固件，防止旧双语界面读取俄文编号。 */
+#define CPU3_PARAM_VERSION 0x0008U
 
 /* CPU3 第 3 版通信与显示参数历史布局；仅用于识别并迁移旧 FRAM 数据，字段顺序和宽度不得按当前结构随意调整。 */
 typedef struct
@@ -1160,7 +1190,7 @@ typedef struct
 
 /*
  * V6结构必须保持升级前的精确字段顺序和类型。
- * 当前V7只在该结构末尾追加六个uint16_t兼容槽。
+ * 历史V7只在该结构末尾追加六个uint16_t兼容槽。
  */
 typedef struct
 {
@@ -1252,6 +1282,30 @@ typedef struct
     uint32_t                    crc; /* 覆盖记录约定范围的 CRC 校验值；装载失败时不得使用对应负载。 */
 } Cpu3ParamStorageV6;
 
+/* V7在完整V6负载末尾追加六个SI原始兼容槽；历史槽数量不得随当前宏变化。 */
+typedef struct
+{
+    Cpu3CommAndDisplayParamsV6 params_v6; /* V6完整参数前缀。 */
+    uint16_t si_compat_holding[6U]; /* SI 40004至40009原始兼容槽。 */
+} Cpu3CommAndDisplayParamsV7;
+
+_Static_assert(offsetof(Cpu3CommAndDisplayParamsV7, si_compat_holding) ==
+               offsetof(Cpu3CommAndDisplayParams, si_compat_holding),
+               "CPU3 V7兼容槽偏移不兼容");
+_Static_assert(sizeof(Cpu3CommAndDisplayParamsV7) ==
+               sizeof(Cpu3CommAndDisplayParams),
+               "CPU3 V7参数负载长度不兼容");
+
+/* CPU3第7版FRAM参数记录；语言编号仅允许旧版中英文0和1。 */
+typedef struct
+{
+    uint32_t magic; /* 持久化记录魔术字。 */
+    uint16_t version; /* 固定为CPU3_PARAM_VERSION_V7。 */
+    uint16_t reserved; /* 历史对齐预留字段。 */
+    Cpu3CommAndDisplayParamsV7 params; /* V7固定参数负载。 */
+    uint32_t crc; /* 覆盖记录头和V7参数负载的CRC校验值。 */
+} Cpu3ParamStorageV7;
+
 typedef struct
 {
     /* 当前 CPU3 FRAM 参数记录头；后续负载字段由版本对应的结构布局解释。 */
@@ -1261,6 +1315,9 @@ typedef struct
     Cpu3CommAndDisplayParams params; /* 持久化的实际参数负载；其结构布局必须与记录头中的版本号一致。 */
     uint32_t                 crc; /* 覆盖记录约定范围的 CRC 校验值；装载失败时不得使用对应负载。 */
 } Cpu3ParamStorage;
+
+_Static_assert(sizeof(Cpu3ParamStorageV7) == sizeof(Cpu3ParamStorage),
+               "CPU3 V7与V8存储记录长度不兼容");
 
 /**
  * @brief 把当前 CPU3 本机参数组织成可直接落 FRAM 的镜像结构。
@@ -1369,6 +1426,48 @@ static bool Cpu3_Params_StorageV6Valid(const Cpu3ParamStorageV6 *stor)
 }
 
 /**
+ * @brief 校验V7参数镜像的魔术字、版本、固定布局长度和CRC。
+ *
+ * @param stor 待读取的V7参数镜像。
+ * @return true表示V7镜像完整可信；false表示版本、魔术字或CRC无效。
+ */
+static bool Cpu3_Params_StorageV7Valid(const Cpu3ParamStorageV7 *stor)
+{
+    uint32_t crc_len;
+    uint32_t crc_calc;
+
+    if ((stor->magic != CPU3_PARAM_MAGIC) || (stor->version != CPU3_PARAM_VERSION_V7)) {
+        return false;
+    }
+
+    crc_len = sizeof(Cpu3ParamStorageV7) - sizeof(stor->crc);
+    crc_calc = CRC32_HAL((uint8_t*)stor, crc_len);
+    return crc_calc == stor->crc;
+}
+
+/**
+ * @brief 在V7到V8迁移写入失败后恢复并校验原V7镜像。
+ *
+ * @param stor 迁移前已通过校验的完整V7记录。
+ * @return true表示原V7记录已经完整恢复；false表示恢复后的版本、CRC或内容不一致。
+ */
+static bool Cpu3_Params_RestoreStorageV7(const Cpu3ParamStorageV7 *stor)
+{
+    Cpu3ParamStorageV7 verify;
+
+    if (stor == NULL) {
+        return false;
+    }
+
+    WriteMultiData((uint8_t*)stor, FRAM_CPU3_PARAM_ADDRESS, sizeof(*stor));
+    memset(&verify, 0, sizeof(verify));
+    ReadMultiData((uint8_t*)&verify, FRAM_CPU3_PARAM_ADDRESS, sizeof(verify));
+
+    return Cpu3_Params_StorageV7Valid(&verify) &&
+           (memcmp(&verify, stor, sizeof(verify)) == 0);
+}
+
+/**
  * @brief 把 V3 参数镜像迁移到当前结构并补齐新增默认值。
  *
  * @param stor 用于接收 CPU3 参数持久化镜像的输出对象。
@@ -1429,7 +1528,7 @@ static void Cpu3_Params_MigrateFromV5(const Cpu3ParamStorageV5 *stor)
 }
 
 /**
- * @brief 把完整V6参数前缀迁移到V7并补入六个SI原始兼容槽。
+ * @brief 把完整V6参数前缀迁移到当前结构并补入六个SI原始兼容槽。
  *
  * @details 调用场景：上电发现FRAM版本为V6且CRC有效。
  * @note 关键约束：V6已有SI参数和三路合法串口配置保持不变；非法串口字段仍按既有加载规则归一化。
@@ -1441,6 +1540,20 @@ static void Cpu3_Params_MigrateFromV6(const Cpu3ParamStorageV6 *stor)
     memset(&g_cpu3_comm_display_params, 0, sizeof(g_cpu3_comm_display_params));
     memcpy(&g_cpu3_comm_display_params, &stor->params, sizeof(stor->params));
     Cpu3_InitSiCompatHolding();
+}
+
+/**
+ * @brief 把完整V7参数负载迁移到V8运行结构。
+ *
+ * @details 调用场景：上电发现FRAM版本为V7且CRC有效。
+ * @note 关键约束：V7与V8参数字节布局一致，迁移必须保留全部显示、SI和三路串口配置。
+ *
+ * @param stor 已通过V7完整性校验的历史参数镜像。
+ */
+static void Cpu3_Params_MigrateFromV7(const Cpu3ParamStorageV7 *stor)
+{
+    memset(&g_cpu3_comm_display_params, 0, sizeof(g_cpu3_comm_display_params));
+    memcpy(&g_cpu3_comm_display_params, &stor->params, sizeof(stor->params));
 }
 
 /**
@@ -1502,12 +1615,11 @@ bool Cpu3_Params_SaveToFRAM(void)
 }
 
 /**
- * @brief 从 FRAM 加载 CPU3 通信与显示参数；迁移 V3～V6 旧布局，校验失败时恢复默认值并回写当前 V7 布局。
+ * @brief 从FRAM加载CPU3通信与显示参数；迁移V3至V7旧布局，校验失败时恢复默认值并回写当前V8布局。
  *
- * 函数先读取当前 V7 存储头；识别到 V3、V4、V5 或 V6 旧布局时，使用对应结构重新读取并校验 CRC，通过后迁移到当前运行结构、应用显示参数并保存为 V7。
- * V3 和 V4 的密度显示输入从旧 x10 口径迁移到 x100；V3 至 V5 补入后来新增的 SI 和兼容字段默认值。V6 已是现场发布基线，迁移时保留合法 SI
- * 与串口配置，不再猜测并改写瓦锡兰物理参数。
- * 当前布局的 magic、版本或 CRC 无效时初始化全部默认参数并立即回写；合法 V7 参数只修正固件运行版本和非法串口字段，合法人工配置保持原值。
+ * 函数先读取当前V8存储头；识别到V3、V4、V5、V6或V7旧布局时，使用对应固定结构重新读取并校验CRC，通过后迁移到当前运行结构、归一化语言并保存为V8。
+ * V3和V4的密度显示输入从旧x10口径迁移到x100；V3至V5补入后来新增的SI和兼容字段默认值。V6迁移补入六个兼容槽，V7迁移完整保留显示、SI和三路串口参数。
+ * 当前布局的magic、版本或CRC无效时初始化全部默认参数并立即回写；合法V8参数只修正固件运行版本、非法语言和非法串口字段，合法人工配置保持原值。
  * 所有成功加载或迁移路径都会把显示亮度、息屏和相关 CPU3 本机参数应用到运行态；需要修正的当前布局在保存并读回校验后才作为新的 FRAM 镜像使用。
  */
 void Cpu3_Params_LoadFromFRAM(void)
@@ -1530,11 +1642,15 @@ void Cpu3_Params_LoadFromFRAM(void)
             g_cpu3_comm_display_params.screen_input_d =
                 Cpu3_MigrateDensityInputX10ToX100(g_cpu3_comm_display_params.screen_input_d);
             (void)Cpu3_ApplyFirmwareVersionRuntime();
+            (void)Cpu3_SanitizeLanguage();
             (void)Cpu3_SanitizeAllPortConfigs();
             (void)Cpu3_MigrateLegacyWartsilaDefaults();
             Cpu3Local_ApplyDisplayRuntimeParams();
-            Cpu3_Params_SaveToFRAM();
-            printf("CPU3 FRAM参数已从V3升级到V7，亮度、SI参数与兼容槽使用默认值。\r\n");
+            if (!Cpu3_Params_SaveToFRAM()) {
+                printf("CPU3 FRAM参数从V3迁移到V8后保存校验失败，本次不报告升级成功，下次上电将按FRAM实际镜像重新判定。\r\n");
+                return;
+            }
+            printf("CPU3 FRAM参数已从V3升级到V8，亮度、SI参数与兼容槽使用默认值。\r\n");
             return;
         }
 
@@ -1553,11 +1669,16 @@ void Cpu3_Params_LoadFromFRAM(void)
                     Cpu3_MigrateDensityInputX10ToX100(g_cpu3_comm_display_params.screen_input_d);
             }
             (void)Cpu3_ApplyFirmwareVersionRuntime();
+            (void)Cpu3_SanitizeLanguage();
             (void)Cpu3_SanitizeAllPortConfigs();
             (void)Cpu3_MigrateLegacyWartsilaDefaults();
             Cpu3Local_ApplyDisplayRuntimeParams();
-            Cpu3_Params_SaveToFRAM();
-            printf("CPU3 FRAM参数已从V%u升级到V7，补入SI参数与兼容槽默认值。\r\n",
+            if (!Cpu3_Params_SaveToFRAM()) {
+                printf("CPU3 FRAM参数从V%u迁移到V8后保存校验失败，本次不报告升级成功，下次上电将按FRAM实际镜像重新判定。\r\n",
+                       (unsigned)legacy.version);
+                return;
+            }
+            printf("CPU3 FRAM参数已从V%u升级到V8，补入SI参数与兼容槽默认值。\r\n",
                    (unsigned)legacy.version);
             return;
         }
@@ -1572,6 +1693,7 @@ void Cpu3_Params_LoadFromFRAM(void)
         if (Cpu3_Params_StorageV6Valid(&legacy)) {
             Cpu3_Params_MigrateFromV6(&legacy);
             (void)Cpu3_ApplyFirmwareVersionRuntime();
+            (void)Cpu3_SanitizeLanguage();
             (void)Cpu3_SanitizeAllPortConfigs();
             /*
              * V6已经是当前发布基线，不能再按“旧默认值”猜测并改写合法串口参数。
@@ -1580,14 +1702,40 @@ void Cpu3_Params_LoadFromFRAM(void)
             Cpu3Local_ApplyDisplayRuntimeParams();
             if (!Cpu3_Params_SaveToFRAM()) {
                 /* 运行态继续使用已迁移参数，但不得把未通过校验的FRAM误报为升级成功。 */
-                printf("CPU3 FRAM参数从V6迁移到V7后保存校验失败，本次不报告升级成功，下次上电将按FRAM实际镜像重新判定。\r\n");
+                printf("CPU3 FRAM参数从V6迁移到V8后保存校验失败，本次不报告升级成功，下次上电将按FRAM实际镜像重新判定。\r\n");
                 return;
             }
-            printf("CPU3 FRAM参数已从V6升级到V7，旧SI参数与串口参数已保留。\r\n");
+            printf("CPU3 FRAM参数已从V6升级到V8，旧SI参数与串口参数已保留。\r\n");
             return;
         }
 
         printf("CPU3 FRAM V6参数CRC无效，使用默认值。\r\n");
+        use_default = 1;
+    } else if ((stor.magic == CPU3_PARAM_MAGIC) && (stor.version == CPU3_PARAM_VERSION_V7)) {
+        Cpu3ParamStorageV7 legacy;
+
+        memset(&legacy, 0, sizeof(legacy));
+        ReadMultiData((uint8_t*)&legacy, FRAM_CPU3_PARAM_ADDRESS, sizeof(Cpu3ParamStorageV7));
+        if (Cpu3_Params_StorageV7Valid(&legacy)) {
+            Cpu3_Params_MigrateFromV7(&legacy);
+            (void)Cpu3_ApplyFirmwareVersionRuntime();
+            (void)Cpu3_SanitizeLanguage();
+            (void)Cpu3_SanitizeAllPortConfigs();
+            Cpu3Local_ApplyDisplayRuntimeParams();
+            if (!Cpu3_Params_SaveToFRAM()) {
+                /* 保留已迁移运行态，同时尽力恢复迁移前的完整V7镜像供下次上电重试。 */
+                if (Cpu3_Params_RestoreStorageV7(&legacy)) {
+                    printf("CPU3 FRAM参数从V7迁移到V8后保存校验失败，原V7镜像已恢复。\r\n");
+                } else {
+                    printf("CPU3 FRAM参数从V7迁移到V8后保存校验失败，原V7镜像恢复也失败。\r\n");
+                }
+                return;
+            }
+            printf("CPU3 FRAM参数已从V7升级到V8，显示、SI与串口参数已保留。\r\n");
+            return;
+        }
+
+        printf("CPU3 FRAM V7参数CRC无效，使用默认值。\r\n");
         use_default = 1;
     } else if ((stor.magic != CPU3_PARAM_MAGIC) ||
                (stor.version != CPU3_PARAM_VERSION)) {
@@ -1619,14 +1767,20 @@ void Cpu3_Params_LoadFromFRAM(void)
         if (Cpu3_ApplyFirmwareVersionRuntime()) {
             need_save = 1U;
         }
+        if (Cpu3_SanitizeLanguage()) {
+            need_save = 1U;
+        }
         if (Cpu3_SanitizeAllPortConfigs() != 0U) {
             /* FRAM 参数加载后只修正非法串口字段，合法的人工串口配置必须原样保留。 */
             need_save = 1U;
         }
-        /* V7不再依据合法物理参数猜测历史默认值，避免改写现场串口配置。 */
+        /* V8不再依据合法物理参数猜测历史默认值，避免改写现场串口配置。 */
         Cpu3Local_ApplyDisplayRuntimeParams();
         if (need_save != 0U) {
-            Cpu3_Params_SaveToFRAM();
+            if (!Cpu3_Params_SaveToFRAM()) {
+                printf("CPU3 V8参数修正已应用到运行态，但FRAM回写校验失败。\r\n");
+                return;
+            }
         }
         printf("CPU3参数已从FRAM加载，CRC=0x%08lX\r\n", (unsigned long)stor.crc);
     }

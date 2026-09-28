@@ -6,6 +6,7 @@
  */
 #include "system_parameter.h"
 #include "display_tankopera.h"
+#include "display_language.h"
 #include "cpu2_communicate.h"
 #include "cpu3_comm_display_params.h"
 #include <stdint.h>
@@ -444,7 +445,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"SI高液位",	0,	COM_NUM_CPU3_SI_HIGH_LEVEL_SETPOINT,	HOLDREGISTER_CPU3_SI_HIGH_LEVEL_SETPOINT,	2,	true,	0,	65535,	(uint8_t*)"mm",	0,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"SIHighLvl"},
 {(uint8_t*)"SI温差限",	0,	COM_NUM_CPU3_SI_TEMP_DEVIATION_SETPOINT,	HOLDREGISTER_CPU3_SI_TEMP_DEVIATION_SETPOINT,	2,	true,	0,	65535,	(uint8_t*)"℃",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"SITempDev"},
 {(uint8_t*)"SI密差限",	0,	COM_NUM_CPU3_SI_DENSITY_DEVIATION_SETPOINT,	HOLDREGISTER_CPU3_SI_DENSITY_DEVIATION_SETPOINT,	2,	true,	0,	65535,	NULL,	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"SIDenDev"},
-{(uint8_t*)"语言",	0,	COM_NUM_PARA_LANG,	HOLDREGISTER_CPU3_LANGUAGE,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"Lang"},
+{(uint8_t*)"语言",	0,	COM_NUM_PARA_LANG,	HOLDREGISTER_CPU3_LANGUAGE,	2,	true,	0,	(LANGUAGE_COUNT - 1),	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"Lang"},
 
 {(uint8_t*)"液位数据源",	0,	COM_NUM_SCREEN_SOURCE_OIL,	HOLDREGISTER_CPU3_SRC_OIL,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"SrcOil"},
 {(uint8_t*)"水位数据源",	0,	COM_NUM_SCREEN_SOURCE_WATER,	HOLDREGISTER_CPU3_SRC_WATER,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"SrcWater"},

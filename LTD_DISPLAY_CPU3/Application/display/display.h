@@ -3,6 +3,7 @@
 #define __DISPLAY_H
 #include "main.h"
 #include "app_version.h"
+#include "display_language.h"
 
 /* CPU3 显示界面使用的软件版本数值别名；直接引用统一版本源 CPU3_APP_VERSION_DISPLAY_VALUE，禁止在显示模块单独维护版本号。 */
 #define CPU3VERSION CPU3_APP_VERSION_DISPLAY_VALUE
@@ -81,19 +82,30 @@ struct ScreenPARA{
     int screenoff; /* 息屏 */
     int brightness; /* 屏幕亮度挡位 */
 };
-/* OLED 界面语言选择；该枚举只影响显示文本，不改变协议数值、参数单位或业务状态。 */
-typedef enum{
-    /* OLED 显示语言选项。 */
-    LANGUAGE_CHINESE, /* 显示中文界面。 */
-    LANGUAGE_ENGLISH, /* 显示英文界面。 */
-}LANGUAGE_TYPE;
 typedef struct {
-	/* 设备状态码到中英文状态文本的只读映射。 */
-	uint16_t state; /* CPU2 设备主状态码，作为中英文状态文本查表键。 */
+	/* 设备状态码到多语言状态文本的只读映射。 */
+	uint16_t state; /* CPU2 设备主状态码，作为状态文本查表键。 */
 	const char *disp_cn; /* 该设备状态对应的中文只读显示文本。 */
 	const char *disp_en; /* 该设备状态对应的英文只读显示文本。 */
+	const char *disp_ru; /* 该设备状态对应的俄文只读显示文本。 */
 } EquipStateDisplay; /* 设备状态显示 */
+
+typedef struct {
+    uint32_t codepoint; /* 当前 UTF-8 字符解码后的 Unicode 码点。 */
+    uint8_t byte_count; /* 当前字符占用的 UTF-8 字节数；非法输入至少消费一个字节。 */
+    uint8_t advance; /* 当前字形在 OLED 上占用的逻辑列宽。 */
+    bool valid; /* UTF-8 序列是否合法。 */
+} DisplayGlyphInfo;
+
 extern struct ScreenPARA screen_parameter;
+/**
+ * @brief 解码一个 UTF-8 字符并返回 OLED 逻辑宽度。
+ *
+ * @param text 待解码字符的首字节地址。
+ * @param remaining 从 text 起仍可读取的字节数。
+ * @return 返回码点、消费字节数、逻辑宽度和合法性；空输入返回全零结果。
+ */
+DisplayGlyphInfo Display_DecodeGlyph(const uint8_t *text, uint8_t remaining);
 /**
  * @brief 把设备运行状态转换为当前语言的状态文字。
  *
@@ -119,9 +131,9 @@ void Display_Task(void);
  */
 void Display_RequestRefresh(void);
 /**
- * @brief 显示多个汉字或字符。
+ * @brief 在 OLED 上绘制统一 UTF-8 文本。
  *
- * @param data 待绘制的只读NUL结尾OLED文字字节串；ASCII和中文字节按当前字库规则依次推进横向列坐标。
+ * @param data 待绘制的只读 NUL 结尾字节串；支持 ASCII、西里尔字母、度数符号和现有中文字模，缺字回退问号。
  * @param x 算法、坐标或比较使用的 X 值。
  * @param y 算法、坐标或比较使用的 Y 值。
  * @param shift OLED 字模阴码/阳码或显示偏移选项。

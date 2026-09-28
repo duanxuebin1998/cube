@@ -1,4 +1,5 @@
 #include "display.h"
+#include "font_cyrillic.h"
 #include "hgs.h"
 #include "stdlib.h"
 #include "math.h"
@@ -24,6 +25,10 @@
 #define DISPLAY_STATUS_DATA_REFRESH_MS 2000U
 /* 状态页最多容纳的可配置显示项数量 6；超过时必须分页或裁剪。 */
 #define DISPLAY_STATUS_MAX_SLOTS 6U
+/* 俄文状态固定使用两行，每行最多显示 16 个紧凑字形。 */
+#define DISPLAY_RUSSIAN_STATUS_LINE_GLYPHS 16U
+/* 16 个 UTF-8 西里尔字母最多占 32 字节，另留字符串结束符。 */
+#define DISPLAY_RUSSIAN_STATUS_LINE_BYTES 33U
 /* 状态页单个数值区域高度 16 像素；用于局部清屏和重绘边界。 */
 #define DISPLAY_VALUE_AREA_HEIGHT 16U
 /* 主界面无按键 30000 ms 后允许进入熄屏状态。 */
@@ -123,6 +128,7 @@ typedef enum {
     DISPLAY_STATUS_SLOT_ERROR_REASON, /* 本槽显示首条故障原因。 */
     DISPLAY_STATUS_SLOT_ERROR_REASON_MORE, /* 本槽显示其余故障原因提示。 */
     DISPLAY_STATUS_SLOT_OIL_LEVEL, /* 本槽显示油位。 */
+    DISPLAY_STATUS_SLOT_OIL_LEVEL_BELOW_DEAD_ZONE, /* 本槽显示液位处于下盲区。 */
     DISPLAY_STATUS_SLOT_WATER_LEVEL, /* 本槽显示水位。 */
     DISPLAY_STATUS_SLOT_DENSITY, /* 本槽显示密度。 */
     DISPLAY_STATUS_SLOT_TEMPERATURE, /* 本槽显示温度。 */
@@ -1059,11 +1065,85 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
 }
 
 /**
- * @brief 计算指定字节范围内文本的 OLED 像素宽度。
+ * @brief 解码一个 UTF-8 字符并给出 OLED 排版使用的逻辑宽度。
  *
- * @param text 待测量、排版或写入状态槽的 NUL 结尾显示文字；宽度计算同时处理 ASCII 与中文字节。
- * @param byte_limit 字节上限。
- * @return 返回文字占用的 OLED 像素宽度。
+ * @details 调用场景：混合文本绘制、宽度计算和俄文状态分行。
+ * @note 关键约束：非法或不完整序列固定消费一个字节并保留问号回退，避免解析停滞或越界。
+ *
+ * @param text 待解码字符的首字节地址。
+ * @param remaining 从 text 起仍可安全读取的字节数。
+ * @return 返回 Unicode 码点、消费字节数、逻辑宽度和合法性；空输入返回全零结果。
+ */
+DisplayGlyphInfo Display_DecodeGlyph(const uint8_t *text, uint8_t remaining)
+{
+    DisplayGlyphInfo glyph = {0U, 0U, 0U, false};
+    uint8_t first;
+
+    if ((text == NULL) || (remaining == 0U) || (text[0] == 0U)) {
+        return glyph;
+    }
+
+    first = text[0];
+    glyph.codepoint = (uint32_t)'?';
+    glyph.byte_count = 1U;
+    glyph.advance = 4U;
+
+    if (first < 0x80U) {
+        glyph.codepoint = first;
+        glyph.valid = true;
+        return glyph;
+    }
+
+    if ((first >= 0xC2U) && (first <= 0xDFU) &&
+        (remaining >= 2U) && (text[1] != 0U) &&
+        ((text[1] & 0xC0U) == 0x80U)) {
+        glyph.codepoint = ((uint32_t)(first & 0x1FU) << 6) |
+                          (uint32_t)(text[1] & 0x3FU);
+        glyph.byte_count = 2U;
+        glyph.valid = true;
+        return glyph;
+    }
+
+    if ((first >= 0xE0U) && (first <= 0xEFU) &&
+        (remaining >= 3U) && (text[1] != 0U) && (text[2] != 0U) &&
+        ((text[1] & 0xC0U) == 0x80U) &&
+        ((text[2] & 0xC0U) == 0x80U) &&
+        !((first == 0xE0U) && (text[1] < 0xA0U)) &&
+        !((first == 0xEDU) && (text[1] >= 0xA0U))) {
+        glyph.codepoint = ((uint32_t)(first & 0x0FU) << 12) |
+                          ((uint32_t)(text[1] & 0x3FU) << 6) |
+                          (uint32_t)(text[2] & 0x3FU);
+        glyph.byte_count = 3U;
+        glyph.advance = 7U;
+        glyph.valid = true;
+        return glyph;
+    }
+
+    if ((first >= 0xF0U) && (first <= 0xF4U) &&
+        (remaining >= 4U) && (text[1] != 0U) &&
+        (text[2] != 0U) && (text[3] != 0U) &&
+        ((text[1] & 0xC0U) == 0x80U) &&
+        ((text[2] & 0xC0U) == 0x80U) &&
+        ((text[3] & 0xC0U) == 0x80U) &&
+        !((first == 0xF0U) && (text[1] < 0x90U)) &&
+        !((first == 0xF4U) && (text[1] >= 0x90U))) {
+        glyph.codepoint = ((uint32_t)(first & 0x07U) << 18) |
+                          ((uint32_t)(text[1] & 0x3FU) << 12) |
+                          ((uint32_t)(text[2] & 0x3FU) << 6) |
+                          (uint32_t)(text[3] & 0x3FU);
+        glyph.byte_count = 4U;
+        glyph.valid = true;
+    }
+
+    return glyph;
+}
+
+/**
+ * @brief 计算指定字节范围内混合 UTF-8 文本的 OLED 逻辑列宽。
+ *
+ * @param text 待测量的 NUL 结尾显示文字。
+ * @param byte_limit 允许读取的最大字节数。
+ * @return 返回各字形逻辑推进宽度之和；空输入返回 0。
  */
 static uint8_t Display_GetTextWidth(const char *text, uint8_t byte_limit)
 {
@@ -1074,23 +1154,59 @@ static uint8_t Display_GetTextWidth(const char *text, uint8_t byte_limit)
         return 0U;
     }
 
-    while ((text[index] != '\0') && (index < byte_limit)) {
-        if (((uint8_t)text[index]) < 128U) {
-            width = (uint8_t)(width + 4U);
-            index++;
-        } else {
-            width = (uint8_t)(width + 7U);
-            index = (uint8_t)(index + 3U);
+    while ((index < byte_limit) && (text[index] != '\0')) {
+        DisplayGlyphInfo glyph = Display_DecodeGlyph((const uint8_t *)&text[index],
+                                                     (uint8_t)(byte_limit - index));
+
+        if (glyph.byte_count == 0U) {
+            break;
         }
+        width = (uint8_t)(width + glyph.advance);
+        index = (uint8_t)(index + glyph.byte_count);
     }
 
     return width;
 }
 
 /**
+ * @brief 计算右对齐文本的实际像素占用宽度。
+ *
+ * @details 调用场景：状态徽标等靠右元素定位。
+ * @note 关键约束：三字节点阵字形实际占 8 列，除最后一字形补 1 列外仍按 7 列推进。
+ *
+ * @param text 待测量的 NUL 结尾显示文字。
+ * @param byte_limit 允许读取的最大字节数。
+ * @return 返回文本实际占用列数；空输入返回 0。
+ */
+static uint8_t Display_GetTextFootprint(const char *text, uint8_t byte_limit)
+{
+    uint8_t width = 0U;
+    uint8_t index = 0U;
+    uint8_t final_extra = 0U;
+
+    if (text == NULL) {
+        return 0U;
+    }
+
+    while ((index < byte_limit) && (text[index] != '\0')) {
+        DisplayGlyphInfo glyph = Display_DecodeGlyph((const uint8_t *)&text[index],
+                                                     (uint8_t)(byte_limit - index));
+
+        if (glyph.byte_count == 0U) {
+            break;
+        }
+        width = (uint8_t)(width + glyph.advance);
+        final_extra = (glyph.valid && (glyph.byte_count == 3U)) ? 1U : 0U;
+        index = (uint8_t)(index + glyph.byte_count);
+    }
+
+    return (uint8_t)(width + final_extra);
+}
+
+/**
  * @brief 计算从指定横坐标起可在一行内显示的文本字节数。
  *
- * @param text 待测量、排版或写入状态槽的 NUL 结尾显示文字；宽度计算同时处理 ASCII 与中文字节。
+ * @param text 待测量的 NUL 结尾 UTF-8 文字；函数按完整字形推进，不截断多字节序列。
  * @param start_x 起始位置。
  * @return 返回从指定横坐标起可在一行内显示的文本字节数的有效长度，单位字节；0 表示没有可供消费的数据。
  */
@@ -1104,23 +1220,17 @@ static uint8_t Display_GetFitTextBytes(const char *text, uint8_t start_x)
     }
 
     while (text[index] != '\0') {
-        uint8_t char_width;
-        uint8_t char_bytes;
+        DisplayGlyphInfo glyph = Display_DecodeGlyph((const uint8_t *)&text[index], 4U);
 
-        if (((uint8_t)text[index]) < 128U) {
-            char_width = 4U;
-            char_bytes = 1U;
-        } else {
-            char_width = 7U;
-            char_bytes = 3U;
+        if (glyph.byte_count == 0U) {
+            break;
         }
-
-        if ((uint8_t)(width + char_width) > OLED_LINE8_END) {
+        if ((uint8_t)(width + glyph.advance) > OLED_LINE8_END) {
             break;
         }
 
-        width = (uint8_t)(width + char_width);
-        index = (uint8_t)(index + char_bytes);
+        width = (uint8_t)(width + glyph.advance);
+        index = (uint8_t)(index + glyph.byte_count);
     }
 
     return index;
@@ -1181,12 +1291,15 @@ static void Display_ErrorReasonMoreLine(uint8_t row)
  */
 void Display_ShowErrorReasonPage(void)
 {
+    const char *back_text;
+
     oled_clear();
     FlagofTotalTwoRow = false;
     DIS_Equipment();
 
     /* 只有存在有效故障码时才绘制故障原因，正常状态不占用原因行。 */
-    if (g_measurement.device_status.error_code != NO_ERROR) {
+    if ((g_measurement.device_status.error_code != NO_ERROR) &&
+        !DisplayLanguage_IsRussian(screen_parameter.language)) {
         Display_ErrorReasonLine(OLED_ROW4_2);
         /* 故障原因超过单行显示宽度时再使用第三行，短原因继续保留单行布局。 */
         if (Display_IsErrorReasonNeedTwoRows()) {
@@ -1194,7 +1307,11 @@ void Display_ShowErrorReasonPage(void)
         }
     }
 
-    DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
+    back_text = DisplayLanguage_SelectStatusText(screen_parameter.language,
+                                                 "返回",
+                                                 "Back",
+                                                 "Назад");
+    OledDisplayLineWords(back_text, OLED_LINE8_1, OLED_ROW4_4, 0U);
 }
 
 /**
@@ -1804,6 +1921,10 @@ static const uint8_t NumberStock[] = {
 
 static const uint8_t CharStockMap[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ./0123456789: +-?!%()";
 static const int CharStockMapLength = (sizeof(CharStockMap) - 1);
+static const uint8_t DegreeGlyph[CYRILLIC_FONT_GLYPH_BYTES] = {
+    0x00, 0x18, 0x24, 0x24, 0x18, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
 static const uint8_t CharStock[] = {
 
 0x00,0x00,0x00,0x00,0x00,0x3C,0x06,0x06,0x3E,0x66,0x66,0x3E,0x00,0x00, /* "a",0 */
@@ -1881,21 +2002,6 @@ static const uint8_t CharStock[] = {
 0x00,0x00,0x00,0x30,0x18,0x18,0x0C,0x0C,0x0C,0x0C,0x0C,0x18,0x18,0x30, /* ")",72 */
 };
 
-/**
- * @brief 按当前字节编码在 OLED 上绘制 ASCII 字符或中文字模，并计算下一横向绘制坐标。
- *
- * 函数读取 display 指向的字节序列：ASCII 字节在 CharStockMap 中匹配并按 4 列推进，中文字节组在 StockMap、WordStock 和 WordStock2 中匹配并按
- * 7 列推进。
- * 达到 cnt 指定的编码字节数或横坐标到达 OLED_LINE8_END 后停止；字库缺字时仍保留对应中文字符的横向空位。
- *
- * @param display 指向待绘制只读字节序列首地址；函数只推进局部读取指针，不修改源字符串。
- * @param cnt 本次最多消费的编码字节数；ASCII字符计1字节，当前UTF-8中文字符按3字节累计。
- * @param x 首个字符的 OLED 横向列坐标；函数在此基础上累加字符宽度并返回下一可用坐标。
- * @param y 字符或中文字模的 OLED 纵向绘制坐标。
- * @param shift 传给字模绘制函数的阴码、阳码选择值。
- * @return 返回本轮绘制结束后的下一 OLED 横向列坐标；ASCII 每个推进 4 列，中文字符每个推进 7 列，达到 OLED_LINE8_END 时提前停止。
- * @note 函数只在局部变量中推进字符串读取指针；返回值用于调用方继续安排同一行后续绘制位置。
- */
 static uint8_t matchingwordstock(const uint8_t *display,int cnt,int x,int y,int shift);
 /**
  * @brief 统计有符号整数绝对值的十进制数字个数。
@@ -1946,7 +2052,7 @@ static void oled_equipment(void);
  * 函数先根据设备状态取得结果页上下文，再逐项判定故障详情、液位、密度、温度、水位、位置、扭力、部件参数、传感器原始量、姿态角、罐高和无线信息是否需要显示。
  * 每个有效项目按显示顺序写入 ValidParaDisArr 的 PARA_NUM 和 PARA_VALID；需要两行的故障原因会占用两个连续项目，读取部件参数时为扭力模块温度、RSSI 和 MAC
  * 保留固定项目。
- * 液位有效时结果区每页排两行并从 OLED_ROW4_3 开始，否则每页排三行并从 OLED_ROW4_2 开始；随后计算 PageAmount 以及每个有效项目的页号和行坐标。
+ * 中英文沿用原分页规则；俄文固定把状态放在前两行，并让每个参数独占一页的标签行和数值行。
  *
  * @note 函数直接更新 ValidParaDisArr、PageAmount、FlagofTotalTwoRow 和液位有效标志，调用方应在测量快照更新后再生成页面布局。
  */
@@ -1956,8 +2062,8 @@ static void CalculateValidPara(void);
  *
  * 函数根据当前结果页是否仅有两行选择标题行，并把非法语言索引收敛为英文；设备状态文字通常从状态表取得，CPU2 协议不匹配时则强制显示协议错误。
  * 维护模式只信任完整运行态快照；曾确认维护开启后若快照暂时失效，继续显示维护状态未知，直到新快照明确确认维护已经关闭。
- * 维护模式与 AO 模拟状态组合为右侧徽标；没有徽标时显示电机运行图标。增量刷新前统一清理当前徽标区域，行位置变化时同时清除旧行，避免 OLED 残影。
- * 设备处于错误状态时，在状态文字之后追加由错误类型和错误位置组成的十进制故障码。
+ * 中英文把维护模式与 AO 模拟状态组合为右侧徽标，没有徽标时显示电机运行图标；俄文用两行完整状态并隐藏这些图标。
+ * 设备处于错误状态时，中英文在状态文字后追加故障码，俄文只在第二行显示故障码。
  */
 static void DIS_Equipment(void);
 /**
@@ -2034,8 +2140,8 @@ static bool Display_ShouldRequestStatusHighlightRefresh(void);
  * @param id 编号。该值是 CPU3 状态页固定槽位标识，用于在快照中定位同一业务字段并执行全量或差量重绘。
  * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
  * @param value 待格式化并绘制到 OLED 的数值。
- * @param is_text true 表示按文字宽度计算布局，false 表示按数值格式计算。
- * @param text 待测量、排版或写入状态槽的 NUL 结尾显示文字；宽度计算同时处理 ASCII 与中文字节。
+ * @param is_text true 表示按文本内容比较，false 表示按数值比较。
+ * @param text 文本槽本次准备绘制的 NUL 结尾文字；用于确认与反白槽缓存内容一致。
  * @return 1 表示目标状态槽仍处于内容一致的反白保持期；槽位无效、内容变化或保持期结束时返回 0。
  */
 static uint8_t Display_GetStatusSlotShift(DisplayStatusSlotId id,
@@ -2087,79 +2193,118 @@ static void Display_ProcessMenuIdleExit(void);
 
 
 /**
- * @brief 按当前字节编码在 OLED 上绘制 ASCII 字符或中文字模，并计算下一横向绘制坐标。
+ * @brief 绘制单个 ASCII 字形，字符未收录时使用问号占位。
  *
- * 函数读取 display 指向的字节序列：ASCII 字节在 CharStockMap 中匹配并按 4 列推进，中文字节组在 StockMap、WordStock 和 WordStock2 中匹配并按
- * 7 列推进。
- * 达到 cnt 指定的编码字节数或横坐标到达 OLED_LINE8_END 后停止；字库缺字时仍保留对应中文字符的横向空位。
+ * @param character 待绘制的 ASCII 字符。
+ * @param x OLED 横向列坐标。
+ * @param y OLED 纵向坐标。
+ * @param shift 字模阴码或阳码选择值。
+ */
+static void Display_DrawAsciiGlyph(uint8_t character, int x, int y, int shift)
+{
+    int index;
+    int fallback_index = -1;
+
+    for (index = 0; index < CharStockMapLength; index++) {
+        if (CharStockMap[index] == (uint8_t)'?') {
+            fallback_index = index;
+        }
+        if (CharStockMap[index] == character) {
+            write_816((uint8_t)x, (uint8_t)y, CharStock, (uint8_t)index, (uint8_t)shift);
+            return;
+        }
+    }
+
+    if (fallback_index >= 0) {
+        write_816((uint8_t)x,
+                  (uint8_t)y,
+                  CharStock,
+                  (uint8_t)fallback_index,
+                  (uint8_t)shift);
+    }
+}
+
+/**
+ * @brief 解码并绘制 ASCII、西里尔字母、度数符号或现有中文字模组成的 UTF-8 文本。
  *
- * @param display 指向待绘制字节序列首地址的二级指针；函数读取 *display，但不会把局部推进后的地址回写给调用方。
- * @param cnt 本次最多消费的编码字节数；ASCII字符计1字节，当前UTF-8中文字符按3字节累计。
- * @param x 首个字符的 OLED 横向列坐标；函数在此基础上累加字符宽度并返回下一可用坐标。
- * @param y 字符或中文字模的 OLED 纵向绘制坐标。
- * @param shift 传给字模绘制函数的阴码、阳码选择值。
- * @return 返回本轮绘制结束后的下一 OLED 横向列坐标；ASCII 每个推进 4 列，中文字符每个推进 7 列，达到 OLED_LINE8_END 时提前停止。
- * @note 函数只在局部变量中推进字符串读取指针，不会回写调用方的 *display；返回值用于调用方继续安排同一行后续绘制位置。
+ * @details 调用场景：OLED 统一文字绘制入口处理状态页和旧菜单文本。
+ * @note 关键约束：无效 UTF-8 或未收录字形显示问号；超出 64 列边界前停止，禁止部分绘制字形。
+ *
+ * @param display 待绘制字节序列首地址。
+ * @param cnt 本次最多消费的编码字节数。
+ * @param x 首个字形的 OLED 横向列坐标。
+ * @param y 字形的 OLED 纵向坐标。
+ * @param shift 字模阴码或阳码选择值。
+ * @return 返回绘制结束后的下一 OLED 横向列坐标。
  */
 static uint8_t matchingwordstock(const uint8_t *display,int cnt,int x,int y,int shift)
 {
-    int i,j;
-    const uint8_t *pdisplay;
-    const uint8_t *pstockmap;
+    int i;
+    int j;
+    const uint8_t *pdisplay = display;
 
-    pdisplay = display; /* 指向要显示的字符串首地址 */
-    for(i = 0;i < cnt;)
-    {
-        if(x >= OLED_LINE8_END)
+    for (i = 0; i < cnt;) {
+        DisplayGlyphInfo glyph;
+        uint8_t remaining = (uint8_t)(((cnt - i) > 255) ? 255 : (cnt - i));
+        const uint8_t *cyrillic_glyph;
+        uint8_t raster_width;
+
+        glyph = Display_DecodeGlyph(pdisplay, remaining);
+        if (glyph.byte_count == 0U) {
             break;
-        if((*pdisplay) < 128)
-        {
-            pstockmap = CharStockMap;
-            for(j=0;j<CharStockMapLength;j++)
-            {
-                if(*pstockmap == *pdisplay)
-                {
-                    write_816(x,y,CharStock,j,shift);
-                }
-                pstockmap++;
-            }
-            x += 4;
-            pdisplay++;
-            i++;
         }
-        else
-        {
-            pstockmap = StockMap; /* 指向索引字库首地址 */
-            /* 遍历字库中是否有要显示的汉字 */
-            for(j = 0;j< StockmapLength ;j++)
-            {
-                if((*pstockmap == *pdisplay) && (*(pstockmap + 1)== *(pdisplay + 1)) && (*(pstockmap + 2)== *(pdisplay + 2)))
-                {
-                    if(j < WordStockGlyphCount)
-                    {
-                        write_hanzi16(x,y,WordStock,j,j + 1,shift);
+        raster_width = (glyph.valid && (glyph.byte_count == 3U)) ? 8U : 4U;
+        if ((x < 0) || ((x + raster_width) > (OLED_LINE8_END + 1))) {
+            break;
+        }
+
+        if (glyph.valid && (glyph.codepoint < 0x80U)) {
+            Display_DrawAsciiGlyph((uint8_t)glyph.codepoint, x, y, shift);
+        } else if (glyph.valid &&
+                   ((cyrillic_glyph = FontCyrillic_GetGlyph(glyph.codepoint)) != NULL)) {
+            write_816((uint8_t)x, (uint8_t)y, cyrillic_glyph, 0U, (uint8_t)shift);
+        } else if (glyph.valid && (glyph.codepoint == 0x00B0U)) {
+            write_816((uint8_t)x, (uint8_t)y, DegreeGlyph, 0U, (uint8_t)shift);
+        } else if (glyph.valid && (glyph.byte_count == OLED_HANZI_UTF8_BYTES)) {
+            bool found = false;
+            const uint8_t *stock_map = StockMap;
+
+            for (j = 0; j < StockmapLength; j++) {
+                if ((stock_map[0] == pdisplay[0]) &&
+                    (stock_map[1] == pdisplay[1]) &&
+                    (stock_map[2] == pdisplay[2])) {
+                    if (j < WordStockGlyphCount) {
+                        write_hanzi16((uint8_t)x, (uint8_t)y, WordStock,
+                                      (uint8_t)j, (uint8_t)(j + 1), (uint8_t)shift);
+                    } else {
+                        write_hanzi16((uint8_t)x, (uint8_t)y, WordStock2,
+                                      (uint8_t)(j - WordStockGlyphCount),
+                                      (uint8_t)(j + 1 - WordStockGlyphCount),
+                                      (uint8_t)shift);
                     }
-                    else
-                    {
-                        write_hanzi16(x,y,WordStock2,j - WordStockGlyphCount,j + 1 - WordStockGlyphCount,shift);
-                    }
+                    found = true;
                     break;
                 }
-                /* 当前UTF-8中文字库索引每个字符占3字节。 */
-            pstockmap += OLED_HANZI_UTF8_BYTES;
+                stock_map += OLED_HANZI_UTF8_BYTES;
             }
-            /* 无论字库是否包含要显示的字,位置都向右移,字库中没有的空出位置 */
-            x += 7;
-            pdisplay += OLED_HANZI_UTF8_BYTES;
-            i += OLED_HANZI_UTF8_BYTES;
+            if (!found) {
+                Display_DrawAsciiGlyph((uint8_t)'?', x, y, shift);
+            }
+        } else {
+            Display_DrawAsciiGlyph((uint8_t)'?', x, y, shift);
         }
+
+        x += glyph.advance;
+        pdisplay += glyph.byte_count;
+        i += glyph.byte_count;
     }
-    return x;
+
+    return (uint8_t)x;
 }
 /**
- * @brief 显示多个汉字或字符。
+ * @brief 在 OLED 上绘制统一 UTF-8 文本。
  *
- * @param data 待绘制的只读NUL结尾OLED文字字节串；ASCII和中文字节按当前字库规则依次推进横向列坐标。
+ * @param data 待绘制的只读 NUL 结尾字节串；支持 ASCII、西里尔字母、度数符号和现有中文字模，缺字回退问号。
  * @param x 算法、坐标或比较使用的 X 值。
  * @param y 算法、坐标或比较使用的 Y 值。
  * @param shift OLED 字模阴码/阳码或显示偏移选项。
@@ -2183,16 +2328,28 @@ uint8_t OledDisplayLineWords(const void *data,uint8_t x,uint8_t y,uint8_t shift)
  */
 void EquipFirstPower(void)
 {
+    const char *communication_text;
+    const char *version_text;
     int line;
+
     if (!Display_ClearBeforeDraw()) {
         return;
     }
-    DisplayLangaugeLineWords((uint8_t*)"通讯尝试中...",0,OLED_ROW4_1,0,(u8*)"Communicate Attempt...");
-    line = DisplayLangaugeLineWords((uint8_t*)"版本:",0,OLED_ROW4_2,0,(u8*)"Version:");
-    OledDisplayLineWords(CPU3_APP_VERSION_STRING,line,OLED_ROW4_2,0);
+
+    communication_text = DisplayLanguage_SelectStatusText(screen_parameter.language,
+                                                           "通讯尝试中...",
+                                                           "Communicate Attempt...",
+                                                           "Попытка связи...");
+    version_text = DisplayLanguage_SelectStatusText(screen_parameter.language,
+                                                     "版本:",
+                                                     "Version:",
+                                                     "Версия:");
+    OledDisplayLineWords(communication_text, OLED_LINE8_1, OLED_ROW4_1, 0U);
+    line = OledDisplayLineWords(version_text, OLED_LINE8_1, OLED_ROW4_2, 0U);
+    OledDisplayLineWords(CPU3_APP_VERSION_STRING, line, OLED_ROW4_2, 0U);
 }
 /**
- * @brief OLED 初始化完成后立即绘制启动页。
+ * @brief OLED 初始化并加载本机显示参数后绘制启动页。
  *
  * @details 调用场景：CPU3 上电初始化显示模块后调用。
  * @note 关键约束：不得在首帧前阻塞等待，CPU2 快照未完成时由现有启动页门禁显示通讯提示。
@@ -2711,31 +2868,279 @@ static void Display_FormatWirelessConnectionMacCompact(const volatile WirelessPa
 }
 
 /**
- * @brief 按当前语言设置返回中文或英文显示文字。
+ * @brief 按当前状态页语言选择中文、英文或俄文显示文字。
  *
- * @param name_cn 当前语言为中文时返回的只读文字；允许为 NULL。
- * @param name_en 当前语言为英文时返回的只读文字；为空时回退到中文文字。
- * @return 返回按当前语言设置返回中文或英文显示文字对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
+ * @param name_cn 中文只读文字；允许为 NULL。
+ * @param name_en 英文只读文字；目标翻译为空时作为首选回退。
+ * @param name_ru 俄文只读文字；仅设备状态文本域允许选用。
+ * @return 返回最终只读文本首地址；调用方不得修改或释放。
  */
-static const char *Display_SelectLanguageText(const uint8_t *name_cn, const uint8_t *name_en)
+static const char *Display_SelectStatusLanguageText(const uint8_t *name_cn,
+                                                    const uint8_t *name_en,
+                                                    const uint8_t *name_ru)
 {
-    if ((screen_parameter.language == LANGUAGE_ENGLISH) && (name_en != NULL)) {
-        return (const char *)name_en;
-    }
-
-    return (const char *)name_cn;
+    return DisplayLanguage_SelectStatusText(screen_parameter.language,
+                                            (const char *)name_cn,
+                                            (const char *)name_en,
+                                            (const char *)name_ru);
 }
 
 /**
- * @brief 计算中英文标签绘制后占用的最后一行。
+ * @brief 选择当前状态页语言并在指定位置绘制一段文字。
  *
- * @param name_cn 用于计算中文标签宽度的只读文字。
- * @param name_en 用于计算英文标签宽度的只读文字；为空时使用中文标签。
- * @return 返回中英文标签绘制后占用的最后一行的有效长度，单位字节；0 表示没有可供消费的数据。
+ * @details 调用场景：状态页字段标签及专用提示复用统一语言选择规则。
+ * @note 关键约束：俄文仅在状态文本域生效，普通页面仍由旧双语接口回退英文。
  */
-static uint8_t Display_GetLabelEndLine(const uint8_t *name_cn, const uint8_t *name_en)
+static uint8_t DisplayStatusLanguageLineWords(const uint8_t *name_cn,
+                                              const uint8_t *name_en,
+                                              const uint8_t *name_ru,
+                                              uint8_t line,
+                                              uint8_t row,
+                                              uint8_t shift)
 {
-    return Display_GetTextWidth(Display_SelectLanguageText(name_cn, name_en), 63U);
+    return OledDisplayLineWords(Display_SelectStatusLanguageText(name_cn,
+                                                                  name_en,
+                                                                  name_ru),
+                                line,
+                                row,
+                                shift);
+}
+
+/**
+ * @brief 判断设备状态页当前是否启用俄文专用布局。
+ *
+ * @return true 表示使用俄文状态布局；false 表示沿用中英文布局。
+ */
+static bool Display_IsRussianStatusLayout(void)
+{
+    return DisplayLanguage_IsRussian(screen_parameter.language);
+}
+
+/**
+ * @brief 统计 NUL 结尾状态文字包含的 UTF-8 字形数量。
+ *
+ * @note 关键约束：按统一解码器推进字节，避免把西里尔多字节序列误计为多个字符。
+ * @return 返回可消费的字形数；空输入返回 0。
+ */
+static uint8_t Display_CountStatusGlyphs(const char *text)
+{
+    size_t index = 0U;
+    uint8_t count = 0U;
+
+    if (text == NULL) {
+        return 0U;
+    }
+
+    while (text[index] != '\0') {
+        DisplayGlyphInfo glyph = Display_DecodeGlyph((const uint8_t *)&text[index], 4U);
+
+        if (glyph.byte_count == 0U) {
+            break;
+        }
+        index += glyph.byte_count;
+        count++;
+    }
+    return count;
+}
+
+/**
+ * @brief 按 UTF-8 字形边界复制俄文状态文字的一个字节区间。
+ *
+ * @details 调用场景：把长状态拆入两条固定长度显示缓存。
+ * @note 关键约束：去掉区间两端空格，禁止截断多字节字形，并始终写入字符串结束符。
+ */
+static void Display_CopyStatusTextRange(char dest[DISPLAY_RUSSIAN_STATUS_LINE_BYTES],
+                                        const char *src,
+                                        size_t start,
+                                        size_t end)
+{
+    size_t dest_index = 0U;
+
+    while ((start < end) && (src[start] == ' ')) {
+        start++;
+    }
+    while ((end > start) && (src[end - 1U] == ' ')) {
+        end--;
+    }
+
+    while (start < end) {
+        DisplayGlyphInfo glyph = Display_DecodeGlyph((const uint8_t *)&src[start], 4U);
+
+        if ((glyph.byte_count == 0U) ||
+            ((dest_index + glyph.byte_count) >= DISPLAY_RUSSIAN_STATUS_LINE_BYTES) ||
+            ((start + glyph.byte_count) > end)) {
+            break;
+        }
+        memcpy(&dest[dest_index], &src[start], glyph.byte_count);
+        dest_index += glyph.byte_count;
+        start += glyph.byte_count;
+    }
+    dest[dest_index] = '\0';
+}
+
+/**
+ * @brief 在可容纳两行的空格位置中选择字形数量最均衡的俄文状态分隔点。
+ *
+ * @return 返回分隔空格的字节偏移；没有合适空格时返回 (size_t)-1。
+ */
+static size_t Display_FindRussianStatusSplit(const char *text, uint8_t total_glyphs)
+{
+    size_t index = 0U;
+    size_t best_split = (size_t)-1;
+    uint8_t left_glyphs = 0U;
+    uint8_t best_difference = 0xFFU;
+
+    while (text[index] != '\0') {
+        DisplayGlyphInfo glyph = Display_DecodeGlyph((const uint8_t *)&text[index], 4U);
+
+        if (glyph.byte_count == 0U) {
+            break;
+        }
+        if (text[index] == ' ') {
+            uint8_t right_glyphs = (uint8_t)(total_glyphs - left_glyphs - 1U);
+
+            if ((left_glyphs <= DISPLAY_RUSSIAN_STATUS_LINE_GLYPHS) &&
+                (right_glyphs <= DISPLAY_RUSSIAN_STATUS_LINE_GLYPHS)) {
+                uint8_t difference = (left_glyphs > right_glyphs)
+                                         ? (uint8_t)(left_glyphs - right_glyphs)
+                                         : (uint8_t)(right_glyphs - left_glyphs);
+
+                if (difference < best_difference) {
+                    best_difference = difference;
+                    best_split = index;
+                }
+            }
+        }
+        index += glyph.byte_count;
+        left_glyphs++;
+    }
+    return best_split;
+}
+
+/**
+ * @brief 查找指定 UTF-8 字形数量对应的字节边界。
+ *
+ * @details 调用场景：俄文状态没有可用空格时执行固定宽度分行。
+ * @return 返回不超过 glyph_limit 个字形后的字节偏移。
+ */
+static size_t Display_FindStatusGlyphByte(const char *text, uint8_t glyph_limit)
+{
+    size_t index = 0U;
+    uint8_t glyph_count = 0U;
+
+    while ((text[index] != '\0') && (glyph_count < glyph_limit)) {
+        DisplayGlyphInfo glyph = Display_DecodeGlyph((const uint8_t *)&text[index], 4U);
+
+        if (glyph.byte_count == 0U) {
+            break;
+        }
+        index += glyph.byte_count;
+        glyph_count++;
+    }
+    return index;
+}
+
+/**
+ * @brief 用最多两行绘制完整俄文设备状态文字。
+ *
+ * @note 关键约束：页面不滚动；优先按空格均衡分行，无空格时才按字形边界拆分。
+ */
+static void Display_DrawRussianStatusText(const char *text)
+{
+    char first_line[DISPLAY_RUSSIAN_STATUS_LINE_BYTES] = {0};
+    char second_line[DISPLAY_RUSSIAN_STATUS_LINE_BYTES] = {0};
+    size_t text_bytes;
+    size_t split_byte;
+    uint8_t glyph_count;
+
+    OLED_ClearArea(OLED_LINE8_1,
+                   OLED_ROW4_1,
+                   (uint8_t)(OLED_LINE8_END + 1U),
+                   (uint8_t)(OLED_ROW4_3 - OLED_ROW4_1));
+    if (text == NULL) {
+        return;
+    }
+
+    text_bytes = strlen(text);
+    glyph_count = Display_CountStatusGlyphs(text);
+    if (glyph_count <= DISPLAY_RUSSIAN_STATUS_LINE_GLYPHS) {
+        Display_CopyStatusTextRange(first_line, text, 0U, text_bytes);
+    } else {
+        split_byte = Display_FindRussianStatusSplit(text, glyph_count);
+        if (split_byte == (size_t)-1) {
+            split_byte = Display_FindStatusGlyphByte(text,
+                                                     DISPLAY_RUSSIAN_STATUS_LINE_GLYPHS);
+        }
+        Display_CopyStatusTextRange(first_line, text, 0U, split_byte);
+        Display_CopyStatusTextRange(second_line, text, split_byte, text_bytes);
+    }
+
+    OledDisplayLineWords(first_line, OLED_LINE8_1, OLED_ROW4_1, 0U);
+    if (second_line[0] != '\0') {
+        OledDisplayLineWords(second_line, OLED_LINE8_1, OLED_ROW4_2, 0U);
+    }
+}
+
+/**
+ * @brief 返回俄文状态页单字段分页使用的完整标签。
+ *
+ * @param id 状态快照槽位类型。
+ * @return 返回对应俄文只读标签；不需要标签的槽位返回 NULL。
+ */
+static const char *Display_GetRussianStatusSlotLabel(DisplayStatusSlotId id)
+{
+    switch (id) {
+        case DISPLAY_STATUS_SLOT_OIL_LEVEL:
+            return "Уровень";
+        case DISPLAY_STATUS_SLOT_OIL_LEVEL_BELOW_DEAD_ZONE:
+            return "Ниже мёртвой";
+        case DISPLAY_STATUS_SLOT_WATER_LEVEL:
+            return "Уровень воды";
+        case DISPLAY_STATUS_SLOT_DENSITY:
+            return "Плотность";
+        case DISPLAY_STATUS_SLOT_TEMPERATURE:
+            return "Температура";
+        case DISPLAY_STATUS_SLOT_POSITION:
+            return "Позиция датчика";
+        case DISPLAY_STATUS_SLOT_WEIGHT:
+            return "Крутящий момент";
+        case DISPLAY_STATUS_SLOT_TORQUE_TEMPERATURE:
+            return "Темп. датчика";
+        case DISPLAY_STATUS_SLOT_FREQUENCY:
+            return "Частота";
+        case DISPLAY_STATUS_SLOT_CAPACITANCE:
+            return "Ёмкость";
+        case DISPLAY_STATUS_SLOT_ANGLE_X:
+            return "Угол X";
+        case DISPLAY_STATUS_SLOT_ANGLE_Y:
+            return "Угол Y";
+        case DISPLAY_STATUS_SLOT_TANK_HEIGHT:
+            return "Высота бака";
+        case DISPLAY_STATUS_SLOT_WIRELESS_RSSI:
+        case DISPLAY_STATUS_SLOT_WIRELESS_RSSI_NA:
+            return "RSSI";
+        case DISPLAY_STATUS_SLOT_WIRELESS_MAC_COMPACT:
+        case DISPLAY_STATUS_SLOT_WIRELESS_MAC_NA:
+            return "MAC токосъёмника";
+        default:
+            return NULL;
+    }
+}
+
+/**
+ * @brief 计算当前状态页语言标签绘制后的横向列坐标。
+ *
+ * @param name_cn 中文标签。
+ * @param name_en 英文标签；目标翻译为空时作为首选回退。
+ * @param name_ru 俄文标签。
+ * @return 返回标签的 OLED 逻辑列宽；空文本返回 0。
+ */
+static uint8_t Display_GetStatusLabelEndLine(const uint8_t *name_cn,
+                                             const uint8_t *name_en,
+                                             const uint8_t *name_ru)
+{
+    return Display_GetTextWidth(Display_SelectStatusLanguageText(name_cn, name_en, name_ru),
+                                63U);
 }
 
 /**
@@ -2746,17 +3151,26 @@ static uint8_t Display_GetLabelEndLine(const uint8_t *name_cn, const uint8_t *na
  */
 static void Display_CopyStatusText(char dest[32], const char *src)
 {
-    uint8_t i;
+    uint8_t dest_index = 0U;
+    uint8_t src_index = 0U;
 
     if (src == NULL) {
         dest[0] = '\0';
         return;
     }
 
-    for (i = 0U; (src[i] != '\0') && (i < 31U); i++) {
-        dest[i] = src[i];
+    while (src[src_index] != '\0') {
+        DisplayGlyphInfo glyph = Display_DecodeGlyph((const uint8_t *)&src[src_index], 4U);
+
+        if ((glyph.byte_count == 0U) ||
+            ((uint8_t)(dest_index + glyph.byte_count) > 31U)) {
+            break;
+        }
+        memcpy(&dest[dest_index], &src[src_index], glyph.byte_count);
+        dest_index = (uint8_t)(dest_index + glyph.byte_count);
+        src_index = (uint8_t)(src_index + glyph.byte_count);
     }
-    dest[i] = '\0';
+    dest[dest_index] = '\0';
 }
 
 /**
@@ -2824,7 +3238,7 @@ static void Display_AddValueStatusSlot(DisplayStatusSnapshot *snapshot,
  * @param id 编号。该值是 CPU3 状态页固定槽位标识，用于在快照中定位同一业务字段并执行全量或差量重绘。
  * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
  * @param value_line 状态槽数值或文字在 OLED 上开始绘制的横向像素位置。
- * @param text 待测量、排版或写入状态槽的 NUL 结尾显示文字；宽度计算同时处理 ASCII 与中文字节。
+ * @param text 待复制到定长状态槽的 NUL 结尾中、英或俄文文字；空指针按空字符串处理。
  */
 static void Display_AddTextStatusSlot(DisplayStatusSnapshot *snapshot,
                                       DisplayStatusSlotId id,
@@ -2852,6 +3266,10 @@ static void Display_AddErrorReasonStatusSlots(DisplayStatusSnapshot *snapshot, i
     char first_line[32];
     uint8_t prefix_width = Display_GetTextWidth("故障:", 7U);
     uint8_t first_bytes = Display_GetFitTextBytes(reason, prefix_width);
+
+    if (DisplayLanguage_IsRussian(screen_parameter.language)) {
+        return;
+    }
 
     /* 当前页包含故障原因首行槽位时，只复制本行能够容纳的完整字节。 */
     if ((ValidParaDisArr[Para_ErrorReason][PARA_VALID] == true) &&
@@ -2899,25 +3317,35 @@ static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapsh
 {
     uint8_t row;
     uint8_t line;
+    uint8_t first_slot = snapshot->slot_count;
+    uint8_t slot_index;
     uint32_t display_value = 0U;
     int display_position = 0;
     int display_frequency;
     int display_capacitance;
     int32_t torque_temperature_x100;
+    bool russian_layout = Display_IsRussianStatusLayout();
 
     Display_AddErrorReasonStatusSlots(snapshot, now_page);
 
-    if (flagofoillevelvalid == true) {
+    if ((flagofoillevelvalid == true) && (!russian_layout || (now_page == 0))) {
         row = FlagofTotalTwoRow ? OLED_ROW4_3 : OLED_ROW4_2;
-        line = Display_GetLabelEndLine((uint8_t*)"液位:", (uint8_t*)"Level:");
+        line = Display_GetStatusLabelEndLine((uint8_t*)"液位:",
+                                             (uint8_t*)"Level:",
+                                             (uint8_t*)"Уровень:");
         if (Display_GetOilLevelValue(snapshot->ctx, &display_value) &&
             ((display_value == OILLEVELDOWNLIMIT) || (display_value == LEVEL_DOWNLIMIT))) {
             Display_AddTextStatusSlot(snapshot,
-                                      DISPLAY_STATUS_SLOT_OIL_LEVEL,
+                                      russian_layout
+                                          ? DISPLAY_STATUS_SLOT_OIL_LEVEL_BELOW_DEAD_ZONE
+                                          : DISPLAY_STATUS_SLOT_OIL_LEVEL,
                                       row,
                                       line,
-                                      Display_SelectLanguageText((uint8_t*)"低于盲区",
-                                                                 (uint8_t*)"Below Blind"));
+                                      russian_layout
+                                          ? "зоны"
+                                          : Display_SelectStatusLanguageText((uint8_t*)"低于盲区",
+                                                                             (uint8_t*)"Below Blind",
+                                                                             (uint8_t*)"Ниже мёртвой зоны"));
         } else {
             Display_AddValueStatusSlot(snapshot,
                                        DISPLAY_STATUS_SLOT_OIL_LEVEL,
@@ -2935,7 +3363,9 @@ static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapsh
         Display_AddValueStatusSlot(snapshot,
                                    DISPLAY_STATUS_SLOT_WATER_LEVEL,
                                    (uint8_t)ValidParaDisArr[Para_Waterlevel][PARA_X],
-                                   Display_GetLabelEndLine((uint8_t*)"水位:", (uint8_t*)"Water:"),
+                                   Display_GetStatusLabelEndLine((uint8_t*)"水位:",
+                                                                 (uint8_t*)"Water:",
+                                                                 (uint8_t*)"Уровень воды:"),
                                    (int32_t)display_value,
                                    1U,
                                    (uint8_t*)"mm");
@@ -2947,7 +3377,9 @@ static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapsh
         Display_AddValueStatusSlot(snapshot,
                                    DISPLAY_STATUS_SLOT_DENSITY,
                                    (uint8_t)ValidParaDisArr[Para_AveDensity][PARA_X],
-                                   Display_GetLabelEndLine((uint8_t*)"密度:", (uint8_t*)"D:"),
+                                   Display_GetStatusLabelEndLine((uint8_t*)"密度:",
+                                                                 (uint8_t*)"D:",
+                                                                 (uint8_t*)"Плотность:"),
                                    (int32_t)display_value,
                                    2U,
                                    (uint8_t*)"kg/m3");
@@ -2959,7 +3391,9 @@ static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapsh
         Display_AddValueStatusSlot(snapshot,
                                    DISPLAY_STATUS_SLOT_TEMPERATURE,
                                    (uint8_t)ValidParaDisArr[Para_AveTemperature][PARA_X],
-                                   Display_GetLabelEndLine((uint8_t*)"温度:", (uint8_t*)"Temp:"),
+                                   Display_GetStatusLabelEndLine((uint8_t*)"温度:",
+                                                                 (uint8_t*)"Temp:",
+                                                                 (uint8_t*)"Температура:"),
                                    (int32_t)display_value - 20000,
                                    2U,
                                    (uint8_t*)"℃");
@@ -2971,7 +3405,9 @@ static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapsh
         Display_AddValueStatusSlot(snapshot,
                                    DISPLAY_STATUS_SLOT_POSITION,
                                    (uint8_t)ValidParaDisArr[Para_position][PARA_X],
-                                   Display_GetLabelEndLine((uint8_t*)"位置:", (uint8_t*)"Pos:"),
+                                   Display_GetStatusLabelEndLine((uint8_t*)"位置:",
+                                                                 (uint8_t*)"Pos:",
+                                                                 (uint8_t*)"Позиция датчика:"),
                                    (int32_t)display_position,
                                    1U,
                                    (uint8_t*)"mm");
@@ -2982,7 +3418,9 @@ static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapsh
         Display_AddValueStatusSlot(snapshot,
                                    DISPLAY_STATUS_SLOT_WEIGHT,
                                    (uint8_t)ValidParaDisArr[Para_weight][PARA_X],
-                                   Display_GetLabelEndLine((uint8_t*)"扭力:", (uint8_t*)"Torque:"),
+                                   Display_GetStatusLabelEndLine((uint8_t*)"扭力:",
+                                                                 (uint8_t*)"Torque:",
+                                                                 (uint8_t*)"Крутящий момент:"),
                                    (int32_t)g_measurement.debug_data.current_weight,
                                    0U,
                                    (uint8_t*)" ");
@@ -2991,7 +3429,9 @@ static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapsh
     if ((ValidParaDisArr[Para_torque_temperature][PARA_VALID] == true) &&
         (now_page == ValidParaDisArr[Para_torque_temperature][PARA_PAGE])) {
         row = (uint8_t)ValidParaDisArr[Para_torque_temperature][PARA_X];
-        line = Display_GetLabelEndLine((uint8_t*)"扭温:", (uint8_t*)"T.Temp:");
+        line = Display_GetStatusLabelEndLine((uint8_t*)"扭温:",
+                                             (uint8_t*)"T.Temp:",
+                                             (uint8_t*)"Темп. датчика");
         if (Display_GetTorqueTemperatureX100(snapshot->ctx, &torque_temperature_x100)) {
             Display_AddValueStatusSlot(snapshot,
                                        DISPLAY_STATUS_SLOT_TORQUE_TEMPERATURE,
@@ -3017,7 +3457,9 @@ static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapsh
         Display_AddValueStatusSlot(snapshot,
                                    DISPLAY_STATUS_SLOT_FREQUENCY,
                                    (uint8_t)ValidParaDisArr[Para_sensor_value][PARA_X],
-                                   Display_GetLabelEndLine((uint8_t*)"频率:", (uint8_t*)"Freq:"),
+                                   Display_GetStatusLabelEndLine((uint8_t*)"频率:",
+                                                                 (uint8_t*)"Freq:",
+                                                                 (uint8_t*)"Частота:"),
                                    (int32_t)display_frequency,
                                    0U,
                                    (uint8_t*)"Hz");
@@ -3031,7 +3473,9 @@ static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapsh
         Display_AddValueStatusSlot(snapshot,
                                    DISPLAY_STATUS_SLOT_CAPACITANCE,
                                    (uint8_t)ValidParaDisArr[Para_capacitance][PARA_X],
-                                   Display_GetLabelEndLine((uint8_t*)"电容:", (uint8_t*)"Cap:"),
+                                   Display_GetStatusLabelEndLine((uint8_t*)"电容:",
+                                                                 (uint8_t*)"Cap:",
+                                                                 (uint8_t*)"Ёмкость:"),
                                    (int32_t)display_capacitance,
                                    1U,
                                    NULL);
@@ -3042,7 +3486,9 @@ static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapsh
         Display_AddValueStatusSlot(snapshot,
                                    DISPLAY_STATUS_SLOT_ANGLE_X,
                                    (uint8_t)ValidParaDisArr[Para_angle_x][PARA_X],
-                                   Display_GetLabelEndLine((uint8_t*)"X角:", (uint8_t*)"AngX:"),
+                                   Display_GetStatusLabelEndLine((uint8_t*)"X角:",
+                                                                 (uint8_t*)"AngX:",
+                                                                 (uint8_t*)"Угол X:"),
                                    (int32_t)g_measurement.debug_data.angle_x,
                                    2U,
                                    (uint8_t*)"°");
@@ -3053,7 +3499,9 @@ static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapsh
         Display_AddValueStatusSlot(snapshot,
                                    DISPLAY_STATUS_SLOT_ANGLE_Y,
                                    (uint8_t)ValidParaDisArr[Para_angle_y][PARA_X],
-                                   Display_GetLabelEndLine((uint8_t*)"Y角:", (uint8_t*)"AngY:"),
+                                   Display_GetStatusLabelEndLine((uint8_t*)"Y角:",
+                                                                 (uint8_t*)"AngY:",
+                                                                 (uint8_t*)"Угол Y:"),
                                    (int32_t)g_measurement.debug_data.angle_y,
                                    2U,
                                    (uint8_t*)"°");
@@ -3064,7 +3512,9 @@ static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapsh
         Display_AddValueStatusSlot(snapshot,
                                    DISPLAY_STATUS_SLOT_TANK_HEIGHT,
                                    (uint8_t)ValidParaDisArr[Para_tankheight][PARA_X],
-                                   Display_GetLabelEndLine((uint8_t*)"罐高:", (uint8_t*)"tankH:"),
+                                   Display_GetStatusLabelEndLine((uint8_t*)"罐高:",
+                                                                 (uint8_t*)"tankH:",
+                                                                 (uint8_t*)"Высота бака:"),
                                    (int32_t)g_measurement.height_measurement.current_real_height,
                                    1U,
                                    (uint8_t*)"mm");
@@ -3076,7 +3526,9 @@ static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapsh
             Display_AddValueStatusSlot(snapshot,
                                        DISPLAY_STATUS_SLOT_WIRELESS_RSSI,
                                        (uint8_t)ValidParaDisArr[Para_wireless_rssi][PARA_X],
-                                       Display_GetLabelEndLine((uint8_t*)"RSSI:", (uint8_t*)"RSSI:"),
+                                       Display_GetStatusLabelEndLine((uint8_t*)"RSSI:",
+                                                                     (uint8_t*)"RSSI:",
+                                                                     (uint8_t*)"RSSI:"),
                                        g_measurement.wireless_pairing_status.rssi,
                                        0U,
                                        (uint8_t*)"dB");
@@ -3085,7 +3537,9 @@ static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapsh
                                       DISPLAY_STATUS_SLOT_WIRELESS_RSSI_NA,
                                       (uint8_t)ValidParaDisArr[Para_wireless_rssi][PARA_X],
                                       OLED_LINE8_1,
-                                      "RSSI:N/A");
+                                      Display_SelectStatusLanguageText((uint8_t*)"RSSI:N/A",
+                                                                       (uint8_t*)"RSSI:N/A",
+                                                                       (uint8_t*)"Нет данных"));
         }
     }
 
@@ -3107,7 +3561,16 @@ static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapsh
                                       DISPLAY_STATUS_SLOT_WIRELESS_MAC_NA,
                                       (uint8_t)ValidParaDisArr[Para_wireless_mac][PARA_X],
                                       OLED_LINE8_1,
-                                      "MAC N/A");
+                                      Display_SelectStatusLanguageText((uint8_t*)"MAC N/A",
+                                                                       (uint8_t*)"MAC N/A",
+                                                                       (uint8_t*)"Нет данных"));
+        }
+    }
+
+    if (russian_layout) {
+        for (slot_index = first_slot; slot_index < snapshot->slot_count; slot_index++) {
+            snapshot->slots[slot_index].row = OLED_ROW4_4;
+            snapshot->slots[slot_index].value_line = OLED_LINE8_1;
         }
     }
 }
@@ -3121,6 +3584,31 @@ static void Display_AddWirelessPairingSlots(DisplayStatusSnapshot *snapshot)
 {
     const volatile WirelessPairingStatus *status = &g_measurement.wireless_pairing_status;
 
+    if (Display_IsRussianStatusLayout()) {
+        if (snapshot->state == STATE_WIRELESS_PAIRING_OVER) {
+            if ((status->result == WIRELESS_PAIRING_RESULT_SUCCESS) &&
+                (status->mac_valid != 0U)) {
+                char mac_line[17];
+
+                Display_FormatWirelessConnectionMacCompact(status,
+                                                           mac_line,
+                                                           sizeof(mac_line));
+                Display_AddTextStatusSlot(snapshot,
+                                          DISPLAY_STATUS_SLOT_WIRELESS_MAC_COMPACT,
+                                          OLED_ROW4_4,
+                                          OLED_LINE8_1,
+                                          mac_line);
+            } else {
+                Display_AddTextStatusSlot(snapshot,
+                                          DISPLAY_STATUS_SLOT_WIRELESS_MAC_NA,
+                                          OLED_ROW4_4,
+                                          OLED_LINE8_1,
+                                          "Нет данных");
+            }
+        }
+        return;
+    }
+
     if ((snapshot->state != STATE_WIRELESS_PAIRING_OVER) ||
         (status->result != WIRELESS_PAIRING_RESULT_SUCCESS) ||
         (status->mac_valid == 0U)) {
@@ -3129,7 +3617,9 @@ static void Display_AddWirelessPairingSlots(DisplayStatusSnapshot *snapshot)
                                       DISPLAY_STATUS_SLOT_WIRELESS_MAC_NA,
                                       OLED_ROW4_2,
                                       OLED_LINE8_2,
-                                      "MAC N/A");
+                                      Display_SelectStatusLanguageText((uint8_t*)"MAC N/A",
+                                                                       (uint8_t*)"MAC N/A",
+                                                                       (uint8_t*)"Нет данных"));
         }
         return;
     }
@@ -3197,11 +3687,17 @@ static void Display_BuildStatusSnapshot(DisplayStatusSnapshot *snapshot)
     snapshot->ctx = Display_GetResultContext(g_measurement.device_status.device_state);
     snapshot->protocol_compatible = IsCpu2ProtocolCompatible();
     snapshot->protocol_mismatch = IsCpu2ProtocolMismatch();
-    lang = (uint8_t)screen_parameter.language;
-    if (lang > LANGUAGE_ENGLISH) {
-        lang = LANGUAGE_ENGLISH;
-    }
+    lang = (uint8_t)DisplayLanguage_Resolve(screen_parameter.language,
+                                            DISPLAY_TEXT_DOMAIN_STATUS);
     snapshot->language = lang;
+
+    /* 新状态必须从首个参数开始，避免沿用上一结果页的轮播索引。 */
+    if (display_status_last_snapshot.valid &&
+        ((snapshot->state != display_status_last_snapshot.state) ||
+         (snapshot->ctx != display_status_last_snapshot.ctx))) {
+        display_status_page_index = 0;
+        display_status_page_hold_count = 0U;
+    }
 
     CalculateValidPara();
     if ((PageAmount <= 0) || (display_status_page_index >= PageAmount)) {
@@ -3287,14 +3783,11 @@ static bool Display_StatusLayoutChanged(const DisplayStatusSnapshot *current,
  */
 static bool Display_ShouldSampleStatusData(uint32_t now)
 {
-    uint8_t lang = (uint8_t)screen_parameter.language;
+    uint8_t lang = (uint8_t)DisplayLanguage_Resolve(screen_parameter.language,
+                                                    DISPLAY_TEXT_DOMAIN_STATUS);
 
     if (!display_status_active_snapshot.valid) {
         return true;
-    }
-
-    if (lang > LANGUAGE_ENGLISH) {
-        lang = LANGUAGE_ENGLISH;
     }
 
     if ((display_status_active_snapshot.state != g_measurement.device_status.device_state) ||
@@ -3339,6 +3832,31 @@ static void Display_DrawStatusSlotValue(const DisplayStatusSlot *slot, uint8_t s
                          shift,
                          slot->points,
                          (uint8_t *)slot->unit);
+    }
+}
+
+/**
+ * @brief 按俄文单字段分页布局绘制当前状态快照的标签和值。
+ *
+ * @note 关键约束：长俄文标签固定占第 3 行，当前页只绘制快照中已构建的槽位，不滚动文本。
+ */
+static void Display_DrawRussianStatusSlots(void)
+{
+    uint8_t i;
+
+    for (i = 0U; i < display_status_active_snapshot.slot_count; i++) {
+        DisplayStatusSlot *slot = &display_status_active_snapshot.slots[i];
+        const char *label = Display_GetRussianStatusSlotLabel(slot->id);
+        uint8_t shift = Display_GetStatusSlotShift(slot->id,
+                                                   slot->row,
+                                                   slot->value,
+                                                   slot->is_text,
+                                                   slot->is_text ? slot->text : NULL);
+
+        if (label != NULL) {
+            OledDisplayLineWords(label, OLED_LINE8_1, OLED_ROW4_3, 0U);
+        }
+        Display_DrawStatusSlotValue(slot, shift);
     }
 }
 
@@ -3567,7 +4085,7 @@ static bool Display_ShouldRequestStatusHighlightRefresh(void)
  *
  * @param id 编号。该值是 CPU3 状态页固定槽位标识，用于在快照中定位同一业务字段并执行全量或差量重绘。
  * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
- * @param is_text true 表示按文字宽度计算布局，false 表示按数值格式计算。
+ * @param is_text true 表示查找文本槽，false 表示查找数值槽；用于区分同一位置的槽类型。
  * @return 成功时返回指向按优先级查找当前应显示的活动状态槽的指针；输入非法或未找到匹配项时返回 NULL。
  */
 static const DisplayStatusSlot *Display_FindActiveStatusSlot(DisplayStatusSlotId id,
@@ -3593,8 +4111,8 @@ static const DisplayStatusSlot *Display_FindActiveStatusSlot(DisplayStatusSlotId
  * @param id 编号。该值是 CPU3 状态页固定槽位标识，用于在快照中定位同一业务字段并执行全量或差量重绘。
  * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
  * @param value 待格式化并绘制到 OLED 的数值。
- * @param is_text true 表示按文字宽度计算布局，false 表示按数值格式计算。
- * @param text 待测量、排版或写入状态槽的 NUL 结尾显示文字；宽度计算同时处理 ASCII 与中文字节。
+ * @param is_text true 表示按文本内容比较，false 表示按数值比较。
+ * @param text 文本槽本次准备绘制的 NUL 结尾文字；用于确认与反白槽缓存内容一致。
  * @return 1 表示目标状态槽仍处于内容一致的反白保持期；槽位无效、内容变化或保持期结束时返回 0。
  */
 static uint8_t Display_GetStatusSlotShift(DisplayStatusSlotId id,
@@ -3700,6 +4218,11 @@ static void oled_equipment(void)
     /* 显示当前设备状态 */
     DIS_Equipment();
 
+    if (Display_IsRussianStatusLayout()) {
+        Display_DrawRussianStatusSlots();
+        return;
+    }
+
     if (g_measurement.device_status.device_state == STATE_WIRELESS_PAIRING) {
         return;
     }
@@ -3730,14 +4253,17 @@ static void oled_equipment(void)
                                                             true,
                                                             mac_line2));
         } else {
-            OledDisplayLineWords("MAC N/A",
+            const char *mac_na = Display_SelectStatusLanguageText((uint8_t*)"MAC N/A",
+                                                                   (uint8_t*)"MAC N/A",
+                                                                   (uint8_t*)"Нет данных");
+            OledDisplayLineWords(mac_na,
                                  OLED_LINE8_2,
                                  OLED_ROW4_2,
                                  Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_WIRELESS_MAC_NA,
                                                             OLED_ROW4_2,
                                                             0,
                                                             true,
-                                                            "MAC N/A"));
+                                                            mac_na));
         }
         return;
     }
@@ -3765,21 +4291,28 @@ static void oled_equipment(void)
             row = OLED_ROW4_3;
         else
             row = OLED_ROW4_2;
-        line = DisplayLangaugeLineWords((u8*)"液位:",OLED_LINE8_1,row,0,(u8*)"Level:");
+        line = DisplayStatusLanguageLineWords((u8*)"液位:",
+                                              (u8*)"Level:",
+                                              (u8*)"Уровень:",
+                                              OLED_LINE8_1,
+                                              row,
+                                              0U);
         if (Display_GetOilLevelValue(ctx, &display_value) &&
             ((display_value == OILLEVELDOWNLIMIT) || (display_value == LEVEL_DOWNLIMIT)))
         {
-            const char *text = Display_SelectLanguageText((uint8_t*)"低于盲区",
-                                                          (uint8_t*)"Below Blind");
-            DisplayLangaugeLineWords((u8*)"低于盲区",
-                                     line,
-                                     row,
-                                     Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_OIL_LEVEL,
-                                                                row,
-                                                                0,
-                                                                true,
-                                                                text),
-                                     (u8*)"Below Blind");
+            const char *text = Display_SelectStatusLanguageText((uint8_t*)"低于盲区",
+                                                                 (uint8_t*)"Below Blind",
+                                                                  (uint8_t*)"Ниже мёртвой зоны");
+            DisplayStatusLanguageLineWords((u8*)"低于盲区",
+                                           (u8*)"Below Blind",
+                                            (u8*)"Ниже мёртвой зоны",
+                                           line,
+                                           row,
+                                           Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_OIL_LEVEL,
+                                                                      row,
+                                                                      0,
+                                                                      true,
+                                                                      text));
         }
         else
         {
@@ -3799,7 +4332,8 @@ static void oled_equipment(void)
     if(ValidParaDisArr[Para_Waterlevel][PARA_VALID] == true && now_page == ValidParaDisArr[Para_Waterlevel][PARA_PAGE])
     {
         row = ValidParaDisArr[Para_Waterlevel][PARA_X];
-        line = DisplayLangaugeLineWords((u8*)"水位:",OLED_LINE8_1,row,0,(u8*)"Water:");
+        line = DisplayStatusLanguageLineWords((u8*)"水位:", (u8*)"Water:", (u8*)"Уровень воды:",
+                                              OLED_LINE8_1, row, 0U);
         if (Display_GetWaterLevelValue(ctx, &display_value))
         {
             OledValueDisplay((int)display_value,
@@ -3818,7 +4352,8 @@ static void oled_equipment(void)
     if(ValidParaDisArr[Para_AveDensity][PARA_VALID] == true && now_page == ValidParaDisArr[Para_AveDensity][PARA_PAGE])
     {
         row = ValidParaDisArr[Para_AveDensity][PARA_X];
-        line = DisplayLangaugeLineWords((u8*)"密度:",OLED_LINE8_1,row,0,(u8*)"D:");
+        line = DisplayStatusLanguageLineWords((u8*)"密度:", (u8*)"D:", (u8*)"Плотность:",
+                                              OLED_LINE8_1, row, 0U);
         if (Display_GetDensityValue(ctx, &display_value))
         {
             OledValueDisplay((int)display_value,
@@ -3837,7 +4372,8 @@ static void oled_equipment(void)
     if(ValidParaDisArr[Para_AveTemperature][PARA_VALID] == true && now_page == ValidParaDisArr[Para_AveTemperature][PARA_PAGE])
     {
         row = ValidParaDisArr[Para_AveTemperature][PARA_X];
-        line = DisplayLangaugeLineWords((u8*)"温度:",OLED_LINE8_1,row,0,(u8*)"Temp:");
+        line = DisplayStatusLanguageLineWords((u8*)"温度:", (u8*)"Temp:", (u8*)"Температура:",
+                                              OLED_LINE8_1, row, 0U);
         if (Display_GetTemperatureValue(ctx, &display_value))
         {
             OledValueDisplay((int)display_value - 20000,
@@ -3857,7 +4393,8 @@ static void oled_equipment(void)
     if(ValidParaDisArr[Para_position][PARA_VALID] == true && now_page == ValidParaDisArr[Para_position][PARA_PAGE])
     {
         row = ValidParaDisArr[Para_position][PARA_X];
-        line = DisplayLangaugeLineWords((u8*)"位置:",OLED_LINE8_1,row,0,(u8*)"Pos:");
+        line = DisplayStatusLanguageLineWords((u8*)"位置:", (u8*)"Pos:", (u8*)"Позиция датчика:",
+                                              OLED_LINE8_1, row, 0U);
         if (Display_GetPositionValue(ctx, &display_position))
         {
             OledValueDisplay(display_position,
@@ -3875,7 +4412,8 @@ static void oled_equipment(void)
     /* 扭力 */
 	if (ValidParaDisArr[Para_weight][PARA_VALID] == true && now_page == ValidParaDisArr[Para_weight][PARA_PAGE]) {
 		row = ValidParaDisArr[Para_weight][PARA_X];
-		line = DisplayLangaugeLineWords((u8*) "扭力:", OLED_LINE8_1, row, 0, (u8*) "Torque:");
+		line = DisplayStatusLanguageLineWords((u8*)"扭力:", (u8*)"Torque:", (u8*)"Крутящий момент:",
+		                                          OLED_LINE8_1, row, 0U);
 		OledValueDisplay(g_measurement.debug_data.current_weight,
                          line,
                          row,
@@ -3892,7 +4430,8 @@ static void oled_equipment(void)
         now_page == ValidParaDisArr[Para_torque_temperature][PARA_PAGE])
     {
         row = ValidParaDisArr[Para_torque_temperature][PARA_X];
-        line = DisplayLangaugeLineWords((u8*)"扭温:", OLED_LINE8_1, row, 0, (u8*)"T.Temp:");
+        line = DisplayStatusLanguageLineWords((u8*)"扭温:", (u8*)"T.Temp:", (u8*)"Темп. датчика",
+                                              OLED_LINE8_1, row, 0U);
         if (Display_GetTorqueTemperatureX100(ctx, &torque_temperature_x100))
         {
             OledValueDisplay((int)torque_temperature_x100,
@@ -3923,7 +4462,8 @@ static void oled_equipment(void)
         now_page == ValidParaDisArr[Para_sensor_value][PARA_PAGE])
     {
         row = ValidParaDisArr[Para_sensor_value][PARA_X];
-        line = DisplayLangaugeLineWords((u8*)"频率:", OLED_LINE8_1, row, 0, (u8*)"Freq:");
+        line = DisplayStatusLanguageLineWords((u8*)"频率:", (u8*)"Freq:", (u8*)"Частота:",
+                                              OLED_LINE8_1, row, 0U);
         display_frequency = (ctx == DISPLAY_RESULT_CONTEXT_READ_PARAMETER)
             ? (int)g_measurement.debug_data.frequency
             : GetOilSensorFrequencyForDisplay();
@@ -3944,7 +4484,8 @@ static void oled_equipment(void)
         now_page == ValidParaDisArr[Para_capacitance][PARA_PAGE])
     {
         row = ValidParaDisArr[Para_capacitance][PARA_X];
-        line = DisplayLangaugeLineWords((u8*)"电容:", OLED_LINE8_1, row, 0, (u8*)"Cap:");
+		line = DisplayStatusLanguageLineWords((u8*)"电容:", (u8*)"Cap:", (u8*)"Ёмкость:",
+                                              OLED_LINE8_1, row, 0U);
         display_capacitance = (ctx == DISPLAY_RESULT_CONTEXT_READ_PARAMETER)
             ? (int)g_measurement.debug_data.water_capacitance_x10
             : (int)(g_measurement.water_measurement.current_capacitance * 10.0f);
@@ -3964,7 +4505,8 @@ static void oled_equipment(void)
         now_page == ValidParaDisArr[Para_angle_x][PARA_PAGE])
     {
         row = ValidParaDisArr[Para_angle_x][PARA_X];
-        line = DisplayLangaugeLineWords((u8*)"X角:", OLED_LINE8_1, row, 0, (u8*)"AngX:");
+        line = DisplayStatusLanguageLineWords((u8*)"X角:", (u8*)"AngX:", (u8*)"Угол X:",
+                                              OLED_LINE8_1, row, 0U);
         OledValueDisplay(g_measurement.debug_data.angle_x,
                          line,
                          row,
@@ -3982,7 +4524,8 @@ static void oled_equipment(void)
         now_page == ValidParaDisArr[Para_angle_y][PARA_PAGE])
     {
         row = ValidParaDisArr[Para_angle_y][PARA_X];
-        line = DisplayLangaugeLineWords((u8*)"Y角:", OLED_LINE8_1, row, 0, (u8*)"AngY:");
+        line = DisplayStatusLanguageLineWords((u8*)"Y角:", (u8*)"AngY:", (u8*)"Угол Y:",
+                                              OLED_LINE8_1, row, 0U);
         OledValueDisplay(g_measurement.debug_data.angle_y,
                          line,
                          row,
@@ -3999,7 +4542,8 @@ static void oled_equipment(void)
         now_page == ValidParaDisArr[Para_tankheight][PARA_PAGE])
     {
         row = ValidParaDisArr[Para_tankheight][PARA_X];
-        line = DisplayLangaugeLineWords((u8*)"罐高:", OLED_LINE8_1, row, 0, (u8*)"tankH:");
+        line = DisplayStatusLanguageLineWords((u8*)"罐高:", (u8*)"tankH:", (u8*)"Высота бака:",
+                                              OLED_LINE8_1, row, 0U);
         OledValueDisplay(g_measurement.height_measurement.current_real_height,
                          line,
                          row,
@@ -4018,7 +4562,8 @@ static void oled_equipment(void)
         row = ValidParaDisArr[Para_wireless_rssi][PARA_X];
         if (g_measurement.wireless_pairing_status.rssi_valid != 0U)
         {
-            line = DisplayLangaugeLineWords((u8*)"RSSI:", OLED_LINE8_1, row, 0, (u8*)"RSSI:");
+            line = DisplayStatusLanguageLineWords((u8*)"RSSI:", (u8*)"RSSI:", (u8*)"RSSI:",
+                                                  OLED_LINE8_1, row, 0U);
             OledValueDisplay((int)g_measurement.wireless_pairing_status.rssi,
                              line,
                              row,
@@ -4032,14 +4577,17 @@ static void oled_equipment(void)
         }
         else
         {
-            OledDisplayLineWords("RSSI:N/A",
+            const char *rssi_na = Display_SelectStatusLanguageText((uint8_t*)"RSSI:N/A",
+                                                                    (uint8_t*)"RSSI:N/A",
+                                                                    (uint8_t*)"Нет данных");
+            OledDisplayLineWords(rssi_na,
                                  OLED_LINE8_1,
                                  row,
                                  Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_WIRELESS_RSSI_NA,
                                                             row,
                                                             0,
                                                             true,
-                                                            "RSSI:N/A"));
+                                                            rssi_na));
         }
     }
     /* 连接从机蓝牙 MAC */
@@ -4065,14 +4613,17 @@ static void oled_equipment(void)
         }
         else
         {
-            OledDisplayLineWords("MAC N/A",
+            const char *mac_na = Display_SelectStatusLanguageText((uint8_t*)"MAC N/A",
+                                                                   (uint8_t*)"MAC N/A",
+                                                                   (uint8_t*)"Нет данных");
+            OledDisplayLineWords(mac_na,
                                  OLED_LINE8_1,
                                  row,
                                  Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_WIRELESS_MAC_NA,
                                                             row,
                                                             0,
                                                             true,
-                                                            "MAC N/A"));
+                                                            mac_na));
         }
     }
 }
@@ -4088,11 +4639,11 @@ static void oled_equipment(void)
  */
 uint8_t DisplayLangaugeLineWords(uint8_t* name1,uint8_t line,uint8_t row,uint8_t shift,uint8_t* name2)
 {
-    if(screen_parameter.language == LANGUAGE_CHINESE || name2 == NULL)
-        line = OledDisplayLineWords(name1,line,row,shift);
-    else if(screen_parameter.language == LANGUAGE_ENGLISH)
-        line = OledDisplayLineWords(name2,line,row,shift);
-    return line;
+    const char *text = DisplayLanguage_SelectLegacyText(screen_parameter.language,
+                                                         (const char *)name1,
+                                                         (const char *)name2);
+
+    return OledDisplayLineWords(text, line, row, shift);
 }
 
 /**
@@ -4101,7 +4652,7 @@ uint8_t DisplayLangaugeLineWords(uint8_t* name1,uint8_t line,uint8_t row,uint8_t
  * 函数先根据设备状态取得结果页上下文，再逐项判定故障详情、液位、密度、温度、水位、位置、扭力、部件参数、传感器原始量、姿态角、罐高和无线信息是否需要显示。
  * 每个有效项目按显示顺序写入 ValidParaDisArr 的 PARA_NUM 和 PARA_VALID；需要两行的故障原因会占用两个连续项目，读取部件参数时为扭力模块温度、RSSI 和 MAC
  * 保留固定项目。
- * 液位有效时结果区每页排两行并从 OLED_ROW4_3 开始，否则每页排三行并从 OLED_ROW4_2 开始；随后计算 PageAmount 以及每个有效项目的页号和行坐标。
+ * 中英文沿用原分页规则；俄文固定把状态放在前两行，并让每个参数独占一页的标签行和数值行。
  *
  * @note 函数直接更新 ValidParaDisArr、PageAmount、FlagofTotalTwoRow 和液位有效标志，调用方应在测量快照更新后再生成页面布局。
  */
@@ -4114,11 +4665,21 @@ static void CalculateValidPara(void)
     DisplayResultContext ctx = Display_GetResultContext(g_measurement.device_status.device_state);
     uint32_t display_value = 0U;
     int display_position = 0;
+    bool russian_layout = Display_IsRussianStatusLayout();
     
     /* *****计算总共有多少个有效参数需要显示***** */
     ValidParaCnt = 0;
+    if ((ctx == DISPLAY_RESULT_CONTEXT_ERROR) &&
+        DisplayLanguage_IsRussian(screen_parameter.language)) {
+        memset(ValidParaDisArr, 0, sizeof(ValidParaDisArr));
+        flagofoillevelvalid = false;
+        FlagofTotalTwoRow = false;
+        PageAmount = 0;
+        return;
+    }
     /* 故障详情 */
-    if (Display_ShouldShowErrorReason(ctx))
+    if (Display_ShouldShowErrorReason(ctx) &&
+        !DisplayLanguage_IsRussian(screen_parameter.language))
     {
         ValidParaCnt++;
         ValidParaDisArr[Para_ErrorReason][PARA_NUM] = ValidParaCnt;
@@ -4272,6 +4833,23 @@ static void CalculateValidPara(void)
     printf("ValidParaCnt = %d\n",ValidParaCnt);
     #endif
     /* *****计算总共需用几页,以及起始行***** */
+    if (russian_layout) {
+        int page_offset = flagofoillevelvalid ? 1 : 0;
+
+        rowsperpage = 1;
+        start_x = OLED_ROW4_4;
+        PageAmount = ValidParaCnt + page_offset;
+        FlagofTotalTwoRow = false;
+        for (i = 0; i < Para_Amount; i++) {
+            if (ValidParaDisArr[i][PARA_VALID] == true) {
+                ValidParaDisArr[i][PARA_X] = start_x;
+                ValidParaDisArr[i][PARA_PAGE] =
+                    ValidParaDisArr[i][PARA_NUM] - 1 + page_offset;
+            }
+        }
+        return;
+    }
+
     if(flagofoillevelvalid == true)
     {
         rowsperpage = 2;
@@ -4311,91 +4889,91 @@ static void CalculateValidPara(void)
 static const EquipStateDisplay state_display_table[] = {
 
     /* ===================== 运行中状态 ===================== */
-    { STATE_STANDBY,                 "待机中",                   "Standby" },
-    { STATE_INIT,                    "设备初始化",               "Initializing" },
-    { STATE_BACKZEROING,             "回零点中",                 "Back to Zero" },
-    { STATE_FINDZEROING,             "标定零点中",               "Zero Calibration" },
-    { STATE_SINGLEPOINTING,          "单点测量中",               "Single Point-M" },
-    { STATE_RUNTOPOINTING,           "运行到测量点中",           "Run to Point" },
-    { STATE_GB_SPREADPOINTING,       "国标分布测量中",           "GB Spread Point-M" },
-    { STATE_SPREADPOINTING,          "分布测量中",               "Spread Point-M" },
-    { STATE_CALIBRATIONOILING,       "标定液位中",               "Calibrating Oil Level" },
-    { STATE_READPARAMETERING,        "读取参数中",               "Reading Parameters" },
-    { STATE_RUNUPING,                "向上运行中",               "Running Up" },
-    { STATE_RUNDOWNING,              "向下运行中",               "Running Down" },
-    { STATE_SETZEROCIRCLING,         "设置零点编码值中",         "Set Zero Circle" },
-    { STATE_SETZEROANGLING,          "设置零点编码值中",         "Set Zero Angle" },
-    { STATE_EFACTORYSETTING_RESTORING,"恢复出厂设置中",         "Factory Resetting" },
-    { STATE_BACKUPING,               "备份配置文件中",           "Backing Up" },
-    { STATE_RESTORYING,              "恢复配置文件中",           "Restoring Config" },
-    { STATE_FINDOIL,                 "寻找液位中",               "Finding Oil Level" },
-    { STATE_FINDWATER,               "寻找水位中",               "Finding Water Level" },
-    { STATE_FINDBOTTOM,              "寻找罐底中",               "Finding Bottom" },
-    { STATE_FORCEZERO,               "设置电机零点中",           "Setting Motor Zero" },
-    { STATE_ONTANKOPRATIONING,       "罐上仪表操作中",           "On-Tank Operation" },
-    { STATE_SYNTHETICING,            "综合指令中",               "Synthetics Running" },
+    { STATE_STANDBY,                 "待机中",                   "Standby",                    "Режим ожидания" },
+    { STATE_INIT,                    "设备初始化",               "Initializing",               "Идёт инициализация" },
+    { STATE_BACKZEROING,             "回零点中",                 "Back to Zero",                "Возврат к нулю" },
+    { STATE_FINDZEROING,             "标定零点中",               "Zero Calibration",            "Калибровка нуля" },
+    { STATE_SINGLEPOINTING,          "单点测量中",               "Single Point-M",              "Точечный замер плотности" },
+    { STATE_RUNTOPOINTING,           "运行到测量点中",           "Run to Point",                "Перемещение к точке измерения" },
+    { STATE_GB_SPREADPOINTING,       "国标分布测量中",           "GB Spread Point-M",           "Профиль плотности по GB" },
+    { STATE_SPREADPOINTING,          "分布测量中",               "Spread Point-M",              "Профиль плотности" },
+    { STATE_CALIBRATIONOILING,       "标定液位中",               "Calibrating Oil Level",        "Калибровка уровня" },
+    { STATE_READPARAMETERING,        "读取参数中",               "Reading Parameters",          "Чтение параметров" },
+    { STATE_RUNUPING,                "向上运行中",               "Running Up",                  "Движение вверх" },
+    { STATE_RUNDOWNING,              "向下运行中",               "Running Down",                "Движение вниз" },
+    { STATE_SETZEROCIRCLING,         "设置零点编码值中",         "Set Zero Circle",             "Сброс счётчика оборотов" },
+    { STATE_SETZEROANGLING,          "设置零点编码值中",         "Set Zero Angle",              "Обнуление угла энкодера" },
+    { STATE_EFACTORYSETTING_RESTORING,"恢复出厂设置中",         "Factory Resetting",           "Заводской сброс" },
+    { STATE_BACKUPING,               "备份配置文件中",           "Backing Up",                  "Создание копии настроек" },
+    { STATE_RESTORYING,              "恢复配置文件中",           "Restoring Config",            "Восстановление конфигурации" },
+    { STATE_FINDOIL,                 "寻找液位中",               "Finding Oil Level",           "Поиск уровня" },
+    { STATE_FINDWATER,               "寻找水位中",               "Finding Water Level",         "Поиск уровня воды" },
+    { STATE_FINDBOTTOM,              "寻找罐底中",               "Finding Bottom",              "Поиск уровня днища" },
+    { STATE_FORCEZERO,               "设置电机零点中",           "Setting Motor Zero",          "Установка нуля двигателя" },
+    { STATE_ONTANKOPRATIONING,       "罐上仪表操作中",           "On-Tank Operation",           "Работа прибора на резервуаре" },
+    { STATE_SYNTHETICING,            "综合指令中",               "Synthetics Running",          "Комплексное измерение" },
 
     /* ===== 水位跟随与扩展测量运行态 ===== */
-    { STATE_FOLLOW_WATER_POINT_SEARCHING, "寻找水位跟随点",             "Searching Water Follow Point" },
-    { STATE_METER_DENSITY,           "密度每米测量中",           "Meter Density Measuring" },
-    { STATE_INTERVAL_DENSITY,        "液位区间测量中",           "Interval Density Measuring" },
-    { STATE_GET_FULLWEIGHT,          "获取满载扭力中",           "Getting Full Torque" },
-    { STATE_GET_EMPTYWEIGHT,         "获取空载扭力中",           "Getting Empty Torque" },
-    { STATE_MAINTENANCEMODE,         "维护模式中",               "Maintenance Mode" },
+    { STATE_FOLLOW_WATER_POINT_SEARCHING, "寻找水位跟随点",     "Searching Water Follow Point", "Поиск точки уровня воды" },
+    { STATE_METER_DENSITY,           "密度每米测量中",           "Meter Density Measuring",     "Замер плотности через 1 м" },
+    { STATE_INTERVAL_DENSITY,        "液位区间测量中",           "Interval Density Measuring",  "Замер плотности в диапазоне" },
+    { STATE_GET_FULLWEIGHT,          "获取满载扭力中",           "Getting Full Torque",         "Момент при полной нагрузке" },
+    { STATE_GET_EMPTYWEIGHT,         "获取空载扭力中",           "Getting Empty Torque",        "Замер момента без нагрузки" },
+    { STATE_MAINTENANCEMODE,         "维护模式中",               "Maintenance Mode",            "Режим обслуживания" },
 
     /* ===== 手动运动、标定与维护运行态 ===== */
-    { STATE_RUN_TO_POSITIONING,      "运行到指定位置中",         "Run to Position" },
-    { STATE_FORCE_RUNUPING,          "电机强制上行中",           "Force Running Up" },
-    { STATE_FORCE_RUNDOWNING,        "电机强制下行中",           "Force Running Down" },
-    { STATE_CALIBRATE_WATERING,      "水位标定中",               "Calibrating Water Level" },
-    { STATE_CALIBRATE_TANKHEIGHTING, "罐高标定中",               "Calibrating Tank Height" },
-    { STATE_WIRELESS_PAIRING,        "无线滑环匹配中",           "Wireless Pairing" },
-    { STATE_DEBUG_MODE,              "调试模式中",               "Debug Mode" },
+    { STATE_RUN_TO_POSITIONING,      "运行到指定位置中",         "Run to Position",             "Движение к заданной позиции" },
+    { STATE_FORCE_RUNUPING,          "电机强制上行中",           "Force Running Up",            "Принудительное движение вверх" },
+    { STATE_FORCE_RUNDOWNING,        "电机强制下行中",           "Force Running Down",          "Принудительное движение вниз" },
+    { STATE_CALIBRATE_WATERING,      "水位标定中",               "Calibrating Water Level",      "Калибровка уровня воды" },
+    { STATE_CALIBRATE_TANKHEIGHTING, "罐高标定中",               "Calibrating Tank Height",      "Калибровка высоты бака" },
+    { STATE_WIRELESS_PAIRING,        "无线滑环匹配中",           "Wireless Pairing",            "Сопряжение с токосъёмником" },
+    { STATE_DEBUG_MODE,              "调试模式中",               "Debug Mode",                  "Режим отладки" },
 
     /* ===== 瓦西莱密度 ===== */
-    { STATE_WARTSILA_DENSITY_START,      "LTD密度分布开始",       "Wartsila Density Start" },
-    { STATE_WARTSILA_DENSITY_MEASURING,  "LTD密度分布测量",       "Wartsila Density Measuring" },
+    { STATE_WARTSILA_DENSITY_START,      "LTD密度分布开始",       "Wartsila Density Start",      "Запуск профиля плотности LTD" },
+    { STATE_WARTSILA_DENSITY_MEASURING,  "LTD密度分布测量",       "Wartsila Density Measuring",  "Профиль плотности LTD" },
 
     /* ===================== 完成态 ===================== */
-    { STATE_FINDZEROOVER,            "标定零点完成",             "Zero Calibration Done" },
-    { STATE_SINGLEPOINTOVER,         "单点测量完成",             "Single Point Done" },
-    { STATE_SPTESTING,               "正在单点密度测量",         "Single Point Testing" },
-    { STATE_GB_SPREADPOINTOVER,      "国标分布测量完成",         "AI Spread Done" },
-    { STATE_SPREADPOINTOVER,         "分布测量完成",             "Spread Measurement Done" },
-    { STATE_FINDOILOVER,             "标定液位完成",             "Oil Calibration Done" },
-    { STATE_READPARAMETEROVER,       "读取参数完成",             "Read Parameter Done" },
-    { STATE_RUNUPOVER,               "向上运行完成",             "Run Up Done" },
-    { STATE_RUNDOWNOVER,             "向下运行完成",             "Run Down Done" },
-    { STATE_SETZEROCIRCLOVER,        "设置零点编码值完成",       "Zero Circle Done" },
-    { STATE_SETZEROANGLOVER,         "设置零点编码值完成",       "Zero Angle Done" },
-    { STATE_EFACTORYSETTING_RESTOROVER,"恢复出厂设置完成",      "Factory Reset Done" },
-    { STATE_BACKUPOVER,              "备份配置文件完成",         "Backup Done" },
-    { STATE_RESTORYOVER,             "恢复配置文件完成",         "Restore Done" },
-    { STATE_FLOWOIL,                 "液位跟随中",               "Level Following" },
+    { STATE_FINDZEROOVER,            "标定零点完成",             "Zero Calibration Done",       "Калибровка нуля завершена" },
+    { STATE_SINGLEPOINTOVER,         "单点测量完成",             "Single Point Done",           "Плотность в точке измерена" },
+    { STATE_SPTESTING,               "正在单点密度测量",         "Single Point Testing",        "Мониторинг в заданной точке" },
+    { STATE_GB_SPREADPOINTOVER,      "国标分布测量完成",         "AI Spread Done",              "Профиль по GB составлен" },
+    { STATE_SPREADPOINTOVER,         "分布测量完成",             "Spread Measurement Done",     "Профиль составлен" },
+    { STATE_FINDOILOVER,             "标定液位完成",             "Oil Calibration Done",        "Калибровка уровня завершена" },
+    { STATE_READPARAMETEROVER,       "读取参数完成",             "Read Parameter Done",         "Параметры считаны" },
+    { STATE_RUNUPOVER,               "向上运行完成",             "Run Up Done",                 "Движение вверх завершено" },
+    { STATE_RUNDOWNOVER,             "向下运行完成",             "Run Down Done",               "Движение вниз завершено" },
+    { STATE_SETZEROCIRCLOVER,        "设置零点编码值完成",       "Zero Circle Done",            "Счётчик оборотов обнулён" },
+    { STATE_SETZEROANGLOVER,         "设置零点编码值完成",       "Zero Angle Done",             "Угол энкодера обнулён" },
+    { STATE_EFACTORYSETTING_RESTOROVER,"恢复出厂设置完成",      "Factory Reset Done",          "Заводской сброс завершён" },
+    { STATE_BACKUPOVER,              "备份配置文件完成",         "Backup Done",                 "Копия настроек создана" },
+    { STATE_RESTORYOVER,             "恢复配置文件完成",         "Restore Done",                "Конфигурация восстановлена" },
+    { STATE_FLOWOIL,                 "液位跟随中",               "Level Following",             "Отслеживание уровня" },
 
     /* ===== 水位跟随、测量与手动控制完成态 ===== */
-    { STATE_FOLLOW_WATERING,         "水位跟随中",                 "Water Level Following" },
-    { STATE_FINDWATER_OVER,          "寻找水位完成",             "Water Level Done" },
-    { STATE_FINDBOTTOM_OVER,         "寻找罐底完成",             "Tank Bottom Done" },
-    { STATE_FORCEZERO_OVER,          "设置电机零点完成",         "Motor Zero Done" },
-    { STATE_ONTANKOPRATIONCOMPLATE,  "罐上仪表操作完成",         "Tank Operation Done" },
-    { STATE_SYNTHETICING_OVER,       "综合指令完成",             "Synthetics Done" },
-    { STATE_COM_METER_DENSITY_OVER,  "密度每米测量完成",         "Meter Density Done" },
-    { STATE_INTERVAL_DENSITY_OVER,   "液位区间测量完成",         "Interval Density Done" },
+    { STATE_FOLLOW_WATERING,         "水位跟随中",               "Water Level Following",       "Отслеживание уровня воды" },
+    { STATE_FINDWATER_OVER,          "寻找水位完成",             "Water Level Done",            "Уровень воды найден" },
+    { STATE_FINDBOTTOM_OVER,         "寻找罐底完成",             "Tank Bottom Done",            "Уровень днища определён" },
+    { STATE_FORCEZERO_OVER,          "设置电机零点完成",         "Motor Zero Done",             "Ноль двигателя установлен" },
+    { STATE_ONTANKOPRATIONCOMPLATE,  "罐上仪表操作完成",         "Tank Operation Done",         "Работа завершена на резервуаре" },
+    { STATE_SYNTHETICING_OVER,       "综合指令完成",             "Synthetics Done",             "Комплексный замер завершён" },
+    { STATE_COM_METER_DENSITY_OVER,  "密度每米测量完成",         "Meter Density Done",          "Профиль с шагом 1 м составлен" },
+    { STATE_INTERVAL_DENSITY_OVER,   "液位区间测量完成",         "Interval Density Done",       "Замер плотности в зоне завершён" },
 
-    { STATE_RUN_TO_POSITION_OVER,    "运行到指定位置完成",       "Run to Position Done" },
-    { STATE_FORCE_RUNUP_OVER,        "强制上行完成",             "Force Run Up Done" },
-    { STATE_FORCE_RUNDOWN_OVER,      "强制下行完成",             "Force Run Down Done" },
-    { STATE_CALIBRATE_WATER_OVER,    "水位标定完成",             "Water Calibration Done" },
-    { STATE_CALIBRATE_TANKHEIGHT_OVER,"罐高标定完成",             "Tank Height Calibration Done" },
-    { STATE_WIRELESS_PAIRING_OVER,   "无线滑环匹配完成",         "Wireless Pair Done" },
+    { STATE_RUN_TO_POSITION_OVER,    "运行到指定位置完成",       "Run to Position Done",        "Заданная позиция достигнута" },
+    { STATE_FORCE_RUNUP_OVER,        "强制上行完成",             "Force Run Up Done",           "Принудительный подъём завершён" },
+    { STATE_FORCE_RUNDOWN_OVER,      "强制下行完成",             "Force Run Down Done",         "Принудительный спуск завершён" },
+    { STATE_CALIBRATE_WATER_OVER,    "水位标定完成",             "Water Calibration Done",      "Уровень воды откалиброван" },
+    { STATE_CALIBRATE_TANKHEIGHT_OVER,"罐高标定完成",            "Tank Height Calibration Done", "Высота бака откалибрована" },
+    { STATE_WIRELESS_PAIRING_OVER,   "无线滑环匹配完成",         "Wireless Pair Done",          "Токосъёмник сопряжён" },
 
-    { STATE_WARTSILA_DENSITY_OVER,   "LTD密度分布完成",          "Wartsila Density Done" },
+    { STATE_WARTSILA_DENSITY_OVER,   "LTD密度分布完成",          "Wartsila Density Done",       "Профиль LTD составлен" },
 
-    { STATE_GET_FULLWEIGHT_OVER,     "获取满载扭力完成",         "Get Full Torque Done" },
-    { STATE_GET_EMPTYWEIGHT_OVER,    "获取空载扭力完成",         "Get Empty Torque Done" },
+    { STATE_GET_FULLWEIGHT_OVER,     "获取满载扭力完成",         "Get Full Torque Done",        "Момент полной нагрузки измерен" },
+    { STATE_GET_EMPTYWEIGHT_OVER,    "获取空载扭力完成",         "Get Empty Torque Done",       "Момент без нагрузки измерен" },
 
-    { STATE_ERROR,                   "故障",                     "Failure" },
+    { STATE_ERROR,                   "故障",                     "Failure",                     "Отказ" },
 };
 
 
@@ -4408,25 +4986,36 @@ static const EquipStateDisplay state_display_table[] = {
  */
 const char* GetStateString(uint16_t state, uint8_t lang)
 {
-    for (int i = 0; i < sizeof(state_display_table) / sizeof(state_display_table[0]); i++) {
-        if (state_display_table[i].state == state)
-            return (lang == 0) ? state_display_table[i].disp_cn : state_display_table[i].disp_en;
+    size_t i;
+
+    for (i = 0U; i < (sizeof(state_display_table) / sizeof(state_display_table[0])); i++) {
+        if (state_display_table[i].state == state) {
+            return DisplayLanguage_SelectStatusText(lang,
+                                                    state_display_table[i].disp_cn,
+                                                    state_display_table[i].disp_en,
+                                                    state_display_table[i].disp_ru);
+        }
     }
-    return (lang == 0) ? "未知" : "Unknown";
+
+    return DisplayLanguage_SelectStatusText(lang,
+                                            "未知",
+                                            "Unknown",
+                                            "Неизвестное состояние");
 }
 /**
  * @brief 绘制状态页顶部设备状态及维护/模拟徽标；协议不匹配优先覆盖普通运行态，快照失效时保留曾确认的维护提示。
  *
  * 函数根据当前结果页是否仅有两行选择标题行，并把非法语言索引收敛为英文；设备状态文字通常从状态表取得，CPU2 协议不匹配时则强制显示协议错误。
  * 维护模式只信任完整运行态快照；曾确认维护开启后若快照暂时失效，继续显示维护状态未知，直到新快照明确确认维护已经关闭。
- * 维护模式与 AO 模拟状态组合为右侧徽标；没有徽标时显示电机运行图标。增量刷新前统一清理当前徽标区域，行位置变化时同时清除旧行，避免 OLED 残影。
- * 设备处于错误状态时，在状态文字之后追加由错误类型和错误位置组成的十进制故障码。
+ * 中英文把维护模式与 AO 模拟状态组合为右侧徽标，没有徽标时显示电机运行图标；俄文用两行完整状态并隐藏这些图标。
+ * 设备处于错误状态时，中英文在状态文字后追加故障码，俄文只在第二行显示故障码。
  */
 static void DIS_Equipment(void)
 {
     int row, line;
     uint16_t state = g_measurement.device_status.device_state;
-    uint8_t lang = screen_parameter.language;
+    uint8_t lang = (uint8_t)DisplayLanguage_Resolve(screen_parameter.language,
+                                                    DISPLAY_TEXT_DOMAIN_STATUS);
     bool protocol_compatible = IsCpu2ProtocolCompatible();
     bool protocol_mismatch = IsCpu2ProtocolMismatch();
     bool runtime_snapshot_valid = CPU2_CommHasRuntimeSnapshot();
@@ -4434,12 +5023,11 @@ static void DIS_Equipment(void)
     bool maintenance_unknown;
     bool ao_simulation_active;
     const char *badge_text = NULL;
-    uint8_t badge_line = OLED_LINE8_8;
+    uint8_t badge_line = OLED_LINE8_END;
     static bool maintenance_last_confirmed_active = false;
     static bool status_badge_visible = false;
     static uint8_t status_badge_row = OLED_ROW4_1;
 
-    if (lang > 1) lang = 1;
     row = FlagofTotalTwoRow ? OLED_ROW4_2 : OLED_ROW4_1;
 
     /*
@@ -4458,17 +5046,20 @@ static void DIS_Equipment(void)
                            (g_measurement.ao_output_runtime.simulation_enabled != 0U);
 
     if (maintenance_unknown) {
-        badge_text = (lang == LANGUAGE_CHINESE) ? "维护?" : "MNT?";
-        badge_line = (lang == LANGUAGE_CHINESE) ? OLED_LINE8_7 : OLED_LINE8_6;
+        badge_text = DisplayLanguage_SelectStatusText(lang, "维护?", "MNT?", "MNT?");
     } else if (maintenance_active && ao_simulation_active) {
-        badge_text = (lang == LANGUAGE_CHINESE) ? "维模" : "M/S";
-        badge_line = (lang == LANGUAGE_CHINESE) ? OLED_LINE8_8 : OLED_LINE8_7;
+        badge_text = DisplayLanguage_SelectStatusText(lang, "维模", "M/S", "M/S");
     } else if (maintenance_active) {
-        badge_text = (lang == LANGUAGE_CHINESE) ? "维护" : "MNT";
-        badge_line = (lang == LANGUAGE_CHINESE) ? OLED_LINE8_8 : OLED_LINE8_7;
+        badge_text = DisplayLanguage_SelectStatusText(lang, "维护", "MNT", "MNT");
     } else if (ao_simulation_active) {
-        badge_text = (lang == LANGUAGE_CHINESE) ? "模拟" : "SIM";
-        badge_line = (lang == LANGUAGE_CHINESE) ? OLED_LINE8_8 : OLED_LINE8_7;
+        badge_text = DisplayLanguage_SelectStatusText(lang, "模拟", "SIM", "SIM");
+    }
+
+    if (badge_text != NULL) {
+        uint8_t badge_width = Display_GetTextFootprint(badge_text, 31U);
+        if (badge_width <= (OLED_LINE8_END + 1U)) {
+            badge_line = (uint8_t)((OLED_LINE8_END + 1U) - badge_width);
+        }
     }
 
     /* 徽标最长四字符，统一清除右侧四列；换行时同时清除旧行，防止增量刷新残留。 */
@@ -4485,17 +5076,42 @@ static void DIS_Equipment(void)
 
     /* 协议不匹配是整机状态问题，优先覆盖普通运行状态，避免用户只在参数页才看到。 */
     const char *disp_str = protocol_mismatch
-                           ? ((lang == LANGUAGE_CHINESE) ? "协议版本不匹配" : "ProtoErr")
+                           ? DisplayLanguage_SelectStatusText(lang,
+                                                             "协议版本不匹配",
+                                                             "ProtoErr",
+                                                             "Несовместимая версия протокола")
                            : GetStateString(state, lang);
+
+    if (lang == LANGUAGE_RUSSIAN) {
+        Display_DrawRussianStatusText(disp_str);
+        if (!protocol_mismatch && (state == STATE_ERROR)) {
+            uint16_t err_type =
+                (uint16_t)((g_measurement.device_status.error_code >> 16) & 0xFFFFU);
+            uint16_t err_pos =
+                (uint16_t)(g_measurement.device_status.error_code & 0xFFFFU);
+            char err_text[16];
+
+            snprintf(err_text,
+                     sizeof(err_text),
+                     "%u-%u",
+                     (unsigned int)err_type,
+                     (unsigned int)err_pos);
+            OledDisplayLineWords(err_text, OLED_LINE8_1, OLED_ROW4_2, 0U);
+        }
+        status_badge_visible = false;
+        status_badge_row = OLED_ROW4_1;
+        return;
+    }
+
     line = OledDisplayLineWords(disp_str, OLED_LINE8_1, row, 0);
 
-    if (state == 0xFFFF) {
-		uint16_t err_type = (g_measurement.device_status.error_code >> 16) & 0xFFFF;
-		uint16_t err_pos  = g_measurement.device_status.error_code & 0xFFFF;
+    if (state == STATE_ERROR) {
+		uint16_t err_type = (uint16_t)((g_measurement.device_status.error_code >> 16) & 0xFFFFU);
+		uint16_t err_pos  = (uint16_t)(g_measurement.device_status.error_code & 0xFFFFU);
 
 		char err_text[16];
-		snprintf(err_text, sizeof(err_text), "%d-%d", err_type, err_pos);
-		line = OledDisplayLineWords(err_text, line, row, 0);
+		snprintf(err_text, sizeof(err_text), "%u-%u", (unsigned int)err_type, (unsigned int)err_pos);
+		line = OledDisplayLineWords(err_text, (uint8_t)line, (uint8_t)row, 0U);
     }
 
     if (badge_text != NULL) {
